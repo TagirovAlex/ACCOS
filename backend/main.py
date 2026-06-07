@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.api.v1.endpoints import auth, user, chat, generation
+from app.api.v1.endpoints import auth, user, chat, generation, orchestration
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.DEBUG),
@@ -52,6 +52,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(user.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(generation.router, prefix="/api/v1")
+app.include_router(orchestration.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health")
