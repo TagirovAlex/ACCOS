@@ -44,3 +44,14 @@
 ## Workflow (Phase 3)
 - 4 из 6 workflow готовы: ZIT.json, QWEN edit 1/2/3 pic.json
 - text_to_video.json, image_to_video.json — зарезервированы (будут позже)
+
+## Fixes & Enhancements
+- Исправлены тесты: 26/26 проходят (было 9 pass, 2 fail, 16 error)
+  - EconomyService.calculate_cost сделан classmethod
+  - Исправлены имена параметров в тестах (input_tokens→tokens_input, ref_size→avg_ref_size)
+  - Исправлен конфиг тестовой БД: NullPool для избежания блокировок asyncpg
+  - Исправлены пути моков в тестах (прямое мокирование адаптеров вместо сервисов)
+  - Исправлены форматы возвращаемых значений моков
+- Добавлен автоаккреал баланса (asyncio background task, каждые 3600с)
+  - Настройки: auto_accrual_interval_minutes, auto_accrual_amount (AdminSettings)
+- Добавлена опция pool_pre_ping в engine для продакшена

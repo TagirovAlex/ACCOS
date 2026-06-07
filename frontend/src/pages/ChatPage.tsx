@@ -45,22 +45,27 @@ export const ChatPage = () => {
   const createChat = async () => {
     try {
       const res: any = await api("POST", "/chat/create", { title: `Chat ${chats.length + 1}` });
-      if (res.chat?.id) {
-        setChats(prev => [...prev, res.chat]);
-        setActiveChat(res.chat.id);
+      if (res.id) {
+        setChats(prev => [...prev, res]);
+        setActiveChat(res.id);
       }
     } catch { /* ignore */ }
   };
 
   const sendMessage = async () => {
     if (!input.trim() || !activeChat) return;
-    setLoading(true);
     const msg = input;
     setInput("");
+    setLoading(true);
+    const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: msg, created_at: new Date().toISOString() };
+    setMessages(prev => [...prev, userMsg]);
     try {
       const res: any = await api("POST", `/chat/${activeChat}/send`, { message: msg });
-      setMessages(res.messages || []);
-    } catch { /* ignore */ }
+      const reply: Message = { id: res.id || `resp-${Date.now()}`, role: "assistant", content: res.message || res.content, created_at: new Date().toISOString() };
+      setMessages(prev => [...prev, reply]);
+    } catch {
+      setMessages(prev => prev.filter(m => m.id !== userMsg.id));
+    }
     setLoading(false);
   };
 

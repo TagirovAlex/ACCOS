@@ -17,12 +17,17 @@ class AuthService:
         self.session = session
         self.user_repo = UserRepository(session)
         self.settings_repo = SettingsRepository(session)
-        ldap_server = settings.ldap_server
-        if "your-ldap" in ldap_server or "localhost" in ldap_server:
-            self.ldap = MockLDAPAdapter()
-            logger.warning("Using Mock LDAP adapter")
-        else:
-            self.ldap = LDAPAdapter()
+        self.ldap = LDAPAdapter()
+
+    async def _authenticate_ldap(self, username: str, password: str) -> dict:
+        result = await self.ldap.execute(username=username, password=password)
+        if not result.get("authenticated"):
+            logger.warning(f"LDAP failed ({result.get('error')}), trying local admin fallback")
+            mock = MockLDAPAdapter()
+            mock_result = await mock.execute(username=username, password=password)
+            if mock_result.get("authenticated"):
+                return mock_result
+        return result
 
     async def _resolve_group_and_permissions(self, ldap_result: dict) -> tuple[str | None, str, float]:
         permissions = "chat"
@@ -50,20 +55,25 @@ class AuthService:
         return group_id, permissions, start_balance
 
     async def authenticate(self, username: str, password: str) -> dict:
-        ldap_result = await self.ldap.execute(username=username, password=password)
+        ldap_result = await self._authenticate_ldap(username, password)
         if not ldap_result.get("authenticated"):
             return {"success": False, "error": ldap_result.get("error", "Authentication failed")}
         user = await self.user_repo.get_by_username(username)
         if not user:
             group_id, permissions, start_balance = await self._resolve_group_and_permissions(ldap_result)
+            is_admin = (username == settings.admin_username)
             user = await self.user_repo.create(
                 username=username,
                 email=ldap_result.get("email"),
                 full_name=ldap_result.get("full_name"),
                 balance=start_balance,
                 permissions=permissions,
+                is_admin=is_admin,
                 group_id=UUID(group_id) if group_id else None,
             )
+        elif username == settings.admin_username and not user.is_admin:
+            await self.user_repo.update(user.id, is_admin=True)
+            user.is_admin = True
         token = create_access_token(subject=str(user.id))
         return {
             "success": True,

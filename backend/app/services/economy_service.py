@@ -53,15 +53,16 @@ class VideoGenCostStrategy(PricingStrategy):
 
 
 class EconomyService:
+    strategies = {
+        "llm": LLMCostStrategy(),
+        "image_gen": ImageGenCostStrategy(),
+        "image_edit": ImageEditCostStrategy(),
+        "video_gen": VideoGenCostStrategy(),
+    }
+
     def __init__(self, session: AsyncSession):
         self.session = session
         self.user_repo = UserRepository(session)
-        self.strategies = {
-            "llm_chat": LLMCostStrategy(),
-            "image_gen": ImageGenCostStrategy(),
-            "image_edit": ImageEditCostStrategy(),
-            "video_gen": VideoGenCostStrategy(),
-        }
 
     async def get_balance(self, user_id: str) -> dict:
         from uuid import UUID
@@ -70,8 +71,9 @@ class EconomyService:
             return {"success": False, "error": "User not found"}
         return {"success": True, "balance": balance}
 
-    def calculate_cost(self, operation_type: str, **params) -> float:
-        strategy = self.strategies.get(operation_type)
+    @classmethod
+    def calculate_cost(cls, operation_type: str, **params) -> float:
+        strategy = cls.strategies.get(operation_type)
         if not strategy:
             raise ValueError(f"Unknown operation type: {operation_type}")
         return strategy.calculate_cost(**params)

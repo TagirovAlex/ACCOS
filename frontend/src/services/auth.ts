@@ -11,8 +11,9 @@ export type User = {
 
 export async function login(username: string, password: string): Promise<User> {
   const res: any = await api("POST", "/auth/login", { username, password });
+  if (!res.success) throw new Error(res.error || "Login failed");
   setToken(res.access_token);
-  return res.user;
+  return getMe();
 }
 
 export async function getMe(): Promise<User> {

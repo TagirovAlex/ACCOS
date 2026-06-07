@@ -104,7 +104,7 @@ class ChatService:
 
         tokens_input = llm_result.get("tokens_input", 0)
         tokens_output = llm_result.get("tokens_output", 0)
-        cost = self.economy.calculate_cost("llm_chat", tokens_input=tokens_input, tokens_output=tokens_output)
+        cost = self.economy.calculate_cost("llm", tokens_input=tokens_input, tokens_output=tokens_output)
 
         deduct = await self.economy.deduct_balance(user_id, cost)
         if not deduct["success"]:
