@@ -22,6 +22,7 @@ class UserInfoResponse(BaseResponse):
     email: str | None = None
     full_name: str | None = None
     balance: float
+    permissions: str = "chat"
     is_admin: bool
 
 
