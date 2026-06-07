@@ -20,9 +20,26 @@
 - Новые пользователи получают стартовый баланс 100 кредитов
 - Фикс: транзакции БД теперь корректно коммитятся через `async with session.begin()`
 
-## Запланировано в админ-панели (Phase 5)
-- Управление БД (просмотр/удаление чатов, генераций, референсов)
-- Управление архивами (бэкапы, логи, файлы генераций)
+## Phase 5 — Admin API + Admin Panel (React)
+- Созданы Admin API эндпоинты: /admin/users, /admin/groups, /admin/chats, /admin/generations, /admin/assets, /admin/settings
+- Реализован AdminService (list, create, update, delete для всех ресурсов)
+- Добавлены недостающие эндпоинты: GET/PUT/DELETE /admin/users/{id}, DELETE /admin/groups/{id}
+- Настроена React Admin Panel (Vite + react-admin + MUI)
+- Реализована поддержка тёмной/светлой темы (MUI ThemeProvider + localStorage)
+- Создана структура admin/src/assets/themes/ (light.ts, dark.ts)
+- Настроен Vite proxy на backend (port 8000)
+- Настроен CORS для admin dev server (port 5173)
+- Интерфейс админ-панели полностью на русском языке
+
+## Phase 6 — User Frontend (React)
+- Создана структура frontend/ (Vite + React + TypeScript + MUI)
+- Реализована страница логина (с интеграцией /auth/login)
+- Реализован дашборд с отображением баланса и прав
+- Реализован интерфейс чата (список сессий, отправка/получение сообщений)
+- Реализована страница генерации (выбор workflow, промпт, результат)
+- Настроена маршрутизация (react-router-dom)
+- Переключатель тёмной/светлой темы
+- Настроен Vite proxy на backend (port 8000)
 
 ## Workflow (Phase 3)
 - 4 из 6 workflow готовы: ZIT.json, QWEN edit 1/2/3 pic.json

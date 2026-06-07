@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACCOS — Панель администратора</title>
+<link rel="stylesheet" href="../css/global.css">
+<style>
+* { box-sizing: border-box; }
+body { display: flex; min-height: 100vh; }
+
+/* Sidebar */
+.sidebar {
+  width: 260px;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-text-secondary);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+.sidebar h1 { font-size: 1.25rem; margin: 0; color: var(--color-primary); }
+.sidebar nav { display: flex; flex-direction: column; gap: 0.5rem; }
+.sidebar nav a {
+  padding: 0.6rem 1rem;
+  border-radius: var(--border-radius);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: background var(--transition);
+}
+.sidebar nav a:hover, .sidebar nav a.active { background: var(--color-primary); color: #fff; }
+.theme-toggle {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.theme-toggle input { accent-color: var(--color-primary); }
+
+/* Main */
+.main { flex: 1; padding: 2rem; overflow-y: auto; }
+.main h2 { margin: 0 0 1.5rem; }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 1rem; margin-bottom: 2rem; }
+.stat-card {
+  background: var(--color-surface);
+  border-radius: var(--border-radius);
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.stat-card .label { font-size: 0.85rem; color: var(--color-text-secondary); }
+.stat-card .value { font-size: 1.75rem; font-weight: 700; margin-top: 0.25rem; }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; background: var(--color-surface); border-radius: var(--border-radius); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--color-text-secondary); }
+th { font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-secondary); }
+tr:hover { background: rgba(0,0,0,0.03); }
+[data-theme="dark"] tr:hover { background: rgba(255,255,255,0.03); }
+
+/* Actions */
+.actions { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: opacity var(--transition);
+}
+.btn-primary { background: var(--color-primary); color: #fff; }
+.btn-danger { background: var(--color-secondary); color: #fff; }
+.btn-outline { background: transparent; border: 1px solid var(--color-text-secondary); color: var(--color-text); }
+.btn:hover { opacity: 0.85; }
+
+/* Badge */
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-success { background: #4caf50; color: #fff; }
+.badge-warning { background: #ff9800; color: #fff; }
+
+/* Modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--color-surface);
+  border-radius: 8px;
+  padding: 2rem;
+  min-width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.24);
+}
+.modal h3 { margin: 0 0 1rem; }
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; font-size: 0.85rem; margin-bottom: 0.3rem; color: var(--color-text-secondary); }
+.form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--color-text-secondary); border-radius: var(--border-radius); background: var(--color-bg); color: var(--color-text); }
+.form-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.5rem; }
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <h1>ACCOS</h1>
+  <nav>
+    <a href="#" class="active">📊 Дашборд</a>
+    <a href="#">👥 Пользователи</a>
+    <a href="#">🏷️ Группы доступа</a>
+    <a href="#">💬 Чаты</a>
+    <a href="#">🎨 Генерации</a>
+    <a href="#">🖼️ Ресурсы</a>
+    <a href="#">⚙️ Настройки</a>
+  </nav>
+  <div class="theme-toggle">
+    <input type="checkbox" id="themeSwitch">
+    <label for="themeSwitch">Тёмная тема</label>
+  </div>
+</aside>
+
+<main class="main">
+  <h2>Дашборд</h2>
+  <div class="stats">
+    <div class="stat-card"><div class="label">Пользователи</div><div class="value">24</div></div>
+    <div class="stat-card"><div class="label">Группы</div><div class="value">5</div></div>
+    <div class="stat-card"><div class="label">Чаты</div><div class="value">142</div></div>
+    <div class="stat-card"><div class="label">Генерации</div><div class="value">89</div></div>
+  </div>
+
+  <h2>Пользователи</h2>
+  <div class="actions">
+    <button class="btn btn-primary" onclick="openModal()">+ Добавить</button>
+    <button class="btn btn-outline">Экспорт</button>
+  </div>
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Логин</th><th>Email</th><th>Баланс</th><th>Статус</th><th></th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>ivanov</td><td>ivanov@domain.local</td><td>340</td><td><span class="badge badge-success">Активен</span></td><td><button class="btn btn-outline">Изменить</button></td></tr>
+      <tr><td>2</td><td>petrov</td><td>petrov@domain.local</td><td>120</td><td><span class="badge badge-success">Активен</span></td><td><button class="btn btn-outline">Изменить</button></td></tr>
+      <tr><td>3</td><td>sidorov</td><td>sidorov@domain.local</td><td>0</td><td><span class="badge badge-warning">Заблокирован</span></td><td><button class="btn btn-outline">Изменить</button></td></tr>
+    </tbody>
+  </table>
+</main>
+
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <h3>Добавить пользователя</h3>
+    <div class="form-group">
+      <label>Логин</label>
+      <input type="text" placeholder="username">
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="text" placeholder="user@domain.local">
+    </div>
+    <div class="form-group">
+      <label>Начальный баланс</label>
+      <input type="number" value="100">
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-primary">Создать</button>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('themeSwitch').addEventListener('change', function () {
+  const theme = this.checked ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('admin-theme', theme);
+});
+if (localStorage.getItem('admin-theme') === 'dark') {
+  document.getElementById('themeSwitch').checked = true;
+  document.documentElement.setAttribute('data-theme', 'dark');
+}
+function openModal() { document.getElementById('userModal').classList.add('show'); }
+function closeModal() { document.getElementById('userModal').classList.remove('show'); }
+document.getElementById('userModal').addEventListener('click', function (e) {
+  if (e.target === this) closeModal();
+});
+</script>
+</body>
+</html>

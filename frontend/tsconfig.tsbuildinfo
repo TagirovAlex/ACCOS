@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/assets/themes/dark.ts","./src/assets/themes/index.ts","./src/assets/themes/light.ts","./src/pages/chatpage.tsx","./src/pages/dashboardpage.tsx","./src/pages/generationpage.tsx","./src/pages/loginpage.tsx","./src/services/api.ts","./src/services/auth.ts"],"version":"6.0.3"}

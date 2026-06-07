@@ -1,0 +1,24 @@
+import { api, setToken } from "./api";
+
+export type User = {
+  id: string;
+  username: string;
+  email?: string;
+  balance: number;
+  permissions: string;
+  is_admin: boolean;
+};
+
+export async function login(username: string, password: string): Promise<User> {
+  const res: any = await api("POST", "/auth/login", { username, password });
+  setToken(res.access_token);
+  return res.user;
+}
+
+export async function getMe(): Promise<User> {
+  return api("GET", "/auth/me");
+}
+
+export function logout() {
+  setToken(null);
+}

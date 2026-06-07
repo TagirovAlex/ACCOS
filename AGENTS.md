@@ -16,88 +16,50 @@ C:\Github\ACCOS\
 ├── backend/                    # FastAPI сервер
 │   ├── app/
 │   │   ├── api/v1/endpoints/   # Роуты FastAPI
-│   │   │   ├── auth.py
-│   │   │   ├── chat.py
-│   │   │   ├── generation.py
-│   │   │   ├── admin.py
-│   │   │   └── user.py
 │   │   ├── core/               # Конфигурация, безопасность
-│   │   │   ├── config.py
-│   │   │   ├── security.py
-│   │   │   └── dependencies.py
 │   │   ├── db/                 # База данных
 │   │   │   ├── base.py
 │   │   │   ├── session.py
 │   │   │   └── models/
-│   │   │       ├── user.py
-│   │   │       ├── chat.py
-│   │   │       ├── generation.py
-│   │   │       ├── image_asset.py
-│   │   │       ├── admin_settings.py
-│   │   │       └── __init__.py
 │   │   ├── repositories/       # Паттерн Repository
-│   │   │   ├── base.py
-│   │   │   ├── user_repository.py
-│   │   │   ├── chat_repository.py
-│   │   │   ├── generation_repository.py
-│   │   │   └── settings_repository.py
 │   │   ├── services/           # Бизнес-логика
-│   │   │   ├── auth_service.py
-│   │   │   ├── economy_service.py
-│   │   │   ├── chat_service.py
-│   │   │   ├── comfyui_service.py
-│   │   │   └── admin_service.py
 │   │   ├── adapters/           # Внешние интеграции
-│   │   │   ├── base.py         # AbstractAdapter
-│   │   │   ├── lmstudio_adapter.py
-│   │   │   ├── comfyui_adapter.py
-│   │   │   └── ldap_adapter.py
 │   │   ├── schemas/            # Pydantic схемы
-│   │   │   ├── auth.py
-│   │   │   ├── chat.py
-│   │   │   ├── generation.py
-│   │   │   └── admin.py
 │   │   └── modules/            # Подключаемые модули
-│   │       ├── base.py         # BaseModule
-│   │       ├── chat_module.py
-│   │       ├── comfyui_module.py
-│   │       └── __init__.py
 │   ├── alembic/
-│   │   ├── versions/
-│   │   └── env.py
 │   ├── tests/
-│   │   ├── conftest.py
-│   │   ├── test_auth.py
-│   │   ├── test_economy.py
-│   │   ├── test_chat.py
-│   │   └── test_comfyui.py
 │   ├── requirements.txt
-│   ├── pyproject.toml
 │   └── main.py
 ├── frontend/                   # React (пользователь)
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   ├── store/
-│   │   └── App.tsx
-│   └── package.json
 ├── admin/                      # React Admin Panel
 │   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
+│   │   ├── assets/             # Статика (темы, стили, скрипты)
+│   │   │   ├── themes/         # Темы (light/dark)
+│   │   │   └── styles/         # CSS/Style файлы
+│   │   ├── components/         # UI компоненты
+│   │   ├── pages/              # Страницы
+│   │   ├── services/           # API клиенты
 │   │   └── App.tsx
 │   └── package.json
+├── config/                     # Все конфиги проекта
+│   ├── .env
+│   ├── .env.example
+│   └── alembic.ini
+├── static/                     # Статические файлы (шаблоны, css, js, images)
+│   ├── css/
+│   ├── js/
+│   ├── images/
+│   └── templates/
 ├── workflows/                  # ComfyUI JSON шаблоны
-│   ├── text_to_image.json
-│   ├── image_edit_1.json
-│   ├── image_edit_2.json
-│   ├── image_edit_3.json
-│   ├── text_to_video.json
-│   └── image_to_video.json
-├── .env.example
-├── AGENTS.md                   # Этот файл
+│   ├── ZIT.json
+│   ├── QWEN edit 1 pic.json
+│   ├── QWEN edit 2 pic.json
+│   ├── QWEN edit 3 pic.json
+│   ├── text_to_video.json      # резерв
+│   └── image_to_video.json     # резерв
+├── .gitignore
+├── AGENTS.md
+├── CHANGELOG.md
 └── README.md
 ```
 

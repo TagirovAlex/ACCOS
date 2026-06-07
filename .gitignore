@@ -11,7 +11,9 @@ env/
 
 # Environment
 .env
+config/.env
 !*.example
+!config/.env.example
 
 # IDE
 .idea/
