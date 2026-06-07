@@ -1,7 +1,7 @@
 {
   "78": {
     "inputs": {
-      "image": "2019-11-10 11-25-25-crop.JPG"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -10,7 +10,7 @@
   },
   "124": {
     "inputs": {
-      "image": "IMG_20190609_143854_cr.jpg"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -19,7 +19,7 @@
   },
   "128": {
     "inputs": {
-      "image": "IMG_20190609_143854_cr.jpg"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -243,7 +243,7 @@
   },
   "189:178": {
     "inputs": {
-      "prompt": "руки женщины опущены вдоль тела. взять лицо женщины со второй фотографии.",
+      "prompt": "",
       "clip": [
         "189:168",
         0

@@ -176,7 +176,7 @@ class BaseAdapter(ABC):
 | Phase 2 | Chat Module (LMStudio adapter, системный промпт, история) |
 | Phase 3 | ComfyUI Module (6 workflow, Image/Video gen, расчёт стоимости) |
 | Phase 4 | Оркестрация (Image→Edit, Image→Video) |
-| Phase 5 | Admin API + Admin Panel (React) |
+| Phase 5 | Admin API + Admin Panel (React) — управление БД, архивами, настройками |
 | Phase 6 | User Frontend (React) |
 
 ### 4.2. Внутри фазы
@@ -186,9 +186,10 @@ class BaseAdapter(ABC):
 3. Написать код.
 4. Установить зависимости (`pip install`), если добавили новые.
 5. Проверить что код запускается (`uvicorn main:app`).
-6. Написать тесты на новую функциональность.
-7. Запустить тесты (`pytest`).
-8. Сообщить о завершении фазы списком созданных файлов.
+6. Обновить CHANGELOG.md — добавить запись о завершённой фазе.
+7. Написать тесты на новую функциональность.
+8. Запустить тесты (`pytest`).
+9. Сообщить о завершении фазы списком созданных файлов.
 
 ### 4.3. Зависимости
 
