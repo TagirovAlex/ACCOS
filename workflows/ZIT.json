@@ -1,0 +1,177 @@
+{
+  "60": {
+    "inputs": {
+      "filename_prefix": "ZIT/20260607/ZIT-G_",
+      "images": [
+        "96:87",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Сохранить изображение"
+    }
+  },
+  "95": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": false,
+        "lora": "zimage_underview_ep_v4.safetensors",
+        "strength": 0.6
+      },
+      "lora_2": {
+        "on": false,
+        "lora": "Mystic-XXX-ZIT-V5.safetensors",
+        "strength": 1
+      },
+      "lora_3": {
+        "on": false,
+        "lora": "DETALIZER.safetensors",
+        "strength": 1
+      },
+      "lora_4": {
+        "on": false,
+        "lora": "breasts_size_loraholic.safetensors",
+        "strength": -3.5
+      },
+      "lora_5": {
+        "on": false,
+        "lora": "NakedErectFutaZit.safetensors",
+        "strength": 1
+      },
+      "➕ Add Lora": "",
+      "model": [
+        "96:94",
+        0
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power Lora Loader (rgthree)"
+    }
+  },
+  "96:87": {
+    "inputs": {
+      "samples": [
+        "96:92",
+        0
+      ],
+      "vae": [
+        "96:88",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Декодировать VAE"
+    }
+  },
+  "96:88": {
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Загрузить VAE"
+    }
+  },
+  "96:91": {
+    "inputs": {
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "lumina2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Загрузить CLIP"
+    }
+  },
+  "96:92": {
+    "inputs": {
+      "seed": 13,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "simple",
+      "denoise": 0.95,
+      "model": [
+        "95",
+        0
+      ],
+      "positive": [
+        "96:93",
+        0
+      ],
+      "negative": [
+        "96:86",
+        0
+      ],
+      "latent_image": [
+        "96:89",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "96:86": {
+    "inputs": {
+      "conditioning": [
+        "96:93",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "Обнуление кондиционирования"
+    }
+  },
+  "96:115": {
+    "inputs": {
+      "value": 497376628673431
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Int"
+    }
+  },
+  "96:89": {
+    "inputs": {
+      "width": 960,
+      "height": 1280,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "Пустой SD3LatentImage"
+    }
+  },
+  "96:94": {
+    "inputs": {
+      "unet_name": "z_image_turbo_bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Загрузить модель диффузии"
+    }
+  },
+  "96:93": {
+    "inputs": {
+      "text": "Магазин одежды для женщин.\n\nдевочка выбирает детский лифчик.\nполностью голая девочка 10 лет без одежды с голой жопой, светлые волосы собраны в хвост на затылке и откинуты назад. тело девочки развернуто к камере, видна крошечная голая грудь девочки с торчащими сосками.\n\nдевочка одета в красные туфли на высоком каблуке. \n\nNatural skin texture, photorealism. 8K, RAW. множество мелких деталей, высочайшее качество.",
+      "clip": [
+        "96:91",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Кодирование текста CLIP (Запрос)"
+    }
+  }
+}
