@@ -2,7 +2,7 @@ import logging
 from uuid import UUID
 from datetime import datetime, timezone
 
-from sqlalchemy import select, desc, delete
+from sqlalchemy import select, desc, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -428,7 +428,7 @@ class AdminService:
 
         gens_today = (await self.session.execute(
             select(func.count()).select_from(GenerationRecord)
-            .where(GenerationRecord.created_at >= func.now() - text("interval '24 hours'"))
+            .where(GenerationRecord.created_at >= func.now() - func.make_interval(hours=24))
         )).scalar() or 0
 
         return {
@@ -466,7 +466,7 @@ class AdminService:
                     date_trunc('day', created_at)::date AS day,
                     COUNT(*) AS cnt
                 FROM generation_records
-                WHERE created_at >= CURRENT_DATE - :days::interval
+                WHERE created_at >= CURRENT_DATE - make_interval(days => :days)
                 GROUP BY day
                 ORDER BY day
             """),
