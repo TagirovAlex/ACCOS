@@ -1,6 +1,5 @@
-import { useState, useMemo, useContext, createContext } from "react";
-import { Admin, Resource, Layout, AppBar, UserMenu, type LayoutProps, type AppBarProps } from "react-admin";
-import { CssBaseline, ThemeProvider, createTheme, MenuItem, ListItemIcon, ListItemText } from "@mui/material";
+import { Admin, Resource, Layout, AppBar, UserMenu, useTheme, LoadingIndicator, type LayoutProps, type AppBarProps } from "react-admin";
+import { MenuItem, ListItemIcon, ListItemText } from "@mui/material";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import { authProvider } from "./services/authProvider";
@@ -17,14 +16,12 @@ import { SettingsList, SettingsEdit, SettingsCreate } from "./pages/Settings";
 import { BackupList } from "./pages/Backups";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
-const ThemeCtx = createContext<{ dark: boolean; toggle: () => void }>({ dark: false, toggle: () => {} });
-
 const ThemeMenuItem = () => {
-  const { dark, toggle } = useContext(ThemeCtx);
+  const [theme, setTheme] = useTheme();
   return (
-    <MenuItem onClick={toggle}>
-      <ListItemIcon>{dark ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}</ListItemIcon>
-      <ListItemText>{dark ? "Светлая тема" : "Тёмная тема"}</ListItemText>
+    <MenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+      <ListItemIcon>{theme === "dark" ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}</ListItemIcon>
+      <ListItemText>{theme === "dark" ? "Светлая тема" : "Тёмная тема"}</ListItemText>
     </MenuItem>
   );
 };
@@ -36,26 +33,12 @@ const CustomUserMenu = () => (
 );
 
 const CustomAppBar = (props: AppBarProps) => (
-  <AppBar {...props} userMenu={<CustomUserMenu />} />
+  <AppBar {...props} userMenu={<CustomUserMenu />} toolbar={<LoadingIndicator />} />
 );
 
-const CustomLayout = (props: LayoutProps) => {
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
-  const theme = useMemo(() => createTheme(darkMode ? darkTheme : lightTheme), [darkMode]);
-  const toggle = () => {
-    const next = !darkMode;
-    setDarkMode(next);
-    localStorage.setItem("theme", next ? "dark" : "light");
-  };
-  return (
-    <ThemeCtx.Provider value={{ dark: darkMode, toggle }}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Layout {...props} appBar={CustomAppBar} />
-      </ThemeProvider>
-    </ThemeCtx.Provider>
-  );
-};
+const CustomLayout = (props: LayoutProps) => (
+  <Layout {...props} appBar={CustomAppBar} />
+);
 
 const App = () => (
   <ErrorBoundary><Admin
@@ -63,6 +46,8 @@ const App = () => (
     dataProvider={dataProvider}
     dashboard={Dashboard}
     layout={CustomLayout}
+    theme={lightTheme}
+    darkTheme={darkTheme}
     requireAuth
   >
     <Resource
