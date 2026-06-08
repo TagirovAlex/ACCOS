@@ -33,7 +33,7 @@ echo '=== Building frontend ==='
 cd "$OLD/frontend" && npm install --silent && npm run build
 
 echo '=== Migrations ==='
-cd "$OLD/backend" && .venv/bin/alembic upgrade head 2>&1
+cd "$OLD" && .venv/bin/alembic -c config/alembic.ini upgrade head 2>&1
 
 echo '=== Restarting ==='
 systemctl daemon-reload || true
