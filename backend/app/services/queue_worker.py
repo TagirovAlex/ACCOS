@@ -23,6 +23,7 @@ GENERATED_DIR = Path(__file__).parent.parent.parent.parent / "static" / "generat
 
 
 async def _process_generation(session: AsyncSession, record: GenerationRecord) -> None:
+    record = await session.merge(record)
     uid = record.user_id
     repo = GenerationRepository(session)
     economy = EconomyService(session)

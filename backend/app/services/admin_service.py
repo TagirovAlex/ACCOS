@@ -84,7 +84,22 @@ class AdminService:
                 is_admin=data.get("is_admin", False),
                 is_active=data.get("is_active", True),
             )
-            return {"success": True, "user": {"id": str(user.id), "username": user.username}}
+            return {
+                "success": True,
+                "user": {
+                    "id": str(user.id),
+                    "username": user.username,
+                    "email": user.email or "",
+                    "full_name": user.full_name,
+                    "balance": float(user.balance),
+                    "permissions": user.permissions,
+                    "group_id": str(user.group_id) if user.group_id else None,
+                    "auth_source": user.auth_source or "local",
+                    "is_active": user.is_active,
+                    "is_admin": user.is_admin,
+                    "created_at": user.created_at,
+                },
+            }
         except Exception as e:
             return {"success": False, "error": str(e)}
 
