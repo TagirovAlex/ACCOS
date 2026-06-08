@@ -1,8 +1,17 @@
 import { useState, useEffect } from "react";
 import {
-  Box, Tabs, Tab, Typography, TextField as MuiTextField,
+  Box, Typography, TextField as MuiTextField,
   Button, Switch, FormControlLabel, Alert, Snackbar, CircularProgress,
+  Paper, List, ListItemButton, ListItemIcon, ListItemText,
 } from "@mui/material";
+import DnsIcon from "@mui/icons-material/Dns";
+import ChatIcon from "@mui/icons-material/Chat";
+import ImageIcon from "@mui/icons-material/Image";
+import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
+import EditIcon from "@mui/icons-material/Edit";
+import MovieIcon from "@mui/icons-material/Movie";
+import PeopleIcon from "@mui/icons-material/People";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import { getToken } from "../services/api";
 
 const API = "/api/v1/admin/settings";
@@ -16,19 +25,19 @@ interface Setting {
 interface CategoryDef {
   key: string;
   label: string;
-  icon?: string;
+  icon: React.ReactNode;
 }
 
 const CATEGORIES: CategoryDef[] = [
-  { key: "Домен", label: "LDAP / Домен" },
-  { key: "LLM", label: "LLM / Чат" },
-  { key: "Генерация", label: "Генерация изображений" },
-  { key: "Цены: LLM", label: "Цены: LLM" },
-  { key: "Цены: Генерация", label: "Цены: генерация" },
-  { key: "Цены: Редактирование", label: "Цены: редактирование" },
-  { key: "Цены: Видео", label: "Цены: видео" },
-  { key: "Пользователи", label: "Пользователи" },
-  { key: "Экономика", label: "Экономика" },
+  { key: "Домен", label: "LDAP / Домен", icon: <DnsIcon /> },
+  { key: "LLM", label: "LLM / Чат", icon: <ChatIcon /> },
+  { key: "Генерация", label: "Генерация изображений", icon: <ImageIcon /> },
+  { key: "Цены: LLM", label: "Цены: LLM", icon: <AttachMoneyIcon /> },
+  { key: "Цены: Генерация", label: "Цены: генерация", icon: <ImageIcon /> },
+  { key: "Цены: Редактирование", label: "Цены: редактирование", icon: <EditIcon /> },
+  { key: "Цены: Видео", label: "Цены: видео", icon: <MovieIcon /> },
+  { key: "Пользователи", label: "Пользователи", icon: <PeopleIcon /> },
+  { key: "Экономика", label: "Экономика", icon: <AccountBalanceIcon /> },
 ];
 
 const CATEGORY_ORDER = CATEGORIES.map((c) => c.key);
@@ -166,7 +175,7 @@ function CategoryForm({
   const hasChanges = settings.some((s) => (values[s.key] ?? s.value) !== s.value);
 
   return (
-    <Box sx={{ mt: 2 }}>
+    <Box>
       {settings.map((s) => (
         <SettingField key={s.key} setting={s} value={values[s.key] ?? s.value} onChange={handleChange} />
       ))}
@@ -255,10 +264,12 @@ function LdapForm({ settings, onSaved }: { settings: Setting[]; onSaved: () => v
   const hasChanges = settings.some((s) => (values[s.key] ?? s.value) !== s.value);
 
   return (
-    <Box sx={{ mt: 2 }}>
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Настройки подключения к Active Directory. После изменения сохраните настройки, затем нажмите "Проверить подключение".
-      </Alert>
+    <Box>
+      <Box sx={{ mb: 3 }}>
+        <Alert severity="info" sx={{ borderRadius: 2 }}>
+          Настройки подключения к Active Directory. После изменения сохраните настройки, затем нажмите "Проверить подключение".
+        </Alert>
+      </Box>
 
       <MuiTextField label="Адрес сервера" helperText="Например: ldap://dc.domain.local:389" value={values.ldap_server ?? ""}
         onChange={(e) => handleChange("ldap_server", e.target.value)} fullWidth sx={{ mb: 2 }} />
@@ -347,24 +358,56 @@ export const SettingsList = () => {
   const currentTab = tab < CATEGORIES.length ? CATEGORIES[tab] : CATEGORIES[0];
   const currentSettings = grouped[currentTab.key] || [];
   const isLdapTab = currentTab.key === "Домен";
+  const isEmpty = currentSettings.length === 0 && !isLdapTab;
 
   return (
-    <Box>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
-        {CATEGORIES.map((c) => (
-          <Tab key={c.key} label={c.label} disabled={!grouped[c.key]?.length && c.key !== "Домен"} />
-        ))}
-      </Tabs>
+    <Box sx={{ display: "flex", gap: 3 }}>
+      <Paper sx={{ width: 240, flexShrink: 0, borderRadius: 2, overflow: "hidden" }}>
+        <List dense disablePadding>
+          {CATEGORIES.map((c, i) => {
+            const hasSettings = !!grouped[c.key]?.length || c.key === "Домен";
+            return (
+              <ListItemButton
+                key={c.key}
+                selected={tab === i}
+                disabled={!hasSettings}
+                onClick={() => setTab(i)}
+                sx={{
+                  px: 2, py: 1.5,
+                  borderLeft: tab === i ? 3 : 0,
+                  borderColor: "primary.main",
+                  "&.Mui-selected": {
+                    bgcolor: (t) => t.palette.mode === "dark" ? "rgba(86,179,240,0.08)" : "rgba(68,138,255,0.06)",
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 36, color: tab === i ? "primary.main" : undefined }}>
+                  {c.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={c.label}
+                  primaryTypographyProps={{ variant: "body2", fontWeight: tab === i ? 600 : 400 }}
+                />
+              </ListItemButton>
+            );
+          })}
+        </List>
+      </Paper>
 
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}><CircularProgress /></Box>
-      ) : currentSettings.length === 0 && !isLdapTab ? (
-        <Box sx={{ mt: 4, textAlign: "center" }}><Typography color="text.secondary">Нет настроек в этой категории</Typography></Box>
-      ) : isLdapTab ? (
-        <LdapForm settings={currentSettings} onSaved={fetchData} />
-      ) : (
-        <CategoryForm settings={currentSettings} onSaved={fetchData} />
-      )}
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="h6" fontWeight={600} mb={3}>{currentTab.label}</Typography>
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}><CircularProgress /></Box>
+        ) : isEmpty ? (
+          <Box sx={{ mt: 2, textAlign: "center" }}>
+            <Typography color="text.secondary">Нет настроек в этой категории</Typography>
+          </Box>
+        ) : isLdapTab ? (
+          <LdapForm settings={currentSettings} onSaved={fetchData} />
+        ) : (
+          <CategoryForm settings={currentSettings} onSaved={fetchData} />
+        )}
+      </Box>
     </Box>
   );
 };

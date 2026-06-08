@@ -1,8 +1,9 @@
-import type { RaThemeOptions } from "react-admin";
+import { defaultTheme } from "react-admin";
 
-export const darkTheme: RaThemeOptions = {
+export const darkTheme = {
+  ...defaultTheme,
   palette: {
-    mode: "dark",
+    mode: "dark" as const,
     primary: { main: "#56b3f0" },
     secondary: { main: "#00bc8c" },
     background: { default: "#1a1d21", paper: "#25282d" },
@@ -21,39 +22,6 @@ export const darkTheme: RaThemeOptions = {
   },
   shape: { borderRadius: 8 },
   components: {
-    RaList: { defaultProps: { empty: false } },
-    RaDatagrid: {
-      styleOverrides: {
-        root: {
-          "& .RaDatagrid-headerCell": {
-            fontWeight: 600,
-            textTransform: "uppercase",
-            fontSize: "0.72rem",
-            letterSpacing: "0.08em",
-            color: "#9aa0a6",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-          },
-          "& .RaDatagrid-row": {
-            "&:hover": { backgroundColor: "rgba(86,179,240,0.04)" },
-          },
-          "& .RaDatagrid-rowCell": {
-            borderBottom: "1px solid rgba(255,255,255,0.04)",
-          },
-        },
-      },
-    },
-    RaShow: {
-      styleOverrides: { card: { backgroundImage: "none" } },
-    },
-    RaSimpleShowLayout: {
-      styleOverrides: { root: { backgroundImage: "none" } },
-    },
-    RaListToolbar: {
-      styleOverrides: { root: { alignItems: "center" } },
-    },
-    RaSearchInput: {
-      styleOverrides: { input: { borderRadius: 6 } },
-    },
     MuiCard: {
       styleOverrides: {
         root: {
@@ -66,33 +34,6 @@ export const darkTheme: RaThemeOptions = {
     MuiPaper: {
       styleOverrides: {
         root: { backgroundImage: "none" },
-      },
-    },
-    MuiTableHead: {
-      styleOverrides: {
-        root: {
-          "& .MuiTableCell-head": {
-            fontWeight: 600,
-            fontSize: "0.72rem",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            color: "#9aa0a6",
-          },
-        },
-      },
-    },
-    MuiTableBody: {
-      styleOverrides: {
-        root: {
-          "& .MuiTableRow-root:hover": {
-            backgroundColor: "rgba(86,179,240,0.04)",
-          },
-        },
-      },
-    },
-    MuiTableCell: {
-      styleOverrides: {
-        root: { borderBottom: "1px solid rgba(255,255,255,0.04)" },
       },
     },
     MuiButton: {
@@ -123,33 +64,6 @@ export const darkTheme: RaThemeOptions = {
           backgroundColor: "#1e2126",
           borderBottom: "1px solid rgba(255,255,255,0.06)",
           boxShadow: "none",
-        },
-      },
-    },
-    RaSidebar: {
-      styleOverrides: {
-        root: {
-          "& .RaSidebar-fixed": {
-            backgroundColor: "#1e2126",
-            borderRight: "1px solid rgba(255,255,255,0.06)",
-          },
-        },
-      },
-    },
-    RaMenu: {
-      styleOverrides: {
-        root: {
-          "& .RaMenu-item": {
-            borderRadius: 6,
-            margin: "2px 8px",
-            "&.active": {
-              backgroundColor: "rgba(86,179,240,0.12)",
-              "& .MuiListItemIcon-root": { color: "#56b3f0" },
-            },
-            "&:hover:not(.active)": {
-              backgroundColor: "rgba(255,255,255,0.04)",
-            },
-          },
         },
       },
     },

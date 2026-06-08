@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
+from app.core.config import settings
 from app.core.dependencies import get_db, get_current_user_id
 from app.schemas.admin import (
     AdminUserListResponse,
