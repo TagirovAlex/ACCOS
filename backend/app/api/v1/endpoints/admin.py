@@ -77,14 +77,17 @@ async def get_user(
     return user
 
 
-@router.post("/users", response_model=BaseResponse)
+@router.post("/users", response_model=AdminUserResponse)
 async def create_user(
     request: AdminUserCreate,
     user_id: str = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return BaseResponse(**await service.create_user(request.model_dump()))
+    result = await service.create_user(request.model_dump())
+    if not result.get("success"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("error", "Creation failed"))
+    return result["user"]
 
 
 @router.put("/users/{user_id}", response_model=BaseResponse)
