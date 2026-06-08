@@ -37,8 +37,11 @@ cd "$OLD" && .venv/bin/alembic -c config/alembic.ini upgrade head 2>&1
 
 echo '=== Restarting ==='
 systemctl daemon-reload || true
-systemctl restart accos || true
-sleep 3
+for i in 1 2 3; do
+  systemctl start accos && { sleep 3; break; }
+  echo "Retry $i..."
+  sleep 2
+done
 systemctl status accos --no-pager -l | head -20
 
 echo '=== Done ==='
