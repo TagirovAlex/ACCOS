@@ -8,6 +8,8 @@ build/
 .venv/
 venv/
 env/
+.pytest_cache/
+*.tsbuildinfo
 
 # Environment
 .env
@@ -31,12 +33,11 @@ Thumbs.db
 
 # Node
 node_modules/
-dist/
-.next/
+
+# Static (auto-generated)
+static/uploads/
+static/generated/
 
 # Database
 *.db
 *.sqlite3
-
-# Uploads
-uploads/

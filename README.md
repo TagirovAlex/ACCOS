@@ -4,7 +4,7 @@
 
 **Стек:** Python 3.11 / FastAPI (async) + PostgreSQL 17 + SQLAlchemy 2.0 (async) / asyncpg + Alembic + React 19 / MUI 7 / Vite  
 **Интеграции:** LMStudio API, ComfyUI API, LDAP/AD  
-**Аутентификация:** JWT (HS256)
+**Аутентификация:** JWT (HS256) access 60 min + refresh 7 days
 
 ---
 
@@ -16,8 +16,10 @@
 | Admin API | ✅ Завершён (Phase 5) |
 | Admin Panel (React) | ✅ Завершён (Phase 5) |
 | User Frontend (React) | ✅ Завершён (Phase 6) |
-| Тесты (26/26) | ✅ Все проходят |
-| Коммитов | 6 |
+| Тесты бэкенда (26/26) | ✅ Все проходят |
+| Тесты фронтенда (16/16) | ✅ Все проходят |
+| Rate limiting | ✅ slowapi (login 5/min, gen 10/min, chat 30/min) |
+| Коммитов | 7 |
 | Ветка | `master` |
 
 ---
@@ -255,12 +257,13 @@ C:\Github\ACCOS\
 |-------|------|----------|---------|----------|
 | GET | `/api/v1/health` | Проверка сервера | — | `{"status":"ok","version":"1.0.0"}` |
 
-### Auth (JWT не требуется для /login)
+### Auth
 
-| Метод | Path | Описание | Request | Response |
-|-------|------|----------|---------|----------|
-| POST | `/api/v1/auth/login` | Аутентификация (LDAP) → JWT | `LoginRequest` | `TokenResponse` |
-| GET | `/api/v1/auth/me` | Профиль + баланс + права | JWT Bearer | `UserInfoResponse` |
+| Метод | Path | Auth | Описание |
+|-------|------|------|----------|
+| POST | `/api/v1/auth/login` | — | Аутентификация (LDAP) → JWT access + refresh |
+| POST | `/api/v1/auth/refresh` | — | Обновить access token по refresh token |
+| GET | `/api/v1/auth/me` | Bearer | Профиль + баланс + права |
 
 ### User
 
@@ -272,17 +275,20 @@ C:\Github\ACCOS\
 
 | Метод | Path | Описание | Request | Response |
 |-------|------|----------|---------|----------|
-| POST | `/api/v1/chat/create` | Создать чат-сессию | `ChatCreateRequest` | `ChatSessionResponse` |
-| GET | `/api/v1/chat/list` | Список чатов пользователя | JWT Bearer | `ChatListResponse` |
-| GET | `/api/v1/chat/{session_id}` | История сообщений | JWT Bearer | `ChatHistoryResponse` |
-| POST | `/api/v1/chat/{session_id}/send` | Отправить сообщение | `ChatSendRequest` | `ChatSendResponse` |
+| POST | `/api/v1/chat/create` | Создать чат-сессию | Bearer | `ChatCreateRequest` → `ChatSessionResponse` |
+| GET | `/api/v1/chat/list` | Список чатов пользователя | Bearer | `ChatListResponse` |
+| GET | `/api/v1/chat/{session_id}` | История сообщений | Bearer | `ChatHistoryResponse` |
+| POST | `/api/v1/chat/{session_id}/send` | Отправить сообщение (LLM) | Bearer | `ChatSendRequest` → `ChatSendResponse` |
+| DELETE | `/api/v1/chat/{session_id}` | Удалить чат (soft) | Bearer | `{"success": true}` |
 
 ### Generation
 
 | Метод | Path | Описание | Request | Response |
 |-------|------|----------|---------|----------|
-| POST | `/api/v1/generate/` | Запустить workflow | `GenerateRequest` | `GenerateResponse` |
-| GET | `/api/v1/generate/history` | История генераций | JWT Bearer | `HistoryResponse` |
+| POST | `/api/v1/generate/upload` | Загрузить reference-изображение (resize 2048px) | Bearer | multipart → `UploadResponse` |
+| POST | `/api/v1/generate/` | Запустить workflow (ставит в очередь) | Bearer | `GenerateRequest` → `GenerateResponse` |
+| GET | `/api/v1/generate/history` | История генераций | Bearer | `HistoryResponse` |
+| GET | `/api/v1/generate/{generation_id}/status` | Статус генерации + изображения | Bearer | `GenerationStatusResponse` |
 
 ### Orchestration
 
@@ -511,8 +517,16 @@ class BaseRepository[ModelType]:
 ## Тестирование
 
 ```bash
+# Бэкенд (26 тестов)
 cd backend
-.venv\Scripts\python -m pytest tests/ -v    # 26 passed, 0 failed
+.venv\Scripts\python -m pytest tests/ -v
+
+# Фронтенд (16 тестов)
+cd frontend
+npx vitest run
+
+# Всё сразу
+npm test   # из корня проекта
 ```
 
 ### Фикстуры (conftest.py)
@@ -536,6 +550,14 @@ cd backend
 | `test_generation.py` | 2 | Запуск workflow, история |
 | `test_admin.py` | 8 | Все админские CRUD + проверка прав |
 | `test_health.py` | 1 | Health check |
+
+### Frontend тесты (Vitest + Testing Library)
+
+| Файл | Тесты | Что тестирует |
+|------|-------|---------------|
+| `ErrorPage.test.tsx` | 5 | Рендер статуса, error_id, чипсов, кнопок, вызов onRetry |
+| `SimpleMarkdown.test.tsx` | 6 | Bold, italic, inline code, code block, HTML escape, plain text |
+| `api.test.ts` | 5 | GET запрос, Authorization header, ApiError, 401 auto-refresh |
 
 ---
 
@@ -585,11 +607,11 @@ npm run dev                      # → http://localhost:3000
 | Phase 6 | User Frontend (React) | ✅ |
 | **Будущее** | **Что можно сделать дальше** | |
 | — | Видео-генерация (text_to_video.json, image_to_video.json) | ⏳ |
-| — | E2E тесты (Cypress/Playwright) | 📝 |
+| — | E2E тесты (Playwright) | 📝 |
 | — | CI/CD (GitHub Actions) | 📝 |
-| — | Документация Swagger (дополнить описания) | 📝 |
 | — | Мониторинг и алертинг | 📝 |
-| — | Rate limiting | 📝 |
+| — | Frontend тесты (Vitest) | ✅ |
+| — | Rate limiting (slowapi) | ✅ |
 
 ---
 
@@ -600,7 +622,7 @@ npm run dev                      # → http://localhost:3000
 3. **Strategy Pattern** — расчёт стоимости через стратегии (легко добавить новые типы)
 4. **Adapter Pattern** — внешние интеграции через BaseAdapter (легко мокать, легко заменять)
 5. **Module Pattern** — подключаемые модули (BaseModule), хотя сейчас все роуты зарегистрированы в main.py напрямую
-6. **JWT без refresh** — access token живёт 60 минут, refresh не реализован
+6. **JWT с refresh** — access token живёт 60 минут, refresh token 7 дней, 401 → автоматическое обновление
 7. **LDAP fallback** — при недоступности реального LDAP работает MockLDAPAdapter (локальный admin)
 8. **NullPool в тестах** — изолированные соединения для избежания блокировок asyncpg
 9. **Автоаккреал** — asyncio background task (не APScheduler) каждые 3600с
