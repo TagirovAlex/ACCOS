@@ -11,6 +11,7 @@ import VideoFileIcon from "@mui/icons-material/VideoFile";
 import LandscapeIcon from "@mui/icons-material/Landscape";
 import PortraitIcon from "@mui/icons-material/Portrait";
 import CropSquareIcon from "@mui/icons-material/CropSquare";
+import TuneIcon from "@mui/icons-material/Tune";
 import { api } from "../services/api";
 
 const WORKFLOWS = [
@@ -77,6 +78,7 @@ export const GenerationPage = () => {
   const [videoPrompt, setVideoPrompt] = useState("");
   const [videoDuration, setVideoDuration] = useState(5);
   const [actionDialog, setActionDialog] = useState<"" | "edit" | "video">("");
+  const [actionLoading, setActionLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -211,37 +213,53 @@ export const GenerationPage = () => {
   };
 
   const handleSendToEdit = async () => {
-    if (!selectedHistory || !editPrompt.trim()) return;
+    if (!selectedHistory || !editPrompt.trim() || actionLoading) return;
+    setActionLoading(true);
     try {
-      const res: any = await api("POST", `/orchestrate/image-to-edit/${selectedHistory.id}?edit_workflow=${editWorkflow}&prompt=${encodeURIComponent(editPrompt.trim())}`, { files: [] });
-      if (res.success) {
+      const qs = new URLSearchParams({ edit_workflow: editWorkflow, prompt: editPrompt.trim() });
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/v1/orchestrate/image-to-edit/${selectedHistory.id}?${qs}`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (data.success) {
         setActionDialog("");
         setEditPrompt("");
         setSelectedHistory(null);
-        pollStatus(res.generation_id).then(() => loadHistory());
+        pollStatus(data.generation_id).then(() => loadHistory());
       } else {
-        setError(res.error || "Ошибка запуска редактирования");
+        setError(data.error || "Ошибка запуска редактирования");
       }
     } catch (err: any) {
       setError(err.message);
     }
+    setActionLoading(false);
   };
 
   const handleSendToVideo = async () => {
-    if (!selectedHistory || !videoPrompt.trim()) return;
+    if (!selectedHistory || !videoPrompt.trim() || actionLoading) return;
+    setActionLoading(true);
     try {
-      const res: any = await api("POST", `/orchestrate/image-to-video/${selectedHistory.id}?prompt=${encodeURIComponent(videoPrompt.trim())}&duration=${videoDuration}`);
-      if (res.success) {
+      const qs = new URLSearchParams({ prompt: videoPrompt.trim(), duration: String(videoDuration) });
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/v1/orchestrate/image-to-video/${selectedHistory.id}?${qs}`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (data.success) {
         setActionDialog("");
         setVideoPrompt("");
         setSelectedHistory(null);
-        pollStatus(res.generation_id).then(() => loadHistory());
+        pollStatus(data.generation_id).then(() => loadHistory());
       } else {
-        setError(res.error || "Ошибка запуска видео");
+        setError(data.error || "Ошибка запуска видео");
       }
     } catch (err: any) {
       setError(err.message);
     }
+    setActionLoading(false);
   };
 
   const statusLabels: Record<string, string> = {
@@ -269,33 +287,32 @@ export const GenerationPage = () => {
 
               <TextField label="Промпт" fullWidth multiline rows={3} value={prompt} onChange={e => setPrompt(e.target.value)} margin="normal" placeholder="Опишите, что хотите получить..." />
 
-              <Typography variant="body2" fontWeight={600} mt={2} mb={1}>Разрешение</Typography>
-              <ToggleButtonGroup
-                value={selectedPreset}
-                exclusive
-                onChange={(_, v) => { if (v !== null) setSelectedPreset(v); }}
-                size="small"
-                sx={{ flexWrap: "wrap", gap: 0.5, mb: selectedPreset === CUSTOM ? 1 : 0 }}
-              >
-                {RESOLUTION_PRESETS.map(p => (
-                  <ToggleButton key={p.label} value={p.label} sx={{ px: 1.5, py: 0.5, textTransform: "none" }}>
-                    {p.icon} <Box component="span" sx={{ ml: 0.5 }}>{p.label}</Box>
-                  </ToggleButton>
-                ))}
-                <ToggleButton value={CUSTOM} sx={{ px: 1.5, py: 0.5, textTransform: "none" }}>
-                  Свой
-                </ToggleButton>
-              </ToggleButtonGroup>
-
-              {selectedPreset === CUSTOM && (
-                <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
-                  <TextField label="Ширина" type="number" size="small" value={customWidth}
-                    onChange={e => setCustomWidth(Math.max(256, Number(e.target.value)))}
-                    inputProps={{ min: 256, max: 2048, step: 64 }} sx={{ width: 120 }} />
-                  <TextField label="Высота" type="number" size="small" value={customHeight}
-                    onChange={e => setCustomHeight(Math.max(256, Number(e.target.value)))}
-                    inputProps={{ min: 256, max: 2048, step: 64 }} sx={{ width: 120 }} />
-                </Box>
+              {!workflow.startsWith("qwen_edit") && (
+                <>
+                  <Typography variant="body2" fontWeight={600} mt={2} mb={1}>Разрешение</Typography>
+                  <ToggleButtonGroup
+                    value={selectedPreset}
+                    exclusive
+                    onChange={(_, v) => { if (v !== null) setSelectedPreset(v); }}
+                    size="small"
+                    sx={{ flexWrap: "wrap", gap: 0.5, mb: selectedPreset === CUSTOM ? 1 : 0 }}
+                  >
+                    {RESOLUTION_PRESETS.map(p => (
+                      <ToggleButton key={p.label} value={p.label} sx={{ px: 1.5, py: 0.5, textTransform: "none" }}>
+                        {p.icon} <Box component="span" sx={{ ml: 0.5 }}>{p.label}</Box>
+                      </ToggleButton>
+                    ))}
+                    <ToggleButton value={CUSTOM} sx={{ px: 1.5, py: 0.5, textTransform: "none", gap: 0.5 }}>
+                      <TuneIcon fontSize="small" /> Свой
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                  {selectedPreset === CUSTOM && (
+                    <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
+                      <TextField label="W" type="number" size="small" value={customWidth} onChange={e => setCustomWidth(Number(e.target.value))} sx={{ width: 100 }} />
+                      <TextField label="H" type="number" size="small" value={customHeight} onChange={e => setCustomHeight(Number(e.target.value))} sx={{ width: 100 }} />
+                    </Box>
+                  )}
+                </>
               )}
 
               {selectedWorkflow?.needsRefs && (
@@ -480,7 +497,7 @@ export const GenerationPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setActionDialog("")}>Отмена</Button>
-          <Button variant="contained" onClick={handleSendToEdit} disabled={!editPrompt.trim()}>Запустить</Button>
+          <Button variant="contained" onClick={handleSendToEdit} disabled={!editPrompt.trim() || actionLoading}>Запустить</Button>
         </DialogActions>
       </Dialog>
 
@@ -495,7 +512,7 @@ export const GenerationPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setActionDialog("")}>Отмена</Button>
-          <Button variant="contained" onClick={handleSendToVideo} disabled={!videoPrompt.trim()}>Запустить</Button>
+          <Button variant="contained" onClick={handleSendToVideo} disabled={!videoPrompt.trim() || actionLoading}>Запустить</Button>
         </DialogActions>
       </Dialog>
     </Box>

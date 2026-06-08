@@ -21,21 +21,25 @@ async def image_to_edit(
     generation_id: str,
     edit_workflow: str,
     prompt: str,
-    files: list[UploadFile] = File(...),
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    files: list[UploadFile] | None = File(default=None),
 ):
-    saved_paths = []
-    for f in files:
-        ext = os.path.splitext(f.filename or "image.png")[1] or ".png"
-        file_id = str(uuid.uuid4())
-        save_path = UPLOAD_DIR / f"{file_id}{ext}"
-        content = await f.read()
-        await asyncio.to_thread(save_path.write_bytes, content)
-        saved_paths.append(str(save_path))
+    saved_paths: list[str] = []
+    if files:
+        for f in files:
+            ext = os.path.splitext(f.filename or "image.png")[1] or ".png"
+            file_id = str(uuid.uuid4())
+            save_path = UPLOAD_DIR / f"{file_id}{ext}"
+            content = await f.read()
+            await asyncio.to_thread(save_path.write_bytes, content)
+            saved_paths.append(str(save_path))
 
     service = OrchestrationService(db)
-    result = await service.enqueue_image_to_edit(user_id, generation_id, edit_workflow, prompt, saved_paths)
+    result = await service.enqueue_image_to_edit(
+        user_id, generation_id, edit_workflow, prompt,
+        reference_images=saved_paths if saved_paths else None,
+    )
 
     return GenerateResponse(**result)
 

@@ -20,13 +20,21 @@ class OrchestrationService:
         self.generation_repo = GenerationRepository(session)
         self.economy = EconomyService(session)
 
-    async def enqueue_image_to_edit(self, user_id: str, generation_id: str, edit_workflow: str, prompt: str, reference_images: list[str]) -> dict:
+    async def enqueue_image_to_edit(self, user_id: str, generation_id: str, edit_workflow: str, prompt: str, reference_images: list[str] | None = None) -> dict:
         uid = UUID(user_id)
         gen = await self.generation_repo.get(UUID(generation_id))
         if not gen:
             return {"success": False, "error": "Source generation not found"}
         if str(gen.user_id) != user_id:
             return {"success": False, "error": "Access denied"}
+
+        # Use generation's own assets as reference if none provided
+        if not reference_images:
+            assets = gen.assets
+            if assets:
+                reference_images = [str(PROJECT_ROOT / a.file_path) for a in assets if a.file_path]
+        if not reference_images:
+            return {"success": False, "error": "No reference images available"}
 
         cost = await self.economy.calculate_cost("image_edit", width=gen.width or 1024, height=gen.height or 1024)
         deduct = await self.economy.deduct_balance(user_id, cost)
