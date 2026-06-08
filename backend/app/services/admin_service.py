@@ -384,9 +384,10 @@ class AdminService:
 
     async def _force_delete(self, model_class, record_id: str) -> dict:
         try:
-            await self.session.execute(
-                delete(model_class).where(model_class.id == UUID(record_id))
-            )
+            obj = await self.session.get(model_class, UUID(record_id))
+            if obj is None:
+                return {"success": False, "error": "Record not found"}
+            await self.session.delete(obj)
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}

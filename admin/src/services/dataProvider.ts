@@ -66,7 +66,8 @@ export const dataProvider: any = {
     const url = resource === "settings"
       ? `${API_BASE}/settings/${params.id}`
       : `${API_BASE}/${resource}/${params.id}`;
-    await httpClient(url, { method: "DELETE" });
+    const data = await httpClient(url, { method: "DELETE" });
+    if (data && data.success === false) throw new Error(data.error || "Delete failed");
     return { data: { id: params.id } };
   },
   getMany: async (resource: string, params: any) => {
@@ -87,11 +88,12 @@ export const dataProvider: any = {
   },
   deleteMany: async (resource: string, params: any) => {
     await Promise.all(
-      (params.ids || []).map((id: string) => {
+      (params.ids || []).map(async (id: string) => {
         const url = resource === "settings"
           ? `${API_BASE}/settings/${id}`
           : `${API_BASE}/${resource}/${id}`;
-        return httpClient(url, { method: "DELETE" });
+        const data = await httpClient(url, { method: "DELETE" });
+        if (data && data.success === false) throw new Error(data.error || "Delete failed");
       })
     );
     return { data: params.ids };

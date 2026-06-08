@@ -1,5 +1,5 @@
-import { Admin, Resource, Layout, AppBar, UserMenu, useTheme, LoadingIndicator, type LayoutProps, type AppBarProps } from "react-admin";
-import { MenuItem, ListItemIcon, ListItemText } from "@mui/material";
+import { Admin, Resource, Layout, AppBar, UserMenu, useTheme, Logout, ToggleThemeButton, LoadingIndicator, type LayoutProps, type AppBarProps } from "react-admin";
+import { MenuItem, ListItemIcon, ListItemText, Box } from "@mui/material";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import { authProvider } from "./services/authProvider";
@@ -29,11 +29,19 @@ const ThemeMenuItem = () => {
 const CustomUserMenu = () => (
   <UserMenu>
     <ThemeMenuItem />
+    <Logout />
   </UserMenu>
 );
 
+const CustomToolbar = () => (
+  <Box sx={{ display: "flex", alignItems: "center", mr: 2 }}>
+    <LoadingIndicator />
+    <ToggleThemeButton />
+  </Box>
+);
+
 const CustomAppBar = (props: AppBarProps) => (
-  <AppBar {...props} userMenu={<CustomUserMenu />} toolbar={<LoadingIndicator />} />
+  <AppBar {...props} userMenu={<CustomUserMenu />} toolbar={<CustomToolbar />} />
 );
 
 const CustomLayout = (props: LayoutProps) => (

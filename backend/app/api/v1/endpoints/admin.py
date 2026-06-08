@@ -210,7 +210,10 @@ async def delete_chat(
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return BaseResponse(**await service.force_delete_chat(chat_id))
+    result = await service.force_delete_chat(chat_id)
+    if not result["success"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("error", "Delete failed"))
+    return BaseResponse(**result)
 
 
 @router.get("/generations", response_model=AdminGenerationListResponse)
@@ -244,7 +247,10 @@ async def delete_generation(
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return BaseResponse(**await service.force_delete_generation(gen_id))
+    result = await service.force_delete_generation(gen_id)
+    if not result["success"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("error", "Delete failed"))
+    return BaseResponse(**result)
 
 
 @router.get("/assets", response_model=AdminAssetListResponse)
