@@ -4,6 +4,7 @@ import { ThemeProvider, CssBaseline, createTheme, AppBar, Toolbar, Typography, B
 import HomeIcon from "@mui/icons-material/Home";
 import ChatIcon from "@mui/icons-material/Chat";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import HistoryIcon from "@mui/icons-material/History";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -21,7 +22,8 @@ const DRAWER_WIDTH = 220;
 const navItems = [
   { path: "/", label: "Дашборд", icon: <HomeIcon /> },
   { path: "/chat", label: "Чат", icon: <ChatIcon /> },
-  { path: "/generate", label: "Генерация", icon: <AutoAwesomeIcon /> },
+  { path: "/generate", label: "Новая генерация", icon: <AutoAwesomeIcon /> },
+  { path: "/history", label: "История", icon: <HistoryIcon /> },
   { path: "/profile", label: "Профиль", icon: <SettingsIcon /> },
 ];
 
@@ -71,6 +73,7 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
             <Route path="/" element={<ErrorBoundary><DashboardPage user={user} /></ErrorBoundary>} />
             <Route path="/chat" element={<ErrorBoundary><ChatPage /></ErrorBoundary>} />
             <Route path="/generate" element={<ErrorBoundary><GenerationPage /></ErrorBoundary>} />
+            <Route path="/history" element={<ErrorBoundary><GenerationPage viewHistory /></ErrorBoundary>} />
             <Route path="/profile" element={<ErrorBoundary><ProfilePage user={user} /></ErrorBoundary>} />
           </Routes>
         </Box>

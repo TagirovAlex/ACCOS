@@ -102,7 +102,7 @@ export const DashboardPage = ({ user }: Props) => {
 
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="h6" fontWeight={600}>История генераций</Typography>
-        <Button size="small" onClick={() => navigate("/generate?view=history")} endIcon={<AutoAwesomeIcon />}>Все генерации</Button>
+        <Button size="small" onClick={() => navigate("/history")} endIcon={<AutoAwesomeIcon />}>Все генерации</Button>
       </Box>
 
       {!loaded ? (

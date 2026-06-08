@@ -22,6 +22,7 @@ export const ProfilePage = ({ user }: Props) => {
   const [saving, setSaving] = useState(false);
   const [savingPrompt, setSavingPrompt] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const [avatarPath, setAvatarPath] = useState<string | null>(user.avatar_path || null);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({ open: false, message: "", severity: "success" });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -31,6 +32,7 @@ export const ProfilePage = ({ user }: Props) => {
       setFullName(p.full_name || "");
       setEmail(p.email || "");
       setSystemPrompt(p.default_system_prompt || "");
+      if (p.avatar_path) setAvatarPath(p.avatar_path);
     }).catch(() => {
     });
   }, [user]);
@@ -47,11 +49,12 @@ export const ProfilePage = ({ user }: Props) => {
     if (!avatarFile) return;
     setSavingAvatar(true);
     try {
-      await uploadAvatar(avatarFile);
+      const res = await uploadAvatar(avatarFile);
       setSnackbar({ open: true, message: "Аватар обновлён", severity: "success" });
       setAvatarPreview(null);
       setAvatarFile(null);
       setAvatarError(false);
+      if (res?.avatar_url) setAvatarPath(res.avatar_url.replace(/^\//, ""));
     } catch {
       setSnackbar({ open: true, message: "Ошибка загрузки аватара", severity: "error" });
     } finally {
@@ -84,7 +87,7 @@ export const ProfilePage = ({ user }: Props) => {
   };
 
   const isLdap = user.auth_source === "ldap";
-  const avatarUrl = user.avatar_path ? `/${user.avatar_path}` : null;
+  const avatarUrl = avatarPath ? `/${avatarPath}` : null;
 
   return (
     <Box>

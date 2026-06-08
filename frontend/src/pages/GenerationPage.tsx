@@ -59,9 +59,9 @@ interface HistoryItem {
   images: ImageAsset[];
 }
 
-export const GenerationPage = () => {
+export const GenerationPage = ({ viewHistory: forceHistory }: { viewHistory?: boolean }) => {
   const [searchParams] = useSearchParams();
-  const [viewHistory, setViewHistory] = useState(searchParams.get("view") === "history");
+  const [viewHistory, setViewHistory] = useState(forceHistory || searchParams.get("view") === "history");
   const [workflow, setWorkflow] = useState("z_image");
   const [prompt, setPrompt] = useState("");
   const [files, setFiles] = useState<File[]>([]);
