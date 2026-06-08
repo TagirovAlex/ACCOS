@@ -1,11 +1,12 @@
 import logging
 from uuid import UUID
 
+from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.ldap_adapter import LDAPAdapter, MockLDAPAdapter
+from app.adapters.ldap_adapter import LDAPAdapter
 from app.core.config import settings
-from app.core.security import create_access_token, create_refresh_token, decode_token
+from app.core.security import create_access_token, create_refresh_token, decode_token, verify_password
 from app.repositories.user_repository import UserRepository
 from app.repositories.settings_repository import SettingsRepository
 from app.services.settings_service import SettingsService
@@ -24,7 +25,8 @@ class AuthService:
     async def _init_ldap(self):
         if self.ldap is not None:
             return
-        if not settings.ldap_enabled:
+        ldap_enabled_setting = await self.settings_svc.get("ldap_enabled", str(settings.ldap_enabled).lower())
+        if ldap_enabled_setting != "true":
             self.ldap = None
             return
         server = await self.settings_svc.get("ldap_server", settings.ldap_server)
@@ -32,19 +34,24 @@ class AuthService:
         base_dn = await self.settings_svc.get("ldap_base_dn", settings.ldap_base_dn)
         self.ldap = LDAPAdapter(server=server, domain=domain, base_dn=base_dn)
 
+    async def _authenticate_local(self, username: str, password: str) -> dict:
+        user = await self.user_repo.get_by_username(username)
+        if user and user.hashed_password and verify_password(password, user.hashed_password):
+            return {"authenticated": True, "from_local": True}
+        return {"authenticated": False, "error": "Invalid username or password"}
+
     async def _authenticate_ldap(self, username: str, password: str) -> dict:
         await self._init_ldap()
         if not self.ldap:
-            logger.info("LDAP disabled, using local authentication fallback")
-            mock = MockLDAPAdapter()
-            return await mock.execute(username=username, password=password)
+            return await self._authenticate_local(username, password)
         result = await self.ldap.execute(username=username, password=password)
-        if not result.get("authenticated"):
-            logger.warning(f"LDAP failed ({result.get('error')}), trying local admin fallback")
-            mock = MockLDAPAdapter()
-            mock_result = await mock.execute(username=username, password=password)
-            if mock_result.get("authenticated"):
-                return mock_result
+        if result.get("authenticated"):
+            result["from_ldap"] = True
+            return result
+        logger.warning(f"LDAP auth failed ({result.get('error')}), falling back to local password")
+        local = await self._authenticate_local(username, password)
+        if local.get("authenticated"):
+            return local
         return result
 
     async def _resolve_group_and_permissions(self, ldap_result: dict) -> tuple[str | None, str, float]:
@@ -94,6 +101,7 @@ class AuthService:
             return {"success": False, "error": ldap_result.get("error", "Authentication failed")}
         if not await self._require_ad_group(username, ldap_result):
             return {"success": False, "error": "Доступ запрещён: пользователь не состоит ни в одной разрешённой доменной группе"}
+        is_ldap = ldap_result.get("from_ldap", False)
         user = await self.user_repo.get_by_username(username)
         avatar_path = await self._save_ad_avatar(str(user.id) if user else username, ldap_result.get("avatar_base64"))
         if not user:
@@ -106,14 +114,18 @@ class AuthService:
                 balance=start_balance,
                 permissions=permissions,
                 is_admin=is_admin,
-                auth_source="ldap",
+                auth_source="ldap" if is_ldap else "local",
                 avatar_path=avatar_path,
                 group_id=UUID(group_id) if group_id else None,
             )
         else:
-            if user.auth_source != "ldap":
-                await self.user_repo.update(user.id, auth_source="ldap")
-                user.auth_source = "ldap"
+            expected_auth = "ldap" if is_ldap else "local"
+            if user.auth_source != expected_auth:
+                await self.user_repo.update(user.id, auth_source=expected_auth)
+                user.auth_source = expected_auth
+            if avatar_path:
+                await self.user_repo.update(user.id, avatar_path=avatar_path)
+                user.avatar_path = avatar_path
             if username == settings.admin_username and not user.is_admin:
                 await self.user_repo.update(user.id, is_admin=True)
                 user.is_admin = True
