@@ -13,7 +13,6 @@ interface Props {
 }
 
 export const ProfilePage = ({ user }: Props) => {
-  const [profile, setProfile] = useState<any>(null);
   const [fullName, setFullName] = useState(user.full_name || "");
   const [email, setEmail] = useState(user.email || "");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -29,12 +28,10 @@ export const ProfilePage = ({ user }: Props) => {
   useEffect(() => {
     getProfile().then((data: any) => {
       const p = data.user || data;
-      setProfile(p);
       setFullName(p.full_name || "");
       setEmail(p.email || "");
       setSystemPrompt(p.default_system_prompt || "");
     }).catch(() => {
-      setProfile(user);
     });
   }, [user]);
 
@@ -65,9 +62,7 @@ export const ProfilePage = ({ user }: Props) => {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      const res = await updateProfile({ full_name: fullName, email });
-      const p = res.user || res;
-      setProfile(p);
+      await updateProfile({ full_name: fullName, email });
       setSnackbar({ open: true, message: "Профиль сохранён", severity: "success" });
     } catch {
       setSnackbar({ open: true, message: "Ошибка сохранения профиля", severity: "error" });
