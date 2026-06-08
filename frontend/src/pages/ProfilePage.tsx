@@ -83,7 +83,8 @@ export const ProfilePage = ({ user }: Props) => {
     }
   };
 
-  const avatarUrl = `/static/avatars/${user.id}.jpg`;
+  const isLdap = user.auth_source === "ldap";
+  const avatarUrl = user.avatar_path ? `/${user.avatar_path}` : null;
 
   return (
     <Box>
@@ -96,7 +97,7 @@ export const ProfilePage = ({ user }: Props) => {
               <Avatar src={avatarPreview} sx={{ width: 100, height: 100 }} />
             ) : (
               <Avatar
-                src={avatarError ? undefined : avatarUrl}
+                src={avatarError ? undefined : (avatarUrl || undefined)}
                 onError={() => setAvatarError(true)}
                 sx={{ width: 100, height: 100, bgcolor: "primary.main", fontSize: 36 }}
               >
@@ -107,26 +108,30 @@ export const ProfilePage = ({ user }: Props) => {
           <Box>
             <Typography variant="subtitle1" fontWeight={600}>{user.full_name || user.username}</Typography>
             <Typography variant="body2" color="text.secondary" mb={1.5}>{user.username}</Typography>
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<PhotoCameraIcon />}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {avatarFile ? "Изменить" : "Загрузить"}
-              </Button>
-              {avatarFile && (
+            {isLdap ? (
+              <Typography variant="caption" color="text.secondary">Аватар загружается из домена Active Directory</Typography>
+            ) : (
+              <Box sx={{ display: "flex", gap: 1 }}>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   size="small"
-                  onClick={handleAvatarUpload}
-                  disabled={savingAvatar}
+                  startIcon={<PhotoCameraIcon />}
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  {savingAvatar ? <CircularProgress size={16} /> : "Сохранить"}
+                  {avatarFile ? "Изменить" : "Загрузить"}
                 </Button>
-              )}
-            </Box>
+                {avatarFile && (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={handleAvatarUpload}
+                    disabled={savingAvatar}
+                  >
+                    {savingAvatar ? <CircularProgress size={16} /> : "Сохранить"}
+                  </Button>
+                )}
+              </Box>
+            )}
             <input
               ref={fileInputRef}
               type="file"

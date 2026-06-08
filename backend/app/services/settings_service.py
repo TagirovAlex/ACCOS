@@ -64,6 +64,8 @@ class SettingsService:
              "[Домен] Имя учётной записи для поиска в LDAP (без домена). Используется как DOMAIN\\username"),
             ("ldap_bind_password", "",
               "[Домен] Пароль учётной записи для поиска в LDAP"),
+            ("ldap_enabled", "false",
+             "[Домен] Включить LDAP-аутентификацию (true/false)"),
 
             # ── LLM / Чат ──
             ("lmstudio_base_url", settings.lmstudio_base_url,

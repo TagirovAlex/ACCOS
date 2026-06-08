@@ -8,6 +8,8 @@ export type User = {
   balance: number;
   permissions: string;
   is_admin: boolean;
+  auth_source?: string;
+  avatar_path?: string | null;
 };
 
 export async function login(username: string, password: string): Promise<User> {

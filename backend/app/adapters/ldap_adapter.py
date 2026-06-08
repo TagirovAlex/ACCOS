@@ -37,15 +37,20 @@ class LDAPAdapter(BaseAdapter):
             conn.search(
                 search_base=self.base_dn,
                 search_filter=f"(sAMAccountName={safe_username})",
-                attributes=["mail", "displayName", "memberOf"],
+                attributes=["mail", "displayName", "memberOf", "thumbnailPhoto"],
             )
             user_info = {}
             if conn.entries:
                 entry = conn.entries[0]
+                photo_bytes = None
+                if hasattr(entry, "thumbnailPhoto") and entry.thumbnailPhoto.value:
+                    photo_bytes = entry.thumbnailPhoto.value
+                import base64
                 user_info = {
                     "email": str(entry.mail.value) if hasattr(entry, "mail") and entry.mail.value else None,
                     "full_name": str(entry.displayName.value) if hasattr(entry, "displayName") and entry.displayName.value else None,
                     "groups": [str(g) for g in entry.memberOf.value] if hasattr(entry, "memberOf") and entry.memberOf.value else [],
+                    "avatar_base64": base64.b64encode(photo_bytes).decode("ascii") if photo_bytes else None,
                 }
             conn.unbind()
             return {"authenticated": True, **user_info}
@@ -65,19 +70,19 @@ class LDAPAdapter(BaseAdapter):
 
     def _bind_connection(self) -> Connection:
         """Create an LDAP connection using available bind credentials.
-        Tries: 1) NTLM with bind_username, 2) bind_dn as-is, 3) anonymous."""
+        Tries: 1) NTLM with bind_username, 2) bind_dn with SIMPLE, 3) anonymous."""
         server = Server(self.server, get_info=ALL)
         if self.bind_username:
             user = f"{self.domain}\\{self.bind_username}"
             return Connection(server, user=user, password=self.bind_password, authentication=NTLM, auto_bind=True)
         if self.bind_dn and self.bind_password:
-            return Connection(server, user=self.bind_dn, password=self.bind_password, authentication=NTLM, auto_bind=True)
+            return Connection(server, user=self.bind_dn, password=self.bind_password, authentication="SIMPLE", auto_bind=True)
         return Connection(server, auto_bind=True)
 
     def _sync_list_groups(self, search: str = "") -> list[dict]:
         conn = self._bind_connection()
         search_filter = "(&(objectClass=group)(cn=*))"
-        if search:
+        if search and search != "*":
             safe = escape_filter_chars(search)
             search_filter = f"(&(objectClass=group)(cn=*{safe}*))"
         conn.search(

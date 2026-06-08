@@ -374,7 +374,8 @@ async def list_ldap_groups(
     bind_dn = await _val("ldap_bind_dn", "")
     bind_username = await _val("ldap_bind_username", "")
     bind_password = await _val("ldap_bind_password", "")
-    if not server or not settings.ldap_enabled:
+    ldap_enabled = await _val("ldap_enabled", "true" if settings.ldap_enabled else "false")
+    if not server or ldap_enabled != "true":
         adapter = MockLDAPAdapter()
     else:
         adapter = LDAPAdapter(server=server, domain=domain, base_dn=base_dn,
@@ -401,7 +402,8 @@ async def test_ldap_connection(
     bind_dn = await _val("ldap_bind_dn", "")
     bind_username = await _val("ldap_bind_username", "")
     bind_password = await _val("ldap_bind_password", "")
-    if not server or not settings.ldap_enabled:
+    ldap_enabled = await _val("ldap_enabled", "true" if settings.ldap_enabled else "false")
+    if not server or ldap_enabled != "true":
         result = {"success": True, "message": "LDAP отключён в конфигурации"}
     else:
         adapter = LDAPAdapter(server=server, domain=domain, base_dn=base_dn,

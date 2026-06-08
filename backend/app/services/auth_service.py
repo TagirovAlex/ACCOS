@@ -95,6 +95,7 @@ class AuthService:
         if not await self._require_ad_group(username, ldap_result):
             return {"success": False, "error": "Доступ запрещён: пользователь не состоит ни в одной разрешённой доменной группе"}
         user = await self.user_repo.get_by_username(username)
+        avatar_path = await self._save_ad_avatar(str(user.id) if user else username, ldap_result.get("avatar_base64"))
         if not user:
             group_id, permissions, start_balance = await self._resolve_group_and_permissions(ldap_result)
             is_admin = (username == settings.admin_username)
@@ -106,11 +107,16 @@ class AuthService:
                 permissions=permissions,
                 is_admin=is_admin,
                 auth_source="ldap",
+                avatar_path=avatar_path,
                 group_id=UUID(group_id) if group_id else None,
             )
-        elif username == settings.admin_username and not user.is_admin:
-            await self.user_repo.update(user.id, is_admin=True)
-            user.is_admin = True
+        else:
+            if user.auth_source != "ldap":
+                await self.user_repo.update(user.id, auth_source="ldap")
+                user.auth_source = "ldap"
+            if username == settings.admin_username and not user.is_admin:
+                await self.user_repo.update(user.id, is_admin=True)
+                user.is_admin = True
         access = create_access_token(subject=str(user.id))
         refresh = create_refresh_token(subject=str(user.id))
         return {
@@ -126,8 +132,32 @@ class AuthService:
                 "balance": user.balance,
                 "permissions": user.permissions,
                 "is_admin": user.is_admin,
+                "auth_source": "ldap",
             },
         }
+
+    async def _save_ad_avatar(self, user_id: str, avatar_base64: str | None) -> str | None:
+        if not avatar_base64:
+            return None
+        try:
+            import base64, io
+            from PIL import Image
+            from pathlib import Path
+            image_data = base64.b64decode(avatar_base64)
+            avatar_dir = Path(__file__).parent.parent.parent.parent / "static" / "avatars"
+            avatar_dir.mkdir(parents=True, exist_ok=True)
+            filepath = avatar_dir / f"{user_id}.jpg"
+            img = Image.open(io.BytesIO(image_data))
+            img.thumbnail((256, 256), Image.LANCZOS)
+            canvas = Image.new("RGB", (256, 256), (255, 255, 255))
+            x = (256 - img.width) // 2
+            y = (256 - img.height) // 2
+            canvas.paste(img, (x, y))
+            canvas.save(filepath, "JPEG", quality=85)
+            return f"static/avatars/{user_id}.jpg"
+        except Exception as e:
+            logger.warning(f"Failed to save AD avatar for {user_id}: {e}")
+            return None
 
     async def refresh_token(self, refresh_token: str) -> dict:
         payload = decode_token(refresh_token)
@@ -158,4 +188,6 @@ class AuthService:
             "balance": user.balance,
             "permissions": user.permissions,
             "is_admin": user.is_admin,
+            "auth_source": user.auth_source,
+            "avatar_path": user.avatar_path,
         }

@@ -49,10 +49,6 @@ export const UserEdit = () => (
         label="Тип"
         render={(record: any) => <AuthSourceField record={record} />}
       />
-      <FunctionField
-        label="Тип"
-        render={(record: any) => <AuthSourceField record={record} />}
-      />
       <PasswordInput />
       <NumberInput source="balance" label="Баланс" />
       <ReferenceInput source="group_id" reference="groups" label="Группа AD">
