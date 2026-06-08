@@ -1,5 +1,5 @@
 import { List, Datagrid, TextField, DateField, NumberField, Show, SimpleShowLayout, ReferenceField, FunctionField } from "react-admin";
-import { Box, Typography, IconButton } from "@mui/material";
+import { Box, IconButton } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import { useRecordContext } from "react-admin";
 
