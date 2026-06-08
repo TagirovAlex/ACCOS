@@ -65,7 +65,6 @@ export const GenerationPage = () => {
   const [result, setResult] = useState<GenResult | null>(null);
   const [error, setError] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState("1024×1024");
   const [customWidth, setCustomWidth] = useState(1024);
@@ -81,12 +80,6 @@ export const GenerationPage = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    return () => {
-      previewUrls.forEach(u => URL.revokeObjectURL(u));
-    };
-  }, [previewUrls]);
-
   const selectedWorkflow = WORKFLOWS.find(w => w.value === workflow);
 
   const currentResolution = selectedPreset === CUSTOM
@@ -101,6 +94,13 @@ export const GenerationPage = () => {
     } catch { /* ignore */ }
     setHistoryLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadHistory();
+    return () => {
+      previewUrls.forEach(u => URL.revokeObjectURL(u));
+    };
+  }, [loadHistory]);
 
   const pollStatus = useCallback(async (genId: string) => {
     let attempts = 0;
@@ -387,7 +387,7 @@ export const GenerationPage = () => {
                   <HistoryIcon color="primary" />
                   <Typography variant="h6" fontWeight={600}>История</Typography>
                 </Box>
-                <IconButton size="small" onClick={() => { loadHistory(); setHistoryLoaded(true); }} title="Обновить">
+                <IconButton size="small" onClick={() => loadHistory()} title="Обновить">
                   <RefreshIcon fontSize="small" />
                 </IconButton>
               </Box>
@@ -399,11 +399,6 @@ export const GenerationPage = () => {
                     <Skeleton variant="rounded" width={80} height={24} />
                   </Box>
                 ))
-              ) : !historyLoaded ? (
-                <Box sx={{ textAlign: "center", py: 4 }}>
-                  <Typography variant="body2" color="text.secondary" mb={1}>Нажмите для загрузки</Typography>
-                  <Button size="small" variant="outlined" onClick={() => { loadHistory(); setHistoryLoaded(true); }}>Загрузить</Button>
-                </Box>
               ) : history.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 4 }}>Нет генераций</Typography>
               ) : (
