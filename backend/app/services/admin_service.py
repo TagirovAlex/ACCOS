@@ -428,7 +428,7 @@ class AdminService:
 
         gens_today = (await self.session.execute(
             select(func.count()).select_from(GenerationRecord)
-            .where(GenerationRecord.created_at >= func.now() - func.make_interval(hours=24))
+            .where(GenerationRecord.created_at >= func.now() - text("INTERVAL '24 hours'"))
         )).scalar() or 0
 
         return {
@@ -459,18 +459,16 @@ class AdminService:
 
     async def get_dashboard_activity(self) -> dict:
         from sqlalchemy import func
-        days = 14
         rows = (await self.session.execute(
             text("""
                 SELECT
                     date_trunc('day', created_at)::date AS day,
                     COUNT(*) AS cnt
                 FROM generation_records
-                WHERE created_at >= CURRENT_DATE - make_interval(days => :days)
+                WHERE created_at >= CURRENT_DATE - INTERVAL '14 days'
                 GROUP BY day
                 ORDER BY day
-            """),
-            {"days": days},
+            """)
         )).fetchall()
         return {
             "success": True,
