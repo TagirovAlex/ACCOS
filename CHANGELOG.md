@@ -219,3 +219,15 @@
 - **LDAP adapter**: Метод `test_connection()` для проверки bind-а, `_sync_list_groups` теперь пробрасывает исключения наверх для правильной обработки ошибок
 - **Seed**: Добавлено поле `seed` в форму генерации (пусто = -1 = случайный). Хранится в БД (generation_records.seed), миграция `943ce26f1ef3`. Передаётся в ComfyUI workflow (перезаписывает seed в KSampler)
 - **Админка**: Ресурсы и Генерации — переключение список/плитка с превью, кнопка "Назад" в Show (Assets, Generations, Users), масштаб/размер изображений в ресурсах
+
+## Admin Roles + Permission Split + Settings Fix (Jun 08)
+- **DB**: Добавлены `admin_role` (VARCHAR 20) и `admin_group_id` (UUID FK → user_groups) в таблицу `users`, миграция `2f821ab49813`
+- **Model**: User.group relationship — явно указан `foreign_keys=[group_id]` (фикс AmbiguousForeignKeyError от двух FK на user_groups)
+- **Schemas**: `AdminUserResponse`, `UserInfoResponse`, `TokenResponse` — добавлено поле `admin_role`
+- **Backend auth**: `_require_super_admin()` для dashboard/groups/chats/generations/assets/settings/backups/ldap; `_require_admin()` для users CRUD + balance
+- **Admin panel**: `<Admin>{(permissions) => ...}</Admin>` — `group_admin` видит только users, `super_admin` — все 7 ресурсов
+- **Permission split**: `WORKFLOW_PERMISSION` в `generation.py` — `generate` (z_image), `edit` (qwen_edit_1/2/3), `video` (text_to_video, image_to_video)
+- **Frontend routes**: `/generate` → `mode="generate"`, `/edit` → `mode="edit"`, `/video` → `mode="video"`, `/history` → `mode="all"`
+- **Dashboard**: 3 отдельных `HistorySection` (generate/edit/video) с per-section viewMode localStorage
+- **Settings**: `isBoolean()` теперь key-whitelist, `isNumeric()` для числовых полей, `auto_accrual_time` (HH:MM серверное время)
+- **Frontend sidebar**: Динамические navItems по `canGenerate/canEdit/canVideo/canChat`
