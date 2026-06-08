@@ -34,6 +34,9 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
     record.updated_at = datetime.now(timezone.utc)
     logger.info(f"Processing generation {record.id} ({record.workflow_type})")
 
+    poll_timeout = await settings_svc.get_int("comfyui_poll_timeout_minutes", 30)
+    poll_interval = await settings_svc.get_int("comfyui_poll_interval", 3)
+
     ref_images = []
     if record.result_path:
         try:
@@ -49,6 +52,8 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
             height=record.height or 1024,
             duration=record.duration or 5,
             images=ref_images,
+            poll_timeout_minutes=poll_timeout,
+            poll_interval=poll_interval,
         )
 
         if result["success"]:

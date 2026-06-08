@@ -37,6 +37,7 @@ class AdminService:
                 "full_name": user.full_name, "balance": user.balance,
                 "permissions": user.permissions,
                 "group_id": str(user.group_id) if user.group_id else None,
+                "auth_source": user.auth_source,
                 "is_active": user.is_active,
                 "is_admin": user.is_admin, "created_at": user.created_at,
             }
@@ -48,6 +49,8 @@ class AdminService:
             user = await self.user_repo.get(UUID(user_id))
             if not user:
                 return {"success": False, "error": "User not found"}
+            if user.auth_source == "ldap" and "password" in data and data["password"]:
+                return {"success": False, "error": "Нельзя сменить пароль доменного пользователя"}
             allowed = {"balance", "permissions", "is_active", "is_admin", "full_name", "group_id"}
             update_data = {}
             for k, v in data.items():
@@ -56,7 +59,7 @@ class AdminService:
                         update_data[k] = UUID(v) if v else None
                     else:
                         update_data[k] = v
-            if "password" in data and data["password"]:
+            if "password" in data and data["password"] and user.auth_source != "ldap":
                 update_data["hashed_password"] = hash_password(data["password"])
             if update_data:
                 await self.user_repo.update(UUID(user_id), **update_data)
@@ -76,6 +79,7 @@ class AdminService:
                 hashed_password=hashed_pw,
                 balance=data.get("balance", 100.0),
                 permissions=data.get("permissions", "chat"),
+                auth_source="local",
                 group_id=UUID(data["group_id"]) if data.get("group_id") else None,
                 is_admin=data.get("is_admin", False),
                 is_active=data.get("is_active", True),
@@ -86,6 +90,11 @@ class AdminService:
 
     async def delete_user(self, user_id: str) -> dict:
         try:
+            user = await self.user_repo.get(UUID(user_id))
+            if not user:
+                return {"success": False, "error": "User not found"}
+            if user.auth_source == "ldap":
+                return {"success": False, "error": "Нельзя удалить доменного пользователя. Если нужно заблокировать — установите is_active = False"}
             await self.user_repo.delete(UUID(user_id), hard=True)
             return {"success": True}
         except Exception as e:
@@ -111,6 +120,7 @@ class AdminService:
                     "full_name": u.full_name, "balance": u.balance,
                     "permissions": u.permissions,
                     "group_id": str(u.group_id) if u.group_id else None,
+                    "auth_source": u.auth_source,
                     "is_active": u.is_active,
                     "is_admin": u.is_admin, "created_at": u.created_at,
                 }

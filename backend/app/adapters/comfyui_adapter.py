@@ -32,7 +32,13 @@ class ComfyUIAdapter(BaseAdapter):
         width = kwargs.get("width", 1024)
         height = kwargs.get("height", 1024)
         duration = kwargs.get("duration", 5)
-        return await self.run_workflow(workflow_type, prompt, images, width, height, duration)
+        poll_timeout_minutes = kwargs.get("poll_timeout_minutes", 30)
+        poll_interval = kwargs.get("poll_interval", 3)
+        return await self.run_workflow(
+            workflow_type, prompt, images, width, height, duration,
+            poll_timeout_minutes=poll_timeout_minutes,
+            poll_interval=poll_interval,
+        )
 
     async def _load_workflow(self, workflow_type: str) -> dict | None:
         mapping = {
@@ -98,7 +104,9 @@ class ComfyUIAdapter(BaseAdapter):
             logger.error(f"Image upload failed: {e}")
             return None
 
-    async def run_workflow(self, workflow_type: str, prompt: str, images: list[str] = None, width: int = 1024, height: int = 1024, duration: int = 5) -> dict:
+    async def run_workflow(self, workflow_type: str, prompt: str, images: list[str] = None,
+                           width: int = 1024, height: int = 1024, duration: int = 5,
+                           poll_timeout_minutes: int = 30, poll_interval: int = 3) -> dict:
         workflow = await self._load_workflow(workflow_type)
         if not workflow:
             return {"success": False, "error": f"Workflow {workflow_type} not found"}
@@ -126,7 +134,8 @@ class ComfyUIAdapter(BaseAdapter):
                 response.raise_for_status()
                 data = response.json()
                 queue_prompt_id = data.get("prompt_id", prompt_id)
-                return await self._poll_result(client, queue_prompt_id)
+                attempts = int((poll_timeout_minutes * 60) / poll_interval)
+                return await self._poll_result(client, queue_prompt_id, max_attempts=attempts, interval=poll_interval)
         except httpx.TimeoutException:
             logger.error("ComfyUI request timed out")
             return {"success": False, "error": "Request timed out"}
@@ -155,9 +164,9 @@ class ComfyUIAdapter(BaseAdapter):
         with open(path, "wb") as f:
             f.write(content)
 
-    async def _poll_result(self, client: httpx.AsyncClient, prompt_id: str, max_attempts: int = 60) -> dict:
-        import asyncio
-        for attempt in range(max_attempts):
+    async def _poll_result(self, client: httpx.AsyncClient, prompt_id: str,
+                           max_attempts: int = 600, interval: int = 3) -> dict:
+        for attempt in range(1, max_attempts + 1):
             try:
                 response = await client.get(
                     f"{self.base_url}/history/{prompt_id}",
@@ -182,6 +191,10 @@ class ComfyUIAdapter(BaseAdapter):
                         if images:
                             return {"success": True, "images": images, "prompt_id": prompt_id}
             except Exception as e:
-                logger.debug(f"Polling attempt {attempt + 1}/{max_attempts}: {e}")
-            await asyncio.sleep(2)
-        return {"success": False, "error": "Timeout waiting for result"}
+                logger.debug(f"Polling attempt {attempt}/{max_attempts}: {e}")
+            if attempt % 20 == 0:
+                logger.info(f"Still waiting for prompt {prompt_id}... ({attempt}/{max_attempts}, "
+                            f"elapsed: {attempt * interval}s)")
+            await asyncio.sleep(interval)
+        logger.error(f"Polling timed out after {max_attempts * interval}s for prompt {prompt_id}")
+        return {"success": False, "error": f"Timeout waiting for result after {max_attempts * interval}s"}

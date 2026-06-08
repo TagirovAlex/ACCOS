@@ -16,6 +16,7 @@ class AdminUserResponse(BaseModel):
     balance: float
     permissions: str
     group_id: str | None = None
+    auth_source: str = "local"
     is_active: bool
     is_admin: bool
     created_at: datetime

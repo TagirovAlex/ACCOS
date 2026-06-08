@@ -105,6 +105,7 @@ class AuthService:
                 balance=start_balance,
                 permissions=permissions,
                 is_admin=is_admin,
+                auth_source="ldap",
                 group_id=UUID(group_id) if group_id else None,
             )
         elif username == settings.admin_username and not user.is_admin:

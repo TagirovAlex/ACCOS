@@ -93,7 +93,10 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return BaseResponse(**await service.update_user(user_id, request.model_dump(exclude_none=True)))
+    result = await service.update_user(user_id, request.model_dump(exclude_none=True))
+    if not result["success"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("error", "Update failed"))
+    return BaseResponse(**result)
 
 
 @router.delete("/users/{user_id}", response_model=BaseResponse)
@@ -103,7 +106,10 @@ async def delete_user(
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return BaseResponse(**await service.delete_user(user_id))
+    result = await service.delete_user(user_id)
+    if not result["success"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("error", "Delete failed"))
+    return BaseResponse(**result)
 
 
 @router.delete("/groups/{group_id}", response_model=BaseResponse)

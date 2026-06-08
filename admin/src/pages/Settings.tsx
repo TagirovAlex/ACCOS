@@ -1,29 +1,37 @@
 import { useState, useEffect } from "react";
 import {
-  Edit, SimpleForm, TextInput,
-  Create, useRefresh, useNotify,
-} from "react-admin";
-import {
-  Box, Card, CardContent, Typography, Accordion, AccordionSummary,
-  AccordionDetails, Chip, Dialog, DialogTitle, DialogContent,
-  DialogActions, Button, TextField as MuiTextField,
+  Box, Tabs, Tab, Typography, TextField as MuiTextField,
+  Button, Switch, FormControlLabel, Alert, Snackbar, CircularProgress,
 } from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { getToken } from "../services/api";
 
 const API = "/api/v1/admin/settings";
 
-const CATEGORIES: Record<string, { label: string; color: string }> = {
-  Домен: { label: "LDAP / Домен", color: "#1976d2" },
-  LLM: { label: "LLM / Чат", color: "#2e7d32" },
-  Генерация: { label: "Генерация изображений", color: "#e65100" },
-  "Цены: LLM": { label: "Стоимость: LLM", color: "#6a1b9a" },
-  "Цены: Генерация": { label: "Стоимость: генерация", color: "#00838f" },
-  "Цены: Редактирование": { label: "Стоимость: редактирование", color: "#ad1457" },
-  "Цены: Видео": { label: "Стоимость: видео", color: "#283593" },
-  Пользователи: { label: "Пользователи", color: "#4e342e" },
-  Экономика: { label: "Экономика", color: "#558b2f" },
-};
+interface Setting {
+  key: string;
+  value: string;
+  description: string;
+}
+
+interface CategoryDef {
+  key: string;
+  label: string;
+  icon?: string;
+}
+
+const CATEGORIES: CategoryDef[] = [
+  { key: "Домен", label: "LDAP / Домен" },
+  { key: "LLM", label: "LLM / Чат" },
+  { key: "Генерация", label: "Генерация изображений" },
+  { key: "Цены: LLM", label: "Цены: LLM" },
+  { key: "Цены: Генерация", label: "Цены: генерация" },
+  { key: "Цены: Редактирование", label: "Цены: редактирование" },
+  { key: "Цены: Видео", label: "Цены: видео" },
+  { key: "Пользователи", label: "Пользователи" },
+  { key: "Экономика", label: "Экономика" },
+];
+
+const CATEGORY_ORDER = CATEGORIES.map((c) => c.key);
 
 function parseCategory(desc: string): string {
   const m = desc.match(/^\[(.+?)\]/);
@@ -34,162 +42,331 @@ function stripCategory(desc: string): string {
   return desc.replace(/^\[.+?\]\s*/, "");
 }
 
-interface Setting {
-  key: string;
+function isBoolean(v: string): boolean {
+  return ["true", "false", "1", "0", "yes", "no"].includes(v.toLowerCase());
+}
+
+const FIELD_DISPLAY_NAMES: Record<string, string> = {
+  ldap_server: "Адрес LDAP-сервера",
+  ldap_domain: "NetBIOS-имя домена",
+  ldap_base_dn: "Базовый DN",
+  ldap_bind_dn: "Учётная запись для поиска (DN)",
+  ldap_bind_password: "Пароль учётной записи",
+  require_ad_group_for_login: "Требовать группу AD для входа",
+  default_permissions: "Права доступа по умолчанию",
+  default_start_balance: "Стартовый баланс",
+  llm_api: "API-адрес LLM",
+  llm_api_key: "API-ключ LLM",
+  llm_model: "Модель LLM",
+  llm_system_prompt: "Системный промпт",
+  comfy_api: "API-адрес ComfyUI",
+  comfy_workflow_zit: "Workflow ZIT",
+  comfy_workflow_qwen_edit_1: "Workflow Qwen edit 1 pic",
+  comfy_workflow_qwen_edit_2: "Workflow Qwen edit 2 pic",
+  comfy_workflow_qwen_edit_3: "Workflow Qwen edit 3 pic",
+  comfy_workflow_text_to_video: "Workflow text-to-video",
+  comfy_workflow_image_to_video: "Workflow image-to-video",
+  cost_llm_input_1k: "Стоимость входных токенов (за 1K)",
+  cost_llm_output_1k: "Стоимость выходных токенов (за 1K)",
+  cost_image_generation: "Стоимость генерации изображения",
+  cost_image_edit_qwen: "Стоимость редактирования (Qwen)",
+  cost_video_gen: "Стоимость генерации видео",
+  cost_video_img2video: "Стоимость image-to-video",
+  accrual_amount: "Сумма начисления",
+  accrual_interval_hours: "Интервал начисления (часы)",
+};
+
+const MASKED_KEYS = new Set(["ldap_bind_password", "llm_api_key"]);
+
+function SettingField({
+  setting,
+  value,
+  onChange,
+}: {
+  setting: Setting;
   value: string;
-  description: string;
+  onChange: (key: string, val: string) => void;
+}) {
+  const label = FIELD_DISPLAY_NAMES[setting.key] || setting.key;
+  const desc = stripCategory(setting.description);
+  const helper = desc || setting.key;
+
+  if (isBoolean(value)) {
+    const checked = ["true", "1", "yes"].includes(value.toLowerCase());
+    return (
+      <FormControlLabel
+        control={<Switch checked={checked} onChange={(e) => onChange(setting.key, e.target.checked ? "true" : "false")} />}
+        label={<><strong>{label}</strong><br /><Typography variant="caption" color="text.secondary">{helper}</Typography></>}
+        sx={{ mb: 1 }}
+      />
+    );
+  }
+
+  return (
+    <MuiTextField
+      label={label}
+      helperText={helper}
+      value={value}
+      onChange={(e) => onChange(setting.key, e.target.value)}
+      fullWidth
+      multiline={value.length > 60}
+      minRows={value.length > 60 ? 2 : undefined}
+      type={MASKED_KEYS.has(setting.key) ? "password" : "text"}
+      slotProps={MASKED_KEYS.has(setting.key) ? { htmlInput: { autoComplete: "new-password" } } : undefined}
+      sx={{ mb: 2 }}
+    />
+  );
 }
 
-async function fetchSettings(): Promise<Setting[]> {
-  const token = getToken();
-  const res = await fetch(API, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const json = await res.json();
-  return (json.settings || []).map((s: Setting) => ({
-    ...s,
-    id: s.key,
-  }));
+function CategoryForm({
+  settings,
+  onSaved,
+}: {
+  settings: Setting[];
+  onSaved: () => void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [snack, setSnack] = useState<{ msg: string; sev: "success" | "error" } | null>(null);
+
+  useEffect(() => {
+    const v: Record<string, string> = {};
+    for (const s of settings) v[s.key] = s.value;
+    setValues(v);
+  }, [settings]);
+
+  const handleChange = (key: string, val: string) => {
+    setValues((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const token = getToken();
+      for (const s of settings) {
+        const newVal = values[s.key] ?? s.value;
+        if (newVal !== s.value) {
+          await fetch(`${API}/${s.key}`, {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ value: newVal, description: s.description }),
+          });
+        }
+      }
+      setSnack({ msg: "Настройки сохранены", sev: "success" });
+      onSaved();
+    } catch (e: any) {
+      setSnack({ msg: e.message || "Ошибка сохранения", sev: "error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const hasChanges = settings.some((s) => (values[s.key] ?? s.value) !== s.value);
+
+  return (
+    <Box sx={{ mt: 2 }}>
+      {settings.map((s) => (
+        <SettingField key={s.key} setting={s} value={values[s.key] ?? s.value} onChange={handleChange} />
+      ))}
+      <Box sx={{ mt: 3, display: "flex", gap: 1 }}>
+        <Button variant="contained" onClick={handleSave} disabled={!hasChanges || saving}>
+          {saving ? <CircularProgress size={20} /> : "Сохранить"}
+        </Button>
+        <Button variant="outlined" onClick={() => {
+          const v: Record<string, string> = {};
+          for (const s of settings) v[s.key] = s.value;
+          setValues(v);
+        }} disabled={!hasChanges}>
+          Сбросить
+        </Button>
+      </Box>
+      {snack && (
+        <Snackbar open autoHideDuration={3000} onClose={() => setSnack(null)} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+          <Alert severity={snack.sev} onClose={() => setSnack(null)}>{snack.msg}</Alert>
+        </Snackbar>
+      )}
+    </Box>
+  );
 }
 
-async function saveSetting(key: string, value: string, description: string): Promise<void> {
-  const token = getToken();
-  await fetch(`${API}/${key}`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ value, description }),
-  });
+function LdapForm({ settings, onSaved }: { settings: Setting[]; onSaved: () => void }) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [snack, setSnack] = useState<{ msg: string; sev: "success" | "error" } | null>(null);
+
+  useEffect(() => {
+    const v: Record<string, string> = {};
+    for (const s of settings) v[s.key] = s.value;
+    setValues(v);
+  }, [settings]);
+
+  const handleChange = (key: string, val: string) => {
+    setValues((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const token = getToken();
+      for (const s of settings) {
+        const newVal = values[s.key] ?? s.value;
+        if (newVal !== s.value) {
+          await fetch(`${API}/${s.key}`, {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ value: newVal, description: s.description }),
+          });
+        }
+      }
+      setSnack({ msg: "Настройки LDAP сохранены", sev: "success" });
+      onSaved();
+    } catch (e: any) {
+      setSnack({ msg: e.message || "Ошибка", sev: "error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const token = getToken();
+      const res = await fetch("/api/v1/admin/ldap-groups?search=*", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.groups) {
+        setTestResult({ ok: true, msg: `Подключение успешно: найдено ${data.groups.length} групп` });
+      } else {
+        setTestResult({ ok: false, msg: data.error || "Ошибка подключения" });
+      }
+    } catch (e: any) {
+      setTestResult({ ok: false, msg: e.message || "Ошибка подключения" });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const hasChanges = settings.some((s) => (values[s.key] ?? s.value) !== s.value);
+
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Alert severity="info" sx={{ mb: 2 }}>
+        Настройки подключения к Active Directory. После изменения сохраните настройки, затем нажмите "Проверить подключение".
+      </Alert>
+
+      <MuiTextField label="Адрес сервера" helperText="Например: ldap://dc.domain.local:389" value={values.ldap_server ?? ""}
+        onChange={(e) => handleChange("ldap_server", e.target.value)} fullWidth sx={{ mb: 2 }} />
+
+      <MuiTextField label="NetBIOS-имя домена" helperText="Например: DOMAIN" value={values.ldap_domain ?? ""}
+        onChange={(e) => handleChange("ldap_domain", e.target.value)} fullWidth sx={{ mb: 2 }} />
+
+      <MuiTextField label="Базовый DN" helperText="Например: DC=domain,DC=local" value={values.ldap_base_dn ?? ""}
+        onChange={(e) => handleChange("ldap_base_dn", e.target.value)} fullWidth sx={{ mb: 2 }} />
+
+      <MuiTextField label="Учётная запись для поиска (DN)"
+        helperText={
+          <span>
+            Полный DN учётной записи для поиска в AD. Например: <code>CN=admin,CN=Users,DC=domain,DC=local</code>.
+            Если оставить пустым — используется анонимный поиск (если сервер поддерживает).
+          </span>
+        }
+        value={values.ldap_bind_dn ?? ""}
+        onChange={(e) => handleChange("ldap_bind_dn", e.target.value)} fullWidth sx={{ mb: 2 }} />
+
+      <MuiTextField label="Пароль" type="password" value={values.ldap_bind_password ?? ""}
+        onChange={(e) => handleChange("ldap_bind_password", e.target.value)}
+        fullWidth sx={{ mb: 2 }} slotProps={{ htmlInput: { autoComplete: "new-password" } }} />
+
+      <FormControlLabel
+        control={<Switch checked={values.require_ad_group_for_login === "true"}
+          onChange={(e) => handleChange("require_ad_group_for_login", e.target.checked ? "true" : "false")} />}
+        label="Требовать членство в AD-группе для входа"
+        sx={{ mb: 2 }}
+      />
+
+      <Box sx={{ mt: 3, display: "flex", gap: 1, alignItems: "center" }}>
+        <Button variant="contained" onClick={handleSave} disabled={!hasChanges || saving}>
+          {saving ? <CircularProgress size={20} /> : "Сохранить"}
+        </Button>
+        <Button variant="outlined" onClick={handleTest} disabled={testing} startIcon={testing ? <CircularProgress size={16} /> : undefined}>
+          {testing ? "Проверка..." : "Проверить подключение"}
+        </Button>
+        {testResult && (
+          <Alert severity={testResult.ok ? "success" : "error"} sx={{ ml: 2, py: 0 }}>
+            {testResult.msg}
+          </Alert>
+        )}
+      </Box>
+
+      {snack && (
+        <Snackbar open autoHideDuration={3000} onClose={() => setSnack(null)} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+          <Alert severity={snack.sev} onClose={() => setSnack(null)}>{snack.msg}</Alert>
+        </Snackbar>
+      )}
+    </Box>
+  );
 }
 
 export const SettingsList = () => {
   const [settings, setSettings] = useState<Setting[]>([]);
-  const [expanded, setExpanded] = useState<string | false>(false);
-  const [editKey, setEditKey] = useState<string | null>(null);
-  const [editVal, setEditVal] = useState("");
-  const [editDesc, setEditDesc] = useState("");
-  const refresh = useRefresh();
-  const notify = useNotify();
+  const [tab, setTab] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchSettings().then(setSettings);
-  }, [refresh]);
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const token = getToken();
+      const res = await fetch(API, { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json();
+      setSettings((json.settings || []).map((s: Setting) => ({ ...s, id: s.key })));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchData(); }, []);
 
   const grouped: Record<string, Setting[]> = {};
+  const others: Setting[] = [];
   for (const s of settings) {
     const cat = parseCategory(s.description);
-    if (!grouped[cat]) grouped[cat] = [];
-    grouped[cat].push(s);
+    if (cat && CATEGORY_ORDER.includes(cat)) {
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(s);
+    } else {
+      others.push(s);
+    }
   }
 
-  const handleSave = async () => {
-    if (!editKey) return;
-    await saveSetting(editKey, editVal, editDesc);
-    setEditKey(null);
-    notify("Сохранено", { type: "success" });
-    const updated = await fetchSettings();
-    setSettings(updated);
-  };
+  const currentTab = tab < CATEGORIES.length ? CATEGORIES[tab] : CATEGORIES[0];
+  const currentSettings = grouped[currentTab.key] || [];
+  const isLdapTab = currentTab.key === "Домен";
 
   return (
     <Box>
-      {/* Edit dialog */}
-      <Dialog open={!!editKey} onClose={() => setEditKey(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>Редактирование: {editKey}</DialogTitle>
-        <DialogContent>
-          <MuiTextField
-            label="Значение" fullWidth multiline minRows={2}
-            value={editVal} onChange={(e) => setEditVal(e.target.value)}
-            sx={{ mt: 1, mb: 2 }}
-          />
-          <MuiTextField
-            label="Описание" fullWidth multiline minRows={2}
-            value={editDesc} onChange={(e) => setEditDesc(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditKey(null)}>Отмена</Button>
-          <Button variant="contained" onClick={handleSave}>Сохранить</Button>
-        </DialogActions>
-      </Dialog>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
+        {CATEGORIES.map((c) => (
+          <Tab key={c.key} label={c.label} disabled={!grouped[c.key]?.length && c.key !== "Домен"} />
+        ))}
+      </Tabs>
 
-      {/* Category sections */}
-      {Object.entries(CATEGORIES).map(([catKey, catVal]) => {
-        const items = grouped[catKey];
-        if (!items || items.length === 0) return null;
-        return (
-          <Accordion
-            key={catKey}
-            expanded={expanded === catKey}
-            onChange={() => setExpanded(expanded === catKey ? false : catKey)}
-            sx={{ mb: 1 }}
-          >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <Chip label={catVal.label} size="small" sx={{ bgcolor: catVal.color, color: "#fff" }} />
-                <Typography variant="body2" color="text.secondary">
-                  {items.length} {items.length === 1 ? "параметр" : items.length < 5 ? "параметра" : "параметров"}
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              {items.map((s) => (
-                <Card key={s.key} variant="outlined" sx={{ mb: 1 }}>
-                  <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="subtitle2" sx={{ fontFamily: "monospace", fontSize: "0.85rem" }}>
-                          {s.key}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontSize: "0.8rem" }}>
-                          {stripCategory(s.description)}
-                        </Typography>
-                        <Typography variant="body1" sx={{ mt: 0.5, fontWeight: 500, wordBreak: "break-all" }}>
-                          {s.value}
-                        </Typography>
-                      </Box>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        sx={{ ml: 2, minWidth: 70 }}
-                        onClick={() => {
-                          setEditKey(s.key);
-                          setEditVal(s.value);
-                          setEditDesc(s.description);
-                        }}
-                      >
-                        Изменить
-                      </Button>
-                    </Box>
-                  </CardContent>
-                </Card>
-              ))}
-            </AccordionDetails>
-          </Accordion>
-        );
-      })}
+      {loading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}><CircularProgress /></Box>
+      ) : currentSettings.length === 0 && !isLdapTab ? (
+        <Box sx={{ mt: 4, textAlign: "center" }}><Typography color="text.secondary">Нет настроек в этой категории</Typography></Box>
+      ) : isLdapTab ? (
+        <LdapForm settings={currentSettings} onSaved={fetchData} />
+      ) : (
+        <CategoryForm settings={currentSettings} onSaved={fetchData} />
+      )}
     </Box>
   );
 };
 
-export const SettingsEdit = () => (
-  <Edit>
-    <SimpleForm>
-      <TextInput source="key" label="Ключ" disabled />
-      <TextInput source="value" label="Значение" multiline fullWidth />
-      <TextInput source="description" label="Описание" fullWidth />
-    </SimpleForm>
-  </Edit>
-);
-
-export const SettingsCreate = () => (
-  <Create>
-    <SimpleForm>
-      <TextInput source="key" label="Ключ" required />
-      <TextInput source="value" label="Значение" multiline fullWidth required />
-      <TextInput source="description" label="Описание" fullWidth />
-    </SimpleForm>
-  </Create>
-);
+export const SettingsEdit = () => null;
+export const SettingsCreate = () => null;
