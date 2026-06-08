@@ -221,3 +221,7 @@ class LdapGroupItem(BaseModel):
 
 class LdapGroupListResponse(BaseResponse):
     groups: list[LdapGroupItem] = []
+
+
+class LdapTestResponse(BaseResponse):
+    message: str = ""

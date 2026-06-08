@@ -182,7 +182,7 @@ class ComfyUIAdapter(BaseAdapter):
                             for key, value in node_output.items():
                                 if isinstance(value, list):
                                     for item in value:
-                                        if isinstance(item, dict) and "filename" in item:
+                                        if isinstance(item, dict) and "filename" in item and item.get("type", "output") == "output":
                                             images.append({
                                                 "filename": item["filename"],
                                                 "subfolder": item.get("subfolder", ""),

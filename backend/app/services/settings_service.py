@@ -59,7 +59,9 @@ class SettingsService:
             ("ldap_base_dn", settings.ldap_base_dn,
               "[Домен] Базовый DN для поиска в LDAP (например DC=FIDELIO,DC=LOCAL)"),
             ("ldap_bind_dn", "",
-              "[Домен] DN учётной записи для поиска в LDAP (например CN=svc-accos,CN=Users,DC=fidelio,DC=local). Оставьте пустым для анонимного поиска"),
+             "[Домен] DN учётной записи для поиска в LDAP (CN=...). Оставьте пустым, если используется ldap_bind_username"),
+            ("ldap_bind_username", "",
+             "[Домен] Имя учётной записи для поиска в LDAP (без домена). Используется как DOMAIN\\username"),
             ("ldap_bind_password", "",
               "[Домен] Пароль учётной записи для поиска в LDAP"),
 

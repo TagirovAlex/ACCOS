@@ -104,3 +104,13 @@ class ComfyUIService:
                 for r in records
             ],
         }
+
+    async def delete_generation(self, generation_id: str, user_id: str) -> dict:
+        gen_id = UUID(generation_id)
+        record = await self.generation_repo.get(gen_id)
+        if not record:
+            return {"success": False, "error": "Generation not found"}
+        if str(record.user_id) != user_id:
+            return {"success": False, "error": "Access denied"}
+        await self.generation_repo.delete(gen_id, hard=False)
+        return {"success": True}

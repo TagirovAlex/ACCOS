@@ -1,9 +1,16 @@
-import { useState, useRef, useCallback } from "react";
-import { Box, Card, CardContent, Typography, TextField, Button, MenuItem, Alert, LinearProgress, Chip, Skeleton, IconButton } from "@mui/material";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { Box, Card, CardContent, Typography, TextField, Button, MenuItem, Alert, LinearProgress, Chip, Skeleton, IconButton, ToggleButtonGroup, ToggleButton, Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import HistoryIcon from "@mui/icons-material/History";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import DownloadIcon from "@mui/icons-material/Download";
+import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
+import VideoFileIcon from "@mui/icons-material/VideoFile";
+import LandscapeIcon from "@mui/icons-material/Landscape";
+import PortraitIcon from "@mui/icons-material/Portrait";
+import CropSquareIcon from "@mui/icons-material/CropSquare";
 import { api } from "../services/api";
 
 const WORKFLOWS = [
@@ -12,6 +19,19 @@ const WORKFLOWS = [
   { value: "qwen_edit_2", label: "Qwen Edit (2 референса)", needsRefs: true, maxRefs: 2 },
   { value: "qwen_edit_3", label: "Qwen Edit (3 референса)", needsRefs: true, maxRefs: 3 },
 ];
+
+const RESOLUTION_PRESETS = [
+  { label: "512×512", w: 512, h: 512, icon: <CropSquareIcon fontSize="small" /> },
+  { label: "768×1024", w: 768, h: 1024, icon: <PortraitIcon fontSize="small" /> },
+  { label: "864×1152", w: 864, h: 1152, icon: <PortraitIcon fontSize="small" /> },
+  { label: "1024×1024", w: 1024, h: 1024, icon: <CropSquareIcon fontSize="small" /> },
+  { label: "1024×768", w: 1024, h: 768, icon: <LandscapeIcon fontSize="small" /> },
+  { label: "1152×864", w: 1152, h: 864, icon: <LandscapeIcon fontSize="small" /> },
+  { label: "1216×832", w: 1216, h: 832, icon: <LandscapeIcon fontSize="small" /> },
+  { label: "1344×768", w: 1344, h: 768, icon: <LandscapeIcon fontSize="small" /> },
+];
+
+const CUSTOM = "custom";
 
 interface ImageAsset {
   id: string;
@@ -26,6 +46,16 @@ interface GenResult {
   images?: ImageAsset[];
 }
 
+interface HistoryItem {
+  id: string;
+  workflow_type: string;
+  prompt: string;
+  status: string;
+  cost: number;
+  created_at: string;
+  images: ImageAsset[];
+}
+
 export const GenerationPage = () => {
   const [workflow, setWorkflow] = useState("z_image");
   const [prompt, setPrompt] = useState("");
@@ -33,12 +63,33 @@ export const GenerationPage = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenResult | null>(null);
   const [error, setError] = useState("");
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState("1024×1024");
+  const [customWidth, setCustomWidth] = useState(1024);
+  const [customHeight, setCustomHeight] = useState(1024);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [selectedHistory, setSelectedHistory] = useState<HistoryItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [editPrompt, setEditPrompt] = useState("");
+  const [editWorkflow, setEditWorkflow] = useState("qwen_edit_1");
+  const [videoPrompt, setVideoPrompt] = useState("");
+  const [videoDuration, setVideoDuration] = useState(5);
+  const [actionDialog, setActionDialog] = useState<"" | "edit" | "video">("");
   const fileRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach(u => URL.revokeObjectURL(u));
+    };
+  }, [previewUrls]);
+
   const selectedWorkflow = WORKFLOWS.find(w => w.value === workflow);
+
+  const currentResolution = selectedPreset === CUSTOM
+    ? { w: customWidth, h: customHeight }
+    : RESOLUTION_PRESETS.find(p => p.label === selectedPreset) || { w: 1024, h: 1024 };
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -89,6 +140,8 @@ export const GenerationPage = () => {
       const genRes: any = await api("POST", "/generate/", {
         workflow_type: workflow,
         prompt: prompt.trim(),
+        width: currentResolution.w,
+        height: currentResolution.h,
         reference_images: refImages,
       });
 
@@ -120,12 +173,75 @@ export const GenerationPage = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const max = selectedWorkflow?.maxRefs || 3;
-      setFiles(Array.from(e.target.files).slice(0, max));
+      const selected = Array.from(e.target.files).slice(0, max);
+      setFiles(selected);
+      const urls = selected.map(f => URL.createObjectURL(f));
+      setPreviewUrls(prev => {
+        prev.forEach(u => URL.revokeObjectURL(u));
+        return urls;
+      });
     }
   };
 
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
+    setPreviewUrls(prev => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const handleDelete = async (item: HistoryItem) => {
+    setDeleting(true);
+    try {
+      const res: any = await api("DELETE", `/generate/${item.id}`);
+      if (res.success) {
+        setHistory(prev => prev.filter(h => h.id !== item.id));
+        setSelectedHistory(null);
+      }
+    } catch { /* ignore */ }
+    setDeleting(false);
+  };
+
+  const handleDownload = (img: ImageAsset) => {
+    const a = document.createElement("a");
+    a.href = `/${img.file_path}`;
+    a.download = img.filename;
+    a.click();
+  };
+
+  const handleSendToEdit = async () => {
+    if (!selectedHistory || !editPrompt.trim()) return;
+    try {
+      const res: any = await api("POST", `/orchestrate/image-to-edit/${selectedHistory.id}?edit_workflow=${editWorkflow}&prompt=${encodeURIComponent(editPrompt.trim())}`, { files: [] });
+      if (res.success) {
+        setActionDialog("");
+        setEditPrompt("");
+        setSelectedHistory(null);
+        pollStatus(res.generation_id).then(() => loadHistory());
+      } else {
+        setError(res.error || "Ошибка запуска редактирования");
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const handleSendToVideo = async () => {
+    if (!selectedHistory || !videoPrompt.trim()) return;
+    try {
+      const res: any = await api("POST", `/orchestrate/image-to-video/${selectedHistory.id}?prompt=${encodeURIComponent(videoPrompt.trim())}&duration=${videoDuration}`);
+      if (res.success) {
+        setActionDialog("");
+        setVideoPrompt("");
+        setSelectedHistory(null);
+        pollStatus(res.generation_id).then(() => loadHistory());
+      } else {
+        setError(res.error || "Ошибка запуска видео");
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
   };
 
   const statusLabels: Record<string, string> = {
@@ -147,18 +263,57 @@ export const GenerationPage = () => {
                 <AutoAwesomeIcon color="primary" />
                 <Typography variant="h6" fontWeight={600}>Новая генерация</Typography>
               </Box>
-              <TextField select label="Workflow" fullWidth value={workflow} onChange={e => { setWorkflow(e.target.value); setFiles([]); }} margin="normal">
+              <TextField select label="Workflow" fullWidth value={workflow} onChange={e => { setWorkflow(e.target.value); setFiles([]); setPreviewUrls([]); }} margin="normal">
                 {WORKFLOWS.map(w => <MenuItem key={w.value} value={w.value}>{w.label}</MenuItem>)}
               </TextField>
 
               <TextField label="Промпт" fullWidth multiline rows={3} value={prompt} onChange={e => setPrompt(e.target.value)} margin="normal" placeholder="Опишите, что хотите получить..." />
 
+              <Typography variant="body2" fontWeight={600} mt={2} mb={1}>Разрешение</Typography>
+              <ToggleButtonGroup
+                value={selectedPreset}
+                exclusive
+                onChange={(_, v) => { if (v !== null) setSelectedPreset(v); }}
+                size="small"
+                sx={{ flexWrap: "wrap", gap: 0.5, mb: selectedPreset === CUSTOM ? 1 : 0 }}
+              >
+                {RESOLUTION_PRESETS.map(p => (
+                  <ToggleButton key={p.label} value={p.label} sx={{ px: 1.5, py: 0.5, textTransform: "none" }}>
+                    {p.icon} <Box component="span" sx={{ ml: 0.5 }}>{p.label}</Box>
+                  </ToggleButton>
+                ))}
+                <ToggleButton value={CUSTOM} sx={{ px: 1.5, py: 0.5, textTransform: "none" }}>
+                  Свой
+                </ToggleButton>
+              </ToggleButtonGroup>
+
+              {selectedPreset === CUSTOM && (
+                <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
+                  <TextField label="Ширина" type="number" size="small" value={customWidth}
+                    onChange={e => setCustomWidth(Math.max(256, Number(e.target.value)))}
+                    inputProps={{ min: 256, max: 2048, step: 64 }} sx={{ width: 120 }} />
+                  <TextField label="Высота" type="number" size="small" value={customHeight}
+                    onChange={e => setCustomHeight(Math.max(256, Number(e.target.value)))}
+                    inputProps={{ min: 256, max: 2048, step: 64 }} sx={{ width: 120 }} />
+                </Box>
+              )}
+
               {selectedWorkflow?.needsRefs && (
                 <Box sx={{ mt: 2, p: 2, bgcolor: "action.hover", borderRadius: 2 }}>
                   <Typography variant="body2" fontWeight={600} mb={1}>Референс-изображения ({files.length}/{selectedWorkflow.maxRefs})</Typography>
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+                  <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mb: 1 }}>
                     {files.map((f, i) => (
-                      <Chip key={i} label={f.name} onDelete={() => removeFile(i)} deleteIcon={<CloseIcon fontSize="small" />} size="small" />
+                      <Box key={i} sx={{ position: "relative", borderRadius: 2, overflow: "hidden", border: "1px solid", borderColor: "divider", maxWidth: "100%", flex: "1 1 auto" }}>
+                        <img src={previewUrls[i]} alt={f.name}
+                          style={{ width: "100%", height: "auto", objectFit: "contain", display: "block", background: "repeating-conic-gradient(rgba(0,0,0,0.03) 0% 25%, transparent 0% 50%) 0px 0px / 20px 20px" }} />
+                        <IconButton size="small" onClick={() => removeFile(i)}
+                          sx={{ position: "absolute", top: 4, right: 4, bgcolor: "rgba(0,0,0,0.5)", color: "white", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" } }}>
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                        <Typography variant="caption" sx={{ position: "absolute", bottom: 0, left: 0, right: 0, bgcolor: "rgba(0,0,0,0.6)", color: "white", px: 1, py: 0.5, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                          {f.name}
+                        </Typography>
+                      </Box>
                     ))}
                   </Box>
                   <Button variant="outlined" size="small" component="label" disabled={files.length >= (selectedWorkflow.maxRefs || 3)}>
@@ -168,9 +323,14 @@ export const GenerationPage = () => {
                 </Box>
               )}
 
-              <Button variant="contained" onClick={handleGenerate} disabled={loading || !prompt.trim()} sx={{ mt: 2 }} startIcon={<AutoAwesomeIcon />}>
-                {loading ? "Генерация..." : "Сгенерировать"}
-              </Button>
+              <Box sx={{ display: "flex", gap: 2, alignItems: "center", mt: 2 }}>
+                <Button variant="contained" onClick={handleGenerate} disabled={loading || !prompt.trim()} startIcon={<AutoAwesomeIcon />}>
+                  {loading ? "Генерация..." : "Сгенерировать"}
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  {currentResolution.w}×{currentResolution.h}
+                </Typography>
+              </Box>
               {loading && <LinearProgress sx={{ mt: 2, borderRadius: 1 }} />}
               {error && <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError("")}>{error}</Alert>}
             </CardContent>
@@ -186,7 +346,7 @@ export const GenerationPage = () => {
                   <Chip label={statusLabels[result.status] || result.status} size="small" color={result.status === "completed" ? "success" : result.status === "failed" ? "error" : "default"} />
                 </Box>
                 {result.images && result.images.length > 0 && (
-                  <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                  <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", maxHeight: 600, overflowY: "auto", p: 1 }}>
                     {result.images.map((img: ImageAsset) => (
                       <Box key={img.id} sx={{ maxWidth: 300 }}>
                         <Box sx={{ borderRadius: 2, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
@@ -230,8 +390,9 @@ export const GenerationPage = () => {
               ) : history.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 4 }}>Нет генераций</Typography>
               ) : (
-                history.map((g: any) => (
-                  <Box key={g.id} sx={{ mb: 1.5, p: 1.5, bgcolor: "action.hover", borderRadius: 2 }}>
+                history.map((g: HistoryItem) => (
+                  <Box key={g.id} onClick={() => setSelectedHistory(g)}
+                    sx={{ mb: 1.5, p: 1.5, bgcolor: "action.hover", borderRadius: 2, cursor: "pointer", "&:hover": { bgcolor: "action.selected" } }}>
                     <Typography variant="body2" fontWeight={600} noWrap>{g.workflow_type}</Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{g.prompt}</Typography>
                     <Box sx={{ display: "flex", gap: 1 }}>
@@ -245,6 +406,98 @@ export const GenerationPage = () => {
           </Card>
         </Box>
       </Box>
+
+      <Dialog open={!!selectedHistory} onClose={() => setSelectedHistory(null)} maxWidth="md" fullWidth>
+        {selectedHistory && (
+          <>
+            <DialogTitle>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Box>
+                  <Typography variant="h6">{selectedHistory.workflow_type}</Typography>
+                  <Typography variant="caption" color="text.secondary">{selectedHistory.prompt}</Typography>
+                </Box>
+                <IconButton onClick={() => setSelectedHistory(null)}><CloseIcon /></IconButton>
+              </Box>
+            </DialogTitle>
+            <DialogContent dividers>
+              {selectedHistory.images.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  {selectedHistory.images.map(img => (
+                    <Box key={img.id} sx={{ mb: 1 }}>
+                      <img src={`/${img.file_path}`} alt={img.filename}
+                        style={{ width: "100%", height: "auto", objectFit: "contain", display: "block", borderRadius: 8, maxHeight: "70vh", background: "repeating-conic-gradient(rgba(0,0,0,0.03) 0% 25%, transparent 0% 50%) 0px 0px / 20px 20px" }} />
+                    </Box>
+                  ))}
+                </Box>
+              )}
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
+                <Chip label={`ID: ${selectedHistory.id.slice(0, 8)}...`} size="small" variant="outlined" />
+                <Chip label={`${selectedHistory.cost} кредитов`} size="small" variant="outlined" />
+                <Chip label={statusLabels[selectedHistory.status] || selectedHistory.status} size="small"
+                  color={selectedHistory.status === "completed" ? "success" : selectedHistory.status === "failed" ? "error" : "default"} />
+              </Box>
+
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                {selectedHistory.images.map(img => (
+                  <Button key={img.id} variant="outlined" size="small" startIcon={<DownloadIcon />}
+                    onClick={() => handleDownload(img)}>
+                    Скачать
+                  </Button>
+                ))}
+                <Button variant="outlined" size="small" color="error" startIcon={<DeleteIcon />}
+                  onClick={() => handleDelete(selectedHistory)} disabled={deleting}>
+                  {deleting ? "Удаление..." : "Удалить"}
+                </Button>
+                {selectedHistory.images.length > 0 && selectedHistory.status === "completed" && (
+                  <>
+                    <Button variant="outlined" size="small" startIcon={<EditIcon />}
+                      onClick={() => setActionDialog("edit")}>
+                      Редактировать
+                    </Button>
+                    <Button variant="outlined" size="small" startIcon={<VideoFileIcon />}
+                      onClick={() => setActionDialog("video")}>
+                      Создать видео
+                    </Button>
+                  </>
+                )}
+              </Box>
+            </DialogContent>
+          </>
+        )}
+      </Dialog>
+
+      <Dialog open={actionDialog === "edit"} onClose={() => setActionDialog("")} maxWidth="sm" fullWidth>
+        <DialogTitle>Редактирование изображения</DialogTitle>
+        <DialogContent>
+          <TextField select label="Workflow" fullWidth value={editWorkflow}
+            onChange={e => setEditWorkflow(e.target.value)} margin="normal">
+            <MenuItem value="qwen_edit_1">Qwen Edit (1 референс)</MenuItem>
+            <MenuItem value="qwen_edit_2">Qwen Edit (2 референса)</MenuItem>
+            <MenuItem value="qwen_edit_3">Qwen Edit (3 референса)</MenuItem>
+          </TextField>
+          <TextField label="Промпт" fullWidth multiline rows={3} value={editPrompt}
+            onChange={e => setEditPrompt(e.target.value)} margin="normal" placeholder="Опишите, что изменить..." />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setActionDialog("")}>Отмена</Button>
+          <Button variant="contained" onClick={handleSendToEdit} disabled={!editPrompt.trim()}>Запустить</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={actionDialog === "video"} onClose={() => setActionDialog("")} maxWidth="sm" fullWidth>
+        <DialogTitle>Создание видео</DialogTitle>
+        <DialogContent>
+          <TextField label="Промпт" fullWidth multiline rows={3} value={videoPrompt}
+            onChange={e => setVideoPrompt(e.target.value)} margin="normal" placeholder="Опишите сценарий..." />
+          <TextField label="Длительность (сек)" type="number" size="small" value={videoDuration}
+            onChange={e => setVideoDuration(Math.max(1, Number(e.target.value)))}
+            inputProps={{ min: 1, max: 30 }} sx={{ width: 160, mt: 1 }} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setActionDialog("")}>Отмена</Button>
+          <Button variant="contained" onClick={handleSendToVideo} disabled={!videoPrompt.trim()}>Запустить</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

@@ -24,6 +24,7 @@ from app.schemas.admin import (
     BackupListResponse,
     BackupCreateResponse,
     LdapGroupListResponse,
+    LdapTestResponse,
     BaseResponse,
 )
 from app.services.admin_service import AdminService
@@ -370,11 +371,40 @@ async def list_ldap_groups(
     domain = await _val("ldap_domain", settings.ldap_domain)
     base_dn = await _val("ldap_base_dn", settings.ldap_base_dn)
     bind_dn = await _val("ldap_bind_dn", "")
+    bind_username = await _val("ldap_bind_username", "")
     bind_password = await _val("ldap_bind_password", "")
     if not server or not settings.ldap_enabled:
         adapter = MockLDAPAdapter()
     else:
         adapter = LDAPAdapter(server=server, domain=domain, base_dn=base_dn,
-                              bind_dn=bind_dn or None, bind_password=bind_password or None)
+                              bind_dn=bind_dn or None, bind_username=bind_username or None,
+                              bind_password=bind_password or None)
     groups = await adapter.list_groups(search)
     return LdapGroupListResponse(success=True, groups=groups)
+
+
+@router.get("/ldap-test", response_model=LdapTestResponse)
+async def test_ldap_connection(
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    sr = SettingsRepository(db)
+
+    async def _val(key: str, default: str) -> str:
+        s = await sr.get_by_key(key)
+        return s.value if s else default
+
+    server = await _val("ldap_server", settings.ldap_server)
+    domain = await _val("ldap_domain", settings.ldap_domain)
+    base_dn = await _val("ldap_base_dn", settings.ldap_base_dn)
+    bind_dn = await _val("ldap_bind_dn", "")
+    bind_username = await _val("ldap_bind_username", "")
+    bind_password = await _val("ldap_bind_password", "")
+    if not server or not settings.ldap_enabled:
+        result = {"success": True, "message": "LDAP отключён в конфигурации"}
+    else:
+        adapter = LDAPAdapter(server=server, domain=domain, base_dn=base_dn,
+                              bind_dn=bind_dn or None, bind_username=bind_username or None,
+                              bind_password=bind_password or None)
+        result = await adapter.test_connection()
+    return LdapTestResponse(success=result.get("success", False), message=result.get("message", ""), error=result.get("error"))

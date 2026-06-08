@@ -8,7 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, get_current_user_id
 from app.core.rate_limit import rate_limit
-from app.schemas.generation import GenerateRequest, GenerateResponse, HistoryResponse, GenerationStatusResponse, UploadResponse
+from app.schemas.generation import (
+    GenerateRequest, GenerateResponse, HistoryResponse,
+    GenerationStatusResponse, UploadResponse, BaseResponse,
+)
 from app.services.comfyui_service import ComfyUIService
 
 router = APIRouter(prefix="/generate", tags=["generation"])
@@ -99,3 +102,14 @@ async def get_history(
     service = ComfyUIService(db)
     result = await service.get_history(user_id)
     return HistoryResponse(**result)
+
+
+@router.delete("/{generation_id}", response_model=BaseResponse)
+async def delete_generation(
+    generation_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ComfyUIService(db)
+    result = await service.delete_generation(generation_id, user_id)
+    return BaseResponse(**result)

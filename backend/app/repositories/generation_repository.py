@@ -16,7 +16,7 @@ class GenerationRepository(BaseRepository[GenerationRecord]):
     async def get_user_generations(self, user_id: UUID, skip: int = 0, limit: int = 50) -> list[GenerationRecord]:
         result = await self.session.execute(
             select(GenerationRecord)
-            .where(GenerationRecord.user_id == user_id)
+            .where(GenerationRecord.user_id == user_id, GenerationRecord.deleted_at.is_(None))
             .options(selectinload(GenerationRecord.assets))
             .order_by(desc(GenerationRecord.created_at))
             .offset(skip)

@@ -66,7 +66,7 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
             ))}
           </List>
         </Drawer>
-        <Box component="main" sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", pt: "64px", px: 3, pb: 3, minHeight: 0 }}>
+        <Box component="main" sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", overflowY: "auto", pt: "64px", px: 3, pb: 3, minHeight: 0 }}>
           <Routes>
             <Route path="/" element={<ErrorBoundary><DashboardPage user={user} /></ErrorBoundary>} />
             <Route path="/chat" element={<ErrorBoundary><ChatPage /></ErrorBoundary>} />

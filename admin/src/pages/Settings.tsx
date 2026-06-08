@@ -50,7 +50,8 @@ const FIELD_DISPLAY_NAMES: Record<string, string> = {
   ldap_server: "Адрес LDAP-сервера",
   ldap_domain: "NetBIOS-имя домена",
   ldap_base_dn: "Базовый DN",
-  ldap_bind_dn: "Учётная запись для поиска (DN)",
+  ldap_bind_dn: "Учётная запись для поиска (DN, устаревший формат)",
+  ldap_bind_username: "Учётная запись для поиска (имя пользователя)",
   ldap_bind_password: "Пароль учётной записи",
   require_ad_group_for_login: "Требовать группу AD для входа",
   default_permissions: "Права доступа по умолчанию",
@@ -268,15 +269,15 @@ function LdapForm({ settings, onSaved }: { settings: Setting[]; onSaved: () => v
       <MuiTextField label="Базовый DN" helperText="Например: DC=domain,DC=local" value={values.ldap_base_dn ?? ""}
         onChange={(e) => handleChange("ldap_base_dn", e.target.value)} fullWidth sx={{ mb: 2 }} />
 
-      <MuiTextField label="Учётная запись для поиска (DN)"
+      <MuiTextField label="Учётная запись для поиска (имя пользователя)"
         helperText={
           <span>
-            Полный DN учётной записи для поиска в AD. Например: <code>CN=admin,CN=Users,DC=domain,DC=local</code>.
-            Если оставить пустым — используется анонимный поиск (если сервер поддерживает).
+            Имя учётной записи для поиска в AD (без домена). Например: <code>svc-accos</code>.
+            Используется форма <code>DOMAIN\username</code>. Если не указано — используется <code>ldap_bind_dn</code> (DN) или анонимный поиск.
           </span>
         }
-        value={values.ldap_bind_dn ?? ""}
-        onChange={(e) => handleChange("ldap_bind_dn", e.target.value)} fullWidth sx={{ mb: 2 }} />
+        value={values.ldap_bind_username ?? ""}
+        onChange={(e) => handleChange("ldap_bind_username", e.target.value)} fullWidth sx={{ mb: 2 }} />
 
       <MuiTextField label="Пароль" type="password" value={values.ldap_bind_password ?? ""}
         onChange={(e) => handleChange("ldap_bind_password", e.target.value)}
