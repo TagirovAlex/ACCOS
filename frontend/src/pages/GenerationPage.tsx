@@ -7,7 +7,8 @@ import HistoryIcon from "@mui/icons-material/History";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
-import EditIcon from "@mui/icons-material/Edit";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import GridViewIcon from "@mui/icons-material/GridView";
 import VideoFileIcon from "@mui/icons-material/VideoFile";
 import LandscapeIcon from "@mui/icons-material/Landscape";
 import PortraitIcon from "@mui/icons-material/Portrait";
@@ -81,6 +82,7 @@ export const GenerationPage = () => {
   const [videoDuration, setVideoDuration] = useState(5);
   const [actionDialog, setActionDialog] = useState<"" | "edit" | "video">("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "tiles">("tiles");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const selectedWorkflow = WORKFLOWS.find(w => w.value === workflow);
@@ -400,9 +402,19 @@ export const GenerationPage = () => {
                   <HistoryIcon color="primary" />
                   <Typography variant="h6" fontWeight={600}>История</Typography>
                 </Box>
-                <IconButton size="small" onClick={() => loadHistory()} title="Обновить">
-                  <RefreshIcon fontSize="small" />
-                </IconButton>
+                <Box sx={{ display: "flex", gap: 0.5 }}>
+                  <ToggleButtonGroup value={viewMode} exclusive size="small" onChange={(_, v) => v && setViewMode(v)}>
+                    <ToggleButton value="list" sx={{ px: 1, py: 0.25, textTransform: "none" }}>
+                      <ViewListIcon fontSize="small" />
+                    </ToggleButton>
+                    <ToggleButton value="tiles" sx={{ px: 1, py: 0.25, textTransform: "none" }}>
+                      <GridViewIcon fontSize="small" />
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                  <IconButton size="small" onClick={() => loadHistory()} title="Обновить">
+                    <RefreshIcon fontSize="small" />
+                  </IconButton>
+                </Box>
               </Box>
               {historyLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
@@ -414,18 +426,43 @@ export const GenerationPage = () => {
                 ))
               ) : history.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 4 }}>Нет генераций</Typography>
-              ) : (
-                history.map((g: HistoryItem) => (
-                  <Box key={g.id} onClick={() => setSelectedHistory(g)}
-                    sx={{ mb: 1.5, p: 1.5, bgcolor: "action.hover", borderRadius: 2, cursor: "pointer", "&:hover": { bgcolor: "action.selected" } }}>
-                    <Typography variant="body2" fontWeight={600} noWrap>{g.workflow_type}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{g.prompt}</Typography>
-                    <Box sx={{ display: "flex", gap: 1 }}>
-                      <Chip label={statusLabels[g.status] || g.status} size="small" color={g.status === "completed" ? "success" : g.status === "failed" ? "error" : "default"} />
-                      <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>{g.cost} кр.</Typography>
+              ) : viewMode === "list" ? (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  {history.map((g: HistoryItem) => (
+                    <Box key={g.id} onClick={() => setSelectedHistory(g)}
+                      sx={{ p: 1.5, bgcolor: "action.hover", borderRadius: 2, cursor: "pointer", "&:hover": { bgcolor: "action.selected" } }}>
+                      <Typography variant="body2" fontWeight={600} noWrap>{g.workflow_type}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{g.prompt}</Typography>
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        <Chip label={statusLabels[g.status] || g.status} size="small" color={g.status === "completed" ? "success" : g.status === "failed" ? "error" : "default"} />
+                        <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>{g.cost} кр.</Typography>
+                      </Box>
                     </Box>
-                  </Box>
-                ))
+                  ))}
+                </Box>
+              ) : (
+                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 1.5 }}>
+                  {history.map((g: HistoryItem) => (
+                    <Card key={g.id} onClick={() => setSelectedHistory(g)}
+                      sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+                      {g.images?.[0] && (
+                        <Box sx={{ width: "100%", height: 120, overflow: "hidden" }}>
+                          <img src={`/${g.images[0].file_path}`} alt=""
+                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                            onError={(e: any) => { e.target.style.display = "none"; }} />
+                        </Box>
+                      )}
+                      <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
+                        <Typography variant="body2" fontWeight={600} noWrap gutterBottom>{g.workflow_type}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }} noWrap>{g.prompt}</Typography>
+                        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                          <Chip label={statusLabels[g.status] || g.status} size="small" color={g.status === "completed" ? "success" : g.status === "failed" ? "error" : "default"} />
+                          <Typography variant="caption" color="text.secondary">{g.cost} кр.</Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
               )}
             </CardContent>
           </Card>

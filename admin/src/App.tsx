@@ -43,7 +43,7 @@ const CustomToolbar = () => (
 const CustomAppBar = (props: AppBarProps) => (
   <AppBar {...props} userMenu={<CustomUserMenu />} toolbar={<CustomToolbar />}>
     <Typography variant="h6" fontWeight={700} noWrap sx={{ ml: 1, letterSpacing: "-0.01em" }}>
-      ACCOS
+      ACCOS Admin
     </Typography>
   </AppBar>
 );
@@ -62,50 +62,13 @@ const App = () => (
     darkTheme={darkTheme}
     requireAuth
   >
-    <Resource
-      name="users"
-      options={{ label: "Пользователи" }}
-      list={UserList}
-      edit={UserEdit}
-      create={UserCreate}
-    />
-    <Resource
-      name="groups"
-      options={{ label: "Группы доступа" }}
-      list={GroupList}
-      edit={GroupEdit}
-      create={GroupCreate}
-    />
-    <Resource
-      name="chats"
-      options={{ label: "Чаты" }}
-      list={ChatList}
-      show={ChatShow}
-    />
-    <Resource
-      name="generations"
-      options={{ label: "Генерации" }}
-      list={GenerationList}
-      show={GenerationShow}
-    />
-    <Resource
-      name="assets"
-      options={{ label: "Ресурсы" }}
-      list={AssetList}
-      show={AssetShow}
-    />
-    <Resource
-      name="settings"
-      options={{ label: "Настройки" }}
-      list={SettingsList}
-      edit={SettingsEdit}
-      create={SettingsCreate}
-    />
-    <Resource
-      name="backups"
-      options={{ label: "Бэкапы" }}
-      list={BackupList}
-    />
+    <Resource name="users" options={{ label: "👥 Пользователи" }} list={UserList} edit={UserEdit} create={UserCreate} />
+    <Resource name="groups" options={{ label: "🔐 Группы доступа" }} list={GroupList} edit={GroupEdit} create={GroupCreate} />
+    <Resource name="chats" options={{ label: "💬 Чаты" }} list={ChatList} show={ChatShow} />
+    <Resource name="generations" options={{ label: "🎨 Генерации" }} list={GenerationList} show={GenerationShow} />
+    <Resource name="assets" options={{ label: "🖼 Ресурсы" }} list={AssetList} show={AssetShow} />
+    <Resource name="settings" options={{ label: "⚙ Настройки" }} list={SettingsList} edit={SettingsEdit} create={SettingsCreate} />
+    <Resource name="backups" options={{ label: "📦 Бэкапы" }} list={BackupList} />
   </Admin>
 );
 

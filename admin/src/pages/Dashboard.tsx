@@ -1,54 +1,44 @@
 import { Card, CardContent, Typography, Grid, Box, Button, Skeleton } from "@mui/material";
 import { useGetList } from "react-admin";
 import { useNavigate } from "react-router-dom";
-import PeopleIcon from "@mui/icons-material/People";
-import GroupIcon from "@mui/icons-material/Group";
-import ChatIcon from "@mui/icons-material/Chat";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
-import ImageIcon from "@mui/icons-material/Image";
 
-interface StatCardProps {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string | undefined;
-  gradient: string;
-  to?: string;
-}
+const INFO_BOXES = [
+  { resource: "users", label: "Пользователи", icon: "👥", color: "#448aff", to: "/users" },
+  { resource: "groups", label: "Группы доступа", icon: "🔐", color: "#43a047", to: "/groups" },
+  { resource: "chats", label: "Чаты", icon: "💬", color: "#ffa726", to: "/chats" },
+  { resource: "generations", label: "Генерации", icon: "🎨", color: "#ab47bc", to: "/generations" },
+  { resource: "assets", label: "Ресурсы", icon: "🖼", color: "#26c6da", to: "/assets" },
+  { resource: "settings", label: "Настройки", icon: "⚙", color: "#78909c", to: "/settings" },
+];
 
-const StatCard = ({ icon, label, value, gradient, to }: StatCardProps) => {
+const InfoBox = ({ icon, label, value, color, to }: { icon: string; label: string; value: number | undefined; color: string; to?: string }) => {
   const nav = useNavigate();
   return (
-    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-      <Card
-        onClick={() => to && nav(to)}
-        sx={{
-          position: "relative", overflow: "hidden", border: "none", borderRadius: 3,
-          cursor: to ? "pointer" : "default",
-          transition: "transform 0.15s ease, box-shadow 0.15s ease",
-          "&:hover": to ? { transform: "translateY(-2px)", boxShadow: 4 } : {},
-        }}
-      >
-        <Box sx={{
-          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-          background: gradient, opacity: 0.08,
-        }} />
-        <CardContent sx={{ position: "relative", display: "flex", alignItems: "center", gap: 2.5, py: 3, px: 3 }}>
-          <Box sx={{
-            width: 56, height: 56, borderRadius: 2.5, display: "flex", alignItems: "center", justifyContent: "center",
-            background: gradient, color: "#fff", fontSize: 28,
-          }}>
-            {icon}
-          </Box>
-          <Box>
-            {value === undefined
-              ? <Skeleton variant="text" width={60} height={40} />
-              : <Typography variant="h4" fontWeight={700}>{value}</Typography>
-            }
-            <Typography variant="body2" color="text.secondary" fontWeight={500}>{label}</Typography>
-          </Box>
-        </CardContent>
-      </Card>
-    </Grid>
+    <Box
+      onClick={() => to && nav(to)}
+      sx={{
+        display: "flex", bgcolor: "background.paper",
+        border: 1, borderColor: "divider", borderRadius: 1,
+        cursor: to ? "pointer" : "default",
+        transition: "all 0.15s ease",
+        "&:hover": to ? { boxShadow: "0 4px 12px rgba(0,0,0,0.12)" } : {},
+      }}
+    >
+      <Box sx={{
+        width: 80, minHeight: 80,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 32, bgcolor: color, color: "#fff",
+      }}>
+        {icon}
+      </Box>
+      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", px: 2 }}>
+        {value === undefined
+          ? <Skeleton variant="text" width={50} height={32} />
+          : <Typography variant="h5" fontWeight={700} lineHeight={1.2}>{value}</Typography>
+        }
+        <Typography variant="body2" color="text.secondary" fontSize="0.85rem">{label}</Typography>
+      </Box>
+    </Box>
   );
 };
 
@@ -60,31 +50,45 @@ export const Dashboard = () => {
   const { total: generations } = useGetList("generations", { pagination: { page: 1, perPage: 1 } });
   const { total: assets } = useGetList("assets", { pagination: { page: 1, perPage: 1 } });
 
+  const totals: Record<string, number | undefined> = { users, groups, chats, generations, assets };
+
   return (
     <Box>
-      <Typography variant="h5" mb={0.5}>ACCOS Admin</Typography>
-      <Typography variant="body2" color="text.secondary" mb={3}>Панель управления системой генерации контента</Typography>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h5" fontWeight={700}>ACCOS Admin</Typography>
+        <Typography variant="body2" color="text.secondary">Панель управления системой генерации контента</Typography>
+      </Box>
 
-      <Grid container spacing={2.5} mb={4}>
-        <StatCard icon={<PeopleIcon fontSize="large" />} label="Пользователи" value={users ?? "..."} gradient="linear-gradient(135deg, #448aff 0%, #7c4dff 100%)" to="/users" />
-        <StatCard icon={<GroupIcon fontSize="large" />} label="Группы доступа" value={groups ?? "..."} gradient="linear-gradient(135deg, #43a047 0%, #00bfa5 100%)" to="/groups" />
-        <StatCard icon={<ChatIcon fontSize="large" />} label="Чаты" value={chats ?? "..."} gradient="linear-gradient(135deg, #ffa726 0%, #ff7043 100%)" to="/chats" />
-        <StatCard icon={<AutoAwesomeIcon fontSize="large" />} label="Генерации" value={generations ?? "..."} gradient="linear-gradient(135deg, #ab47bc 0%, #e040fb 100%)" to="/generations" />
-        <StatCard icon={<ImageIcon fontSize="large" />} label="Ресурсы (изображения)" value={assets ?? "..."} gradient="linear-gradient(135deg, #26c6da 0%, #448aff 100%)" to="/assets" />
+      <Grid container spacing={2} mb={4}>
+        {INFO_BOXES.map(box => (
+          <Grid size={{ xs: 12, sm: 6, md: 4 }} key={box.resource}>
+            <InfoBox
+              icon={box.icon}
+              label={box.label}
+              value={totals[box.resource]}
+              color={box.color}
+              to={box.to}
+            />
+          </Grid>
+        ))}
       </Grid>
 
-      <Typography variant="h6" mb={2}>Быстрые действия</Typography>
-      <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
-        <Button variant="contained" onClick={() => navigate("/users/create")} sx={{ px: 3, py: 1 }}>
-          + Создать пользователя
-        </Button>
-        <Button variant="outlined" onClick={() => navigate("/groups/create")} sx={{ px: 3, py: 1 }}>
-          + Создать группу
-        </Button>
-        <Button variant="outlined" onClick={() => navigate("/settings")} sx={{ px: 3, py: 1 }}>
-          Настройки
-        </Button>
-      </Box>
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} mb={2}>Быстрые действия</Typography>
+          <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
+            <Button variant="contained" onClick={() => navigate("/users/create")} sx={{ px: 3, py: 1 }}>
+              + Создать пользователя
+            </Button>
+            <Button variant="outlined" onClick={() => navigate("/groups/create")} sx={{ px: 3, py: 1 }}>
+              + Создать группу
+            </Button>
+            <Button variant="outlined" onClick={() => navigate("/settings")} sx={{ px: 3, py: 1 }}>
+              Настройки
+            </Button>
+          </Box>
+        </CardContent>
+      </Card>
     </Box>
   );
 };
