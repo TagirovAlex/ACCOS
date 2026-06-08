@@ -251,12 +251,31 @@ class AdminService:
         try:
             result = await self.session.execute(
                 select(GenerationRecord)
-                .options(joinedload(GenerationRecord.user), selectinload(GenerationRecord.assets))
+                .options(
+                    joinedload(GenerationRecord.user),
+                    selectinload(GenerationRecord.assets),
+                    selectinload(GenerationRecord.source_gen).selectinload(GenerationRecord.assets),
+                )
                 .where(GenerationRecord.id == UUID(gen_id))
             )
             record = result.unique().scalar_one_or_none()
             if not record:
                 return None
+
+            def _asset_json(a):
+                return {
+                    "id": str(a.id), "filename": a.filename,
+                    "file_path": a.file_path, "file_size": a.file_size,
+                }
+
+            source_data = None
+            if record.source_generation_id and record.source_gen:
+                source_data = {
+                    "id": str(record.source_gen.id),
+                    "workflow_type": record.source_gen.workflow_type,
+                    "images": [_asset_json(a) for a in (record.source_gen.assets or [])],
+                }
+
             return {
                 "success": True,
                 "id": str(record.id), "user_id": str(record.user_id),
@@ -267,15 +286,11 @@ class AdminService:
                 "status": record.status, "cost": record.cost,
                 "error_message": record.error_message,
                 "created_at": record.created_at, "updated_at": record.updated_at,
-                "images": [
-                    {
-                        "id": str(a.id), "filename": a.filename,
-                        "file_path": a.file_path, "file_size": a.file_size,
-                    }
-                    for a in (record.assets or [])
-                ],
+                "images": [_asset_json(a) for a in (record.assets or [])],
+                "source_generation": source_data,
             }
-        except Exception:
+        except Exception as e:
+            logger.exception("get_generation_detail failed")
             return None
 
     async def list_all_generations(self, skip: int = 0, limit: int = 100) -> dict:

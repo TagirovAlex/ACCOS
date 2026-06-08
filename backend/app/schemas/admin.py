@@ -149,6 +149,12 @@ class AdminGenerationAssetResponse(BaseModel):
     file_size: int | None = None
 
 
+class AdminGenerationSourceResponse(BaseModel):
+    id: str
+    workflow_type: str
+    images: list[AdminGenerationAssetResponse] = []
+
+
 class AdminGenerationResponse(BaseModel):
     id: str
     user_id: str
@@ -179,6 +185,7 @@ class AdminGenerationDetailResponse(BaseResponse):
     created_at: datetime
     updated_at: datetime
     images: list[AdminGenerationAssetResponse] = []
+    source_generation: AdminGenerationSourceResponse | None = None
 
 
 class AdminAssetResponse(BaseModel):

@@ -43,6 +43,8 @@ class OrchestrationService:
 
         ref_json = json.dumps(reference_images or [])
 
+        source_uuid = UUID(generation_id)
+
         record = await self.generation_repo.create(
             user_id=uid,
             workflow_type=edit_workflow,
@@ -52,6 +54,7 @@ class OrchestrationService:
             cost=cost,
             status="queued",
             result_path=ref_json,
+            source_generation_id=source_uuid,
         )
 
         await self.session.flush()
@@ -78,6 +81,8 @@ class OrchestrationService:
         source_paths = [str(PROJECT_ROOT / a.file_path) for a in assets if a.file_path]
         ref_json = json.dumps(source_paths)
 
+        source_uuid = UUID(generation_id)
+
         record = await self.generation_repo.create(
             user_id=uid,
             workflow_type="image_to_video",
@@ -88,6 +93,7 @@ class OrchestrationService:
             cost=cost,
             status="queued",
             result_path=ref_json,
+            source_generation_id=source_uuid,
         )
 
         await self.session.flush()
