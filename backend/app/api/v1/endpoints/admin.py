@@ -44,7 +44,7 @@ async def _require_admin(user_id: str = Depends(get_current_user_id), db: AsyncS
     return user_id
 
 
-@router.get("/dashboard", response_model=BaseResponse)
+@router.get("/dashboard")
 async def get_dashboard_stats(
     user_id: str = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
@@ -53,7 +53,7 @@ async def get_dashboard_stats(
     return await service.get_dashboard_stats()
 
 
-@router.get("/dashboard/activity", response_model=BaseResponse)
+@router.get("/dashboard/activity")
 async def get_dashboard_activity(
     user_id: str = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
