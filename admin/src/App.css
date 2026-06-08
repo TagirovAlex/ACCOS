@@ -1,1 +1,35 @@
-/* App-level overrides (minimal — MUI/react-admin handles theming) */
+/* Admin panel custom overrides */
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.5); }
+
+/* Smooth transitions */
+.MuiButton-root, .MuiIconButton-root, .MuiChip-root {
+  transition: all 0.2s ease !important;
+}
+
+/* Card hover effect */
+.MuiCard-root {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.MuiCard-root:hover {
+  transform: translateY(-1px);
+}
+
+/* Datagrid row cursor */
+.RaDatagrid-row {
+  cursor: pointer;
+}
+
+/* AppBar user menu spacing */
+.MuiToolbar-root .MuiLoadingIndicator-root {
+  margin-right: 8px;
+}

@@ -1,5 +1,5 @@
 import { Admin, Resource, Layout, AppBar, UserMenu, useTheme, Logout, ToggleThemeButton, LoadingIndicator, type LayoutProps, type AppBarProps } from "react-admin";
-import { MenuItem, ListItemIcon, ListItemText, Box } from "@mui/material";
+import { MenuItem, ListItemIcon, ListItemText, Box, Typography } from "@mui/material";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import { authProvider } from "./services/authProvider";
@@ -14,7 +14,7 @@ import { GenerationList, GenerationShow } from "./pages/Generations";
 import { AssetList, AssetShow } from "./pages/Assets";
 import { SettingsList, SettingsEdit, SettingsCreate } from "./pages/Settings";
 import { BackupList } from "./pages/Backups";
-import { ErrorBoundary } from "./components/ErrorBoundary";
+import "./App.css";
 
 const ThemeMenuItem = () => {
   const [theme, setTheme] = useTheme();
@@ -34,14 +34,18 @@ const CustomUserMenu = () => (
 );
 
 const CustomToolbar = () => (
-  <Box sx={{ display: "flex", alignItems: "center", mr: 2 }}>
+  <Box sx={{ display: "flex", alignItems: "center", mr: 2, gap: 1 }}>
     <LoadingIndicator />
     <ToggleThemeButton />
   </Box>
 );
 
 const CustomAppBar = (props: AppBarProps) => (
-  <AppBar {...props} userMenu={<CustomUserMenu />} toolbar={<CustomToolbar />} />
+  <AppBar {...props} userMenu={<CustomUserMenu />} toolbar={<CustomToolbar />}>
+    <Typography variant="h6" fontWeight={700} noWrap sx={{ ml: 1, letterSpacing: "-0.01em" }}>
+      ACCOS
+    </Typography>
+  </AppBar>
 );
 
 const CustomLayout = (props: LayoutProps) => (
@@ -49,7 +53,7 @@ const CustomLayout = (props: LayoutProps) => (
 );
 
 const App = () => (
-  <ErrorBoundary><Admin
+  <Admin
     authProvider={authProvider}
     dataProvider={dataProvider}
     dashboard={Dashboard}
@@ -102,7 +106,7 @@ const App = () => (
       options={{ label: "Бэкапы" }}
       list={BackupList}
     />
-  </Admin></ErrorBoundary>
+  </Admin>
 );
 
 export default App;
