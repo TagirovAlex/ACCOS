@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Box, Card, CardContent, Typography, TextField, Button, MenuItem, Alert, LinearProgress, Chip, Skeleton, IconButton, ToggleButtonGroup, ToggleButton, Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
@@ -58,6 +59,8 @@ interface HistoryItem {
 }
 
 export const GenerationPage = () => {
+  const [searchParams] = useSearchParams();
+  const [viewHistory, setViewHistory] = useState(searchParams.get("view") === "history");
   const [workflow, setWorkflow] = useState("z_image");
   const [prompt, setPrompt] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -273,7 +276,16 @@ export const GenerationPage = () => {
     <Box>
       <Typography variant="h5" fontWeight={700} mb={3}>Генерация</Typography>
 
+      {viewHistory && (
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+          <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={() => setViewHistory(false)}>
+            Новая генерация
+          </Button>
+        </Box>
+      )}
+
       <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+        {!viewHistory && (
         <Box sx={{ flex: "1 1 60%", minWidth: 300 }}>
           <Card sx={{ mb: 3 }}>
             <CardContent>
@@ -378,9 +390,10 @@ export const GenerationPage = () => {
             </Card>
           )}
         </Box>
+        )}
 
-        <Box sx={{ flex: "1 1 35%", minWidth: 280 }}>
-          <Card sx={{ position: "sticky", top: 80 }}>
+        <Box sx={{ flex: viewHistory ? "1 1 100%" : "1 1 35%", minWidth: 280 }}>
+          <Card sx={{ position: viewHistory ? "static" : "sticky", top: 80 }}>
             <CardContent>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>

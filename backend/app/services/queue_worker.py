@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.comfyui_adapter import ComfyUIAdapter
@@ -104,18 +104,24 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
 
 async def _claim_next_job(session: AsyncSession) -> GenerationRecord | None:
     result = await session.execute(
-        select(GenerationRecord)
-        .where(GenerationRecord.status == "queued")
-        .order_by(GenerationRecord.created_at)
-        .limit(1)
-        .with_for_update(skip_locked=True)
+        text("""
+            UPDATE generation_records
+            SET status = 'processing', updated_at = NOW()
+            WHERE id = (
+                SELECT id FROM generation_records
+                WHERE status = 'queued'
+                ORDER BY created_at
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+            )
+            RETURNING id
+        """)
     )
-    record = result.scalar_one_or_none()
-    if record:
-        record.status = "processing"
-        record.updated_at = datetime.now(timezone.utc)
-        await session.flush()
-    return record
+    row = result.fetchone()
+    if row:
+        record = await session.get(GenerationRecord, row[0])
+        return record
+    return None
 
 
 async def queue_worker_loop() -> None:

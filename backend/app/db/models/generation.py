@@ -27,6 +27,6 @@ class GenerationRecord(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     source_generation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("generation_records.id"), nullable=True)
 
-    user: Mapped["User"] = relationship("User", lazy="joined")
+    user: Mapped["User"] = relationship("User", lazy="selectin")
     assets: Mapped[list["ImageAsset"]] = relationship("ImageAsset", back_populates="generation", cascade="all, delete-orphan", lazy="selectin")
     source_gen: Mapped["GenerationRecord | None"] = relationship("GenerationRecord", remote_side="GenerationRecord.id", lazy="selectin")
