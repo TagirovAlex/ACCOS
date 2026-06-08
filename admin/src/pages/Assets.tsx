@@ -1,7 +1,8 @@
 import { List, Datagrid, TextField, DateField, NumberField, Show, SimpleShowLayout, ReferenceField, FunctionField } from "react-admin";
-import { Box, IconButton } from "@mui/material";
+import { Box, IconButton, Chip } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import { useRecordContext } from "react-admin";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 const ImagePreview = () => {
   const record = useRecordContext();
@@ -48,6 +49,14 @@ const DownloadButton = () => {
   );
 };
 
+const StatusChip = () => {
+  const record = useRecordContext();
+  if (!record?.deleted_at) {
+    return <Chip label="Активен" size="small" color="success" variant="outlined" />;
+  }
+  return <Chip label="Удалён" size="small" color="error" icon={<DeleteIcon />} />;
+};
+
 export const AssetList = () => (
   <List>
     <Datagrid rowClick="show">
@@ -62,6 +71,7 @@ export const AssetList = () => (
         <TextField source="id" />
       </ReferenceField>
       <DateField source="created_at" label="Создан" showTime />
+      <FunctionField label="Статус" render={() => <StatusChip />} />
       <FunctionField label="" render={() => <DownloadButton />} />
     </Datagrid>
   </List>

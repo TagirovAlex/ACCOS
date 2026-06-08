@@ -9,6 +9,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
+import EditIcon from "@mui/icons-material/Edit";
 import VideoFileIcon from "@mui/icons-material/VideoFile";
 import LandscapeIcon from "@mui/icons-material/Landscape";
 import PortraitIcon from "@mui/icons-material/Portrait";

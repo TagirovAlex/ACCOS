@@ -198,6 +198,7 @@ class AdminAssetResponse(BaseModel):
     width: int | None = None
     height: int | None = None
     created_at: datetime
+    deleted_at: datetime | None = None
 
 
 class AdminAssetListResponse(BaseResponse):

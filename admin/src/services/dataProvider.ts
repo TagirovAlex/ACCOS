@@ -37,6 +37,10 @@ export const dataProvider: any = {
     return { data, total: data.length };
   },
   getOne: async (resource: string, params: any) => {
+    if (resource === "dashboard") {
+      const json = await httpClient(`${API_BASE}/dashboard`);
+      return { data: { id: "stats", ...json } };
+    }
     if (resource === "settings") {
       const json = await httpClient(`${API_BASE}/settings`);
       const item = (json.settings || []).find((s: any) => s.key === params.id);

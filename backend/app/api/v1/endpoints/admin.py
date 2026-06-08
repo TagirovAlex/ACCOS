@@ -53,6 +53,15 @@ async def get_dashboard_stats(
     return await service.get_dashboard_stats()
 
 
+@router.get("/dashboard/activity", response_model=BaseResponse)
+async def get_dashboard_activity(
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    return await service.get_dashboard_activity()
+
+
 @router.get("/users", response_model=AdminUserListResponse)
 async def list_users(
     skip: int = 0,

@@ -347,6 +347,7 @@ class AdminService:
                 "filename": asset.filename, "file_path": asset.file_path,
                 "file_size": asset.file_size, "width": asset.width, "height": asset.height,
                 "created_at": asset.created_at,
+                "deleted_at": asset.deleted_at,
             }
         except Exception:
             return None
@@ -367,6 +368,7 @@ class AdminService:
                     "filename": a.filename, "file_path": a.file_path,
                     "file_size": a.file_size, "width": a.width, "height": a.height,
                     "created_at": a.created_at,
+                    "deleted_at": a.deleted_at,
                 }
                 for a in assets
             ],
@@ -413,6 +415,22 @@ class AdminService:
         chats_count = (await self.session.execute(select(func.count()).select_from(ChatSession))).scalar()
         gens_count = (await self.session.execute(select(func.count()).select_from(GenerationRecord))).scalar()
         assets_count = (await self.session.execute(select(func.count()).select_from(ImageAsset))).scalar()
+
+        recent_users = (await self.session.execute(
+            select(User).order_by(User.created_at.desc()).limit(5)
+        )).scalars().all()
+        recent_chats = (await self.session.execute(
+            select(ChatSession).order_by(ChatSession.created_at.desc()).limit(5)
+        )).scalars().all()
+        recent_gens = (await self.session.execute(
+            select(GenerationRecord).order_by(GenerationRecord.created_at.desc()).limit(5)
+        )).scalars().all()
+
+        gens_today = (await self.session.execute(
+            select(func.count()).select_from(GenerationRecord)
+            .where(GenerationRecord.created_at >= func.now() - text("interval '24 hours'"))
+        )).scalar() or 0
+
         return {
             "success": True,
             "users": users_count or 0,
@@ -420,6 +438,45 @@ class AdminService:
             "chats": chats_count or 0,
             "generations": gens_count or 0,
             "assets": assets_count or 0,
+            "generations_today": gens_today,
+            "recent_users": [
+                {"id": str(u.id), "username": u.username, "created_at": u.created_at}
+                for u in recent_users
+            ],
+            "recent_chats": [
+                {"id": str(c.id), "title": c.title, "user_id": str(c.user_id), "created_at": c.created_at}
+                for c in recent_chats
+            ],
+            "recent_generations": [
+                {
+                    "id": str(g.id), "user_id": str(g.user_id),
+                    "workflow_type": g.workflow_type, "status": g.status,
+                    "created_at": g.created_at,
+                }
+                for g in recent_gens
+            ],
+        }
+
+    async def get_dashboard_activity(self) -> dict:
+        from sqlalchemy import func
+        days = 14
+        rows = (await self.session.execute(
+            text("""
+                SELECT
+                    date_trunc('day', created_at)::date AS day,
+                    COUNT(*) AS cnt
+                FROM generation_records
+                WHERE created_at >= CURRENT_DATE - :days::interval
+                GROUP BY day
+                ORDER BY day
+            """),
+            {"days": days},
+        )).fetchall()
+        return {
+            "success": True,
+            "activity": [
+                {"date": str(r[0]), "count": r[1]} for r in rows
+            ],
         }
 
     async def _force_delete(self, model_class, record_id: str) -> dict:
