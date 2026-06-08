@@ -30,8 +30,6 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
     api_key = await settings_svc.get("comfyui_api_key")
     comfyui = ComfyUIAdapter(api_key=api_key)
 
-    record.status = "processing"
-    record.updated_at = datetime.now(timezone.utc)
     logger.info(f"Processing generation {record.id} ({record.workflow_type})")
 
     poll_timeout = await settings_svc.get_int("comfyui_poll_timeout_minutes", 30)
@@ -104,20 +102,33 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
         logger.error(f"Generation {record.id} crashed: {e}")
 
 
+async def _claim_next_job(session: AsyncSession) -> GenerationRecord | None:
+    result = await session.execute(
+        select(GenerationRecord)
+        .where(GenerationRecord.status == "queued")
+        .order_by(GenerationRecord.created_at)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+    record = result.scalar_one_or_none()
+    if record:
+        record.status = "processing"
+        record.updated_at = datetime.now(timezone.utc)
+        await session.flush()
+    return record
+
+
 async def queue_worker_loop() -> None:
     logger.info("Queue worker started")
     while True:
+        record = None
         try:
             async with async_session_factory() as session:
                 async with session.begin():
-                    result = await session.execute(
-                        select(GenerationRecord)
-                        .where(GenerationRecord.status == "queued")
-                        .order_by(GenerationRecord.created_at)
-                        .limit(1)
-                    )
-                    record = result.scalar_one_or_none()
-                    if record:
+                    record = await _claim_next_job(session)
+            if record:
+                async with async_session_factory() as session:
+                    async with session.begin():
                         await _process_generation(session, record)
         except Exception as e:
             logger.error(f"Queue worker error: {e}")
