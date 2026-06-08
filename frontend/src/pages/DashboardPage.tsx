@@ -2,10 +2,9 @@ import { useState, useEffect } from "react";
 import { Box, Card, CardContent, Typography, Grid, Chip, Button, Skeleton, Avatar, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import PersonIcon from "@mui/icons-material/Person";
-import LockIcon from "@mui/icons-material/Lock";
-import ChatIcon from "@mui/icons-material/Chat";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import ChatIcon from "@mui/icons-material/Chat";
+import HistoryIcon from "@mui/icons-material/History";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
 import type { User } from "../services/auth";
@@ -36,7 +35,11 @@ export const DashboardPage = ({ user }: Props) => {
   const navigate = useNavigate();
   const [generations, setGenerations] = useState<HistoryGen[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [viewMode, setViewMode] = useState<"list" | "tiles">("list");
+  const [viewMode, setViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("dashboardViewMode") as "list" | "tiles") ?? "list");
+
+  useEffect(() => {
+    localStorage.setItem("dashboardViewMode", viewMode);
+  }, [viewMode]);
 
   useEffect(() => {
     api("GET", "/generate/history").then((res: any) => {
@@ -63,27 +66,27 @@ export const DashboardPage = ({ user }: Props) => {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ "&:hover": { cursor: "default", transform: "none" } }}>
+          <Card onClick={() => navigate("/generate")} sx={{ cursor: "pointer" }}>
             <CardContent sx={{ display: "flex", alignItems: "center", gap: 2, py: 2.5 }}>
               <Avatar sx={{ bgcolor: "success.main", width: 48, height: 48 }}>
-                <PersonIcon />
+                <AutoAwesomeIcon />
               </Avatar>
               <Box>
-                <Typography variant="body2" color="text.secondary">Пользователь</Typography>
-                <Typography variant="h6" fontWeight={600}>{user.full_name || user.username}</Typography>
+                <Typography variant="body2" color="text.secondary">Быстрый доступ</Typography>
+                <Typography variant="h6" fontWeight={600}>Генерация</Typography>
               </Box>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ "&:hover": { cursor: "default", transform: "none" } }}>
+          <Card onClick={() => navigate("/history")} sx={{ cursor: "pointer" }}>
             <CardContent sx={{ display: "flex", alignItems: "center", gap: 2, py: 2.5 }}>
               <Avatar sx={{ bgcolor: "warning.main", width: 48, height: 48 }}>
-                <LockIcon />
+                <HistoryIcon />
               </Avatar>
               <Box>
-                <Typography variant="body2" color="text.secondary">Права доступа</Typography>
-                <Typography variant="h6" fontWeight={600}>{user.permissions === "chat" ? "Чат" : user.permissions === "generate" ? "Генерация" : "Полный доступ"}</Typography>
+                <Typography variant="body2" color="text.secondary">Быстрый доступ</Typography>
+                <Typography variant="h6" fontWeight={600}>История</Typography>
               </Box>
             </CardContent>
           </Card>

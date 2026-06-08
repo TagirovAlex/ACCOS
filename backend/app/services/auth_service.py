@@ -5,7 +5,7 @@ from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.ldap_adapter import LDAPAdapter
-from app.core.config import settings
+from app.core.config import settings, PROJECT_ROOT
 from app.core.security import create_access_token, create_refresh_token, decode_token, verify_password
 from app.repositories.user_repository import UserRepository
 from app.repositories.settings_repository import SettingsRepository
@@ -129,6 +129,8 @@ class AuthService:
             if username == settings.admin_username and not user.is_admin:
                 await self.user_repo.update(user.id, is_admin=True)
                 user.is_admin = True
+        from datetime import datetime, timezone
+        await self.user_repo.update(user.id, last_login=datetime.now(timezone.utc))
         access = create_access_token(subject=str(user.id))
         refresh = create_refresh_token(subject=str(user.id))
         return {
@@ -154,18 +156,17 @@ class AuthService:
         try:
             import base64, io
             from PIL import Image
-            from pathlib import Path
-            image_data = base64.b64decode(avatar_base64)
-            avatar_dir = Path(__file__).parent.parent.parent.parent / "static" / "avatars"
+            avatar_dir = PROJECT_ROOT / "static" / "avatars"
             avatar_dir.mkdir(parents=True, exist_ok=True)
             filepath = avatar_dir / f"{user_id}.jpg"
+            image_data = base64.b64decode(avatar_base64)
             img = Image.open(io.BytesIO(image_data))
-            img.thumbnail((256, 256), Image.LANCZOS)
-            canvas = Image.new("RGB", (256, 256), (255, 255, 255))
-            x = (256 - img.width) // 2
-            y = (256 - img.height) // 2
-            canvas.paste(img, (x, y))
-            canvas.save(filepath, "JPEG", quality=85)
+            size = min(img.width, img.height)
+            left = (img.width - size) // 2
+            top = (img.height - size) // 2
+            img = img.crop((left, top, left + size, top + size))
+            img = img.resize((256, 256), Image.LANCZOS)
+            img.save(filepath, "JPEG", quality=85)
             return f"static/avatars/{user_id}.jpg"
         except Exception as e:
             logger.warning(f"Failed to save AD avatar for {user_id}: {e}")

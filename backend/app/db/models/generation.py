@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Text, DateTime, Float, ForeignKey, Integer
+from sqlalchemy import String, Text, DateTime, Float, ForeignKey, Integer, BigInteger
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +18,7 @@ class GenerationRecord(Base):
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    seed: Mapped[int] = mapped_column(BigInteger, nullable=False, default=-1)
     cost: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending")
     result_path: Mapped[str | None] = mapped_column(String(500), nullable=True)

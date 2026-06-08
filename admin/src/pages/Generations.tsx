@@ -1,9 +1,14 @@
 import { useState } from "react";
-import { List, Datagrid, TextField, DateField, NumberField, Show, SimpleShowLayout, ReferenceField, FunctionField } from "react-admin";
-import { Box, Typography, Chip, IconButton } from "@mui/material";
+import { List, Datagrid, TextField, DateField, NumberField, Show, SimpleShowLayout, ReferenceField, FunctionField, WithListContext, useRedirect } from "react-admin";
+import { Box, Typography, Chip, IconButton, Card, CardContent, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Button } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import GridViewIcon from "@mui/icons-material/GridView";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useRecordContext } from "react-admin";
+
+const THUMB_SIZE = 56;
 
 const PromptField = () => {
   const record = useRecordContext();
@@ -67,25 +72,109 @@ const SourceGenerationBlock = () => {
   );
 };
 
-export const GenerationList = () => (
-  <List>
-    <Datagrid rowClick="show">
-      <ReferenceField source="user_id" reference="users" label="Пользователь">
-        <TextField source="username" />
-      </ReferenceField>
-      <TextField source="workflow_type" label="Тип" />
-      <TextField source="status" label="Статус" />
-      <NumberField source="cost" label="Стоимость" />
-      <DateField source="created_at" label="Создана" />
-    </Datagrid>
-  </List>
+const GenThumb = ({ record }: { record?: any }) => {
+  if (!record?.thumbnail) return null;
+  return (
+    <img src={`/${record.thumbnail}`} alt=""
+      style={{ width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: 4, objectFit: "cover" }}
+      onError={(e: any) => { e.target.style.display = "none"; }} />
+  );
+};
+
+const StatusChip = ({ record }: { record?: any }) => {
+  const status = record?.status || "";
+  const color = status === "completed" ? "success" : status === "failed" ? "error" : "default";
+  const labels: Record<string, string> = { completed: "Готово", processing: "Обработка", queued: "В очереди", failed: "Ошибка" };
+  return <Chip label={labels[status] || status} size="small" color={color} />;
+};
+
+const GenerationListView = () => (
+  <Datagrid rowClick="show" sx={{ "& .column-thumb": { width: 66 } }}>
+    <FunctionField label="" render={(r: any) => <GenThumb record={r} />} />
+    <ReferenceField source="user_id" reference="users" label="Пользователь" link="show">
+      <TextField source="username" />
+    </ReferenceField>
+    <TextField source="workflow_type" label="Тип" />
+    <FunctionField label="Статус" render={(r: any) => <StatusChip record={r} />} />
+    <NumberField source="cost" label="Стоимость" />
+    <TextField source="width" label="Ш×В" />
+    <DateField source="created_at" label="Создана" showTime />
+    <FunctionField label="Промпт" render={(r: any) => (
+      <Typography variant="body2" sx={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.prompt}</Typography>
+    )} />
+  </Datagrid>
 );
 
+const GenerationTileView = () => {
+  const redirect = useRedirect();
+  return (
+    <WithListContext render={({ data }) => (
+      <MuiGrid container spacing={2} sx={{ p: 2 }}>
+        {data?.map((record: any) => (
+          <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
+            <Card onClick={() => redirect("show", "generations", record.id)}
+              sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+              <Box sx={{ width: "100%", height: 140, overflow: "hidden", bgcolor: "#1a1a1a" }}>
+                {record.thumbnail ? (
+                  <img src={`/${record.thumbnail}`} alt=""
+                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                    onError={(e: any) => { e.target.style.display = "none"; }} />
+                ) : (
+                  <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Typography variant="caption" color="text.disabled">Нет изображения</Typography>
+                  </Box>
+                )}
+              </Box>
+              <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
+                <Typography variant="body2" fontWeight={600} noWrap>{record.workflow_type}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{record.prompt}</Typography>
+                <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 0.5 }}>
+                  <StatusChip record={record} />
+                  <Typography variant="caption" color="text.secondary">{record.cost} кр.</Typography>
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {record.username} · {new Date(record.created_at).toLocaleDateString()}
+                </Typography>
+              </CardContent>
+            </Card>
+          </MuiGrid>
+        ))}
+      </MuiGrid>
+    )} />
+  );
+};
+
+export const GenerationList = () => {
+  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("generations_view") as "list" | "tiles") ?? "list");
+  return (
+    <List actions={false}>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+        <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("generations_view", v); } }}>
+          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+      {view === "list" ? <GenerationListView /> : <GenerationTileView />}
+    </List>
+  );
+};
+
+const ShowActions = ({ listLabel, listPath }: { listLabel: string; listPath: string }) => {
+  const redirect = useRedirect();
+  return (
+    <Box sx={{ display: "flex", gap: 1, p: 1 }}>
+      <Button startIcon={<ArrowBackIcon />} size="small" onClick={() => redirect("list", listPath)}>
+        {listLabel}
+      </Button>
+    </Box>
+  );
+};
+
 export const GenerationShow = () => (
-  <Show>
+  <Show actions={<ShowActions listLabel="← Генерации" listPath="generations" />}>
     <SimpleShowLayout>
       <TextField source="workflow_type" label="Тип" />
-      <ReferenceField source="user_id" reference="users" label="Пользователь">
+      <ReferenceField source="user_id" reference="users" label="Пользователь" link="show">
         <TextField source="username" />
       </ReferenceField>
       <FunctionField label="Промпт" render={() => <PromptField />} />
@@ -93,6 +182,7 @@ export const GenerationShow = () => (
       <NumberField source="cost" label="Стоимость" />
       <TextField source="width" label="Ширина" />
       <TextField source="height" label="Высота" />
+      <NumberField source="seed" label="Seed" />
       <TextField source="error_message" label="Ошибка" />
       <DateField source="created_at" label="Создана" />
       <DateField source="updated_at" label="Обновлена" />

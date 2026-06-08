@@ -83,8 +83,16 @@ export const GenerationPage = ({ viewHistory: forceHistory }: { viewHistory?: bo
   const [videoDuration, setVideoDuration] = useState(5);
   const [actionDialog, setActionDialog] = useState<"" | "edit" | "video">("");
   const [actionLoading, setActionLoading] = useState(false);
-  const [viewMode, setViewMode] = useState<"list" | "tiles">("tiles");
+  const [seed, setSeed] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "tiles">(() => {
+    const stored = localStorage.getItem("historyViewMode");
+    return stored === "list" || stored === "tiles" ? stored : "tiles";
+  });
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem("historyViewMode", viewMode);
+  }, [viewMode]);
 
   const selectedWorkflow = WORKFLOWS.find(w => w.value === workflow);
 
@@ -150,6 +158,7 @@ export const GenerationPage = ({ viewHistory: forceHistory }: { viewHistory?: bo
         prompt: prompt.trim(),
         width: currentResolution.w,
         height: currentResolution.h,
+        seed: seed ? parseInt(seed, 10) : -1,
         reference_images: refImages,
       });
 
@@ -301,6 +310,11 @@ export const GenerationPage = ({ viewHistory: forceHistory }: { viewHistory?: bo
               </TextField>
 
               <TextField label="Промпт" fullWidth multiline rows={3} value={prompt} onChange={e => setPrompt(e.target.value)} margin="normal" placeholder="Опишите, что хотите получить..." />
+
+              <TextField label="Seed (пусто = случайный)" fullWidth type="number" size="small" value={seed}
+                onChange={e => setSeed(e.target.value)}
+                inputProps={{ min: 0, max: 2**32 - 1 }}
+                sx={{ mt: 1 }} />
 
               {!workflow.startsWith("qwen_edit") && (
                 <>

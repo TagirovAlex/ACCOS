@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
+from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,6 +51,7 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
             width=record.width or 1024,
             height=record.height or 1024,
             duration=record.duration or 5,
+            seed=record.seed,
             images=ref_images,
             poll_timeout_minutes=poll_timeout,
             poll_interval=poll_interval,
@@ -67,12 +69,24 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
                     image_type=img.get("type", "output"),
                     save_path=str(local_path),
                 )
+                img_width = None
+                img_height = None
+                img_size = None
                 if downloaded:
+                    try:
+                        with Image.open(local_path) as pil_img:
+                            img_width, img_height = pil_img.size
+                        img_size = os.path.getsize(local_path)
+                    except Exception:
+                        pass
                     asset = await repo.create_asset(
                         generation_id=record.id,
                         user_id=uid,
                         filename=img["filename"],
                         file_path=f"static/generated/{record.id}/{img['filename']}",
+                        width=img_width,
+                        height=img_height,
+                        file_size=img_size,
                     )
                     images.append({"id": str(asset.id), "filename": img["filename"]})
                 else:

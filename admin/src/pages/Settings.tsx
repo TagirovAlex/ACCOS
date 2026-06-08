@@ -295,6 +295,13 @@ function LdapForm({ settings, onSaved }: { settings: Setting[]; onSaved: () => v
         fullWidth sx={{ mb: 2 }} slotProps={{ htmlInput: { autoComplete: "new-password" } }} />
 
       <FormControlLabel
+        control={<Switch checked={values.ldap_enabled === "true"}
+          onChange={(e) => handleChange("ldap_enabled", e.target.checked ? "true" : "false")} />}
+        label={<><strong>Включить LDAP-аутентификацию</strong><br /><Typography variant="caption" color="text.secondary">Разрешить вход доменным пользователям</Typography></>}
+        sx={{ mb: 2 }}
+      />
+
+      <FormControlLabel
         control={<Switch checked={values.require_ad_group_for_login === "true"}
           onChange={(e) => handleChange("require_ad_group_for_login", e.target.checked ? "true" : "false")} />}
         label="Требовать членство в AD-группе для входа"

@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings
 from typing import List
 import json
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/accos"

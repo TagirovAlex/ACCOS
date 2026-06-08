@@ -15,7 +15,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.core.rate_limit import limiter
 
-from app.core.config import settings
+from app.core.config import settings, PROJECT_ROOT
 from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin
 from app.services.accrual_service import run_auto_accrual
 from app.services.queue_worker import queue_worker_loop
@@ -30,7 +30,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).parent.parent
 log_dir = PROJECT_ROOT / "logs"
 log_dir.mkdir(exist_ok=True)
 
@@ -102,6 +101,7 @@ static_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 (static_dir / "generated").mkdir(parents=True, exist_ok=True)
 (static_dir / "uploads").mkdir(parents=True, exist_ok=True)
+(static_dir / "avatars").mkdir(parents=True, exist_ok=True)
 
 
 def _error_detail(request: Request, exc: Exception, status: int, error_id: str) -> dict:

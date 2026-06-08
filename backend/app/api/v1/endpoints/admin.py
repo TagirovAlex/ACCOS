@@ -284,7 +284,7 @@ async def list_assets(
     return AdminAssetListResponse(**await service.list_all_assets(skip=skip, limit=limit))
 
 
-@router.get("/assets/{asset_id}", response_model=BaseResponse)
+@router.get("/assets/{asset_id}")
 async def get_asset_detail(
     asset_id: str,
     user_id: str = Depends(_require_admin),

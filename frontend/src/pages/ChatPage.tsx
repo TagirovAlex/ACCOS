@@ -5,7 +5,6 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
-import PersonIcon from "@mui/icons-material/Person";
 import { api } from "../services/api";
 import { SimpleMarkdown } from "../components/SimpleMarkdown";
 
@@ -25,7 +24,11 @@ interface Message {
   cost?: number;
 }
 
-export const ChatPage = () => {
+interface ChatPageProps {
+  user?: { avatar_path?: string | null; full_name?: string; username: string };
+}
+
+export const ChatPage = ({ user }: ChatPageProps) => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChat, setActiveChat] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -41,6 +44,8 @@ export const ChatPage = () => {
   const [settingsDialog, setSettingsDialog] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editSystemPrompt, setEditSystemPrompt] = useState("");
+  const [avatarError, setAvatarError] = useState(false);
+  const avatarUrl = user?.avatar_path ? `/${user.avatar_path}` : null;
 
   useEffect(() => { loadChats(); }, []);
   useEffect(() => { if (activeChat) loadMessages(activeChat); }, [activeChat]);
@@ -214,7 +219,7 @@ export const ChatPage = () => {
                         )}
                       </Typography>
                     </Box>
-                    {isUser && <Avatar sx={{ width: 32, height: 32, bgcolor: "success.main", mt: 0.5 }}><PersonIcon sx={{ fontSize: 18 }} /></Avatar>}
+                    {isUser && <Avatar src={avatarError ? undefined : (avatarUrl || undefined)} onError={() => setAvatarError(true)} sx={{ width: 32, height: 32, bgcolor: "success.main", mt: 0.5 }}>{user?.full_name?.[0] || user?.username?.[0] || "U"}</Avatar>}
                   </Box>
                 );
               })}

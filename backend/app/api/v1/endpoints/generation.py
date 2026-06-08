@@ -74,6 +74,7 @@ async def generate(
         body.width,
         body.height,
         body.duration,
+        body.seed,
         body.reference_images,
     )
     return GenerateResponse(**result)

@@ -40,6 +40,7 @@ class AdminService:
                 "auth_source": user.auth_source,
                 "is_active": user.is_active,
                 "is_admin": user.is_admin, "created_at": user.created_at,
+                "avatar_path": user.avatar_path, "last_login": user.last_login,
             }
         except Exception:
             return None
@@ -138,6 +139,7 @@ class AdminService:
                     "auth_source": u.auth_source,
                     "is_active": u.is_active,
                     "is_admin": u.is_admin, "created_at": u.created_at,
+                    "avatar_path": u.avatar_path, "last_login": u.last_login,
                 }
                 for u in users
             ],
@@ -281,6 +283,7 @@ class AdminService:
                 return {
                     "id": str(a.id), "filename": a.filename,
                     "file_path": a.file_path, "file_size": a.file_size,
+                    "width": a.width, "height": a.height,
                 }
 
             source_data = None
@@ -297,7 +300,7 @@ class AdminService:
                 "username": record.user.username if record.user else "unknown",
                 "workflow_type": record.workflow_type, "prompt": record.prompt,
                 "width": record.width, "height": record.height,
-                "duration": record.duration,
+                "duration": record.duration, "seed": record.seed,
                 "status": record.status, "cost": record.cost,
                 "error_message": record.error_message,
                 "created_at": record.created_at, "updated_at": record.updated_at,
@@ -316,6 +319,19 @@ class AdminService:
             .offset(skip).limit(limit)
         )
         records = result.unique().scalars().all()
+
+        gen_ids = [r.id for r in records]
+        thumb_map: dict[str, str | None] = {}
+        if gen_ids:
+            thumb_result = await self.session.execute(
+                select(ImageAsset.generation_id, ImageAsset.file_path)
+                .where(ImageAsset.generation_id.in_(gen_ids))
+                .distinct(ImageAsset.generation_id)
+                .order_by(ImageAsset.generation_id, ImageAsset.created_at)
+            )
+            for row in thumb_result:
+                thumb_map[str(row.generation_id)] = row.file_path
+
         return {
             "success": True,
             "generations": [
@@ -324,6 +340,9 @@ class AdminService:
                     "username": r.user.username if r.user else "unknown",
                     "workflow_type": r.workflow_type, "prompt": r.prompt,
                     "status": r.status, "cost": r.cost, "created_at": r.created_at,
+                    "width": r.width, "height": r.height,
+                    "seed": r.seed,
+                    "thumbnail": thumb_map.get(str(r.id)),
                 }
                 for r in records
             ],

@@ -161,6 +161,7 @@ export const ProfilePage = ({ user }: Props) => {
               value={fullName}
               onChange={e => setFullName(e.target.value)}
               size="small"
+              disabled={isLdap}
             />
             <TextField
               label="Email"
@@ -168,16 +169,19 @@ export const ProfilePage = ({ user }: Props) => {
               onChange={e => setEmail(e.target.value)}
               size="small"
               type="email"
+              disabled={isLdap}
             />
             <Box>
-              <Button
-                variant="contained"
-                onClick={handleSaveProfile}
-                disabled={saving}
-                startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
-              >
-                Сохранить
-              </Button>
+              {!isLdap && (
+                <Button
+                  variant="contained"
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                  startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
+                >
+                  Сохранить
+                </Button>
+              )}
             </Box>
           </Box>
         </CardContent>

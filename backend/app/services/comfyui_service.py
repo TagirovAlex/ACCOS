@@ -17,7 +17,7 @@ class ComfyUIService:
         self.generation_repo = GenerationRepository(session)
         self.economy = EconomyService(session)
 
-    async def enqueue_generation(self, user_id: str, workflow_type: str, prompt: str, width: int = 1024, height: int = 1024, duration: int = 5, reference_images: list[str] | None = None) -> dict:
+    async def enqueue_generation(self, user_id: str, workflow_type: str, prompt: str, width: int = 1024, height: int = 1024, duration: int = 5, seed: int = -1, reference_images: list[str] | None = None) -> dict:
         uid = UUID(user_id)
 
         cost = await self.economy.calculate_cost("image_gen", width=width, height=height)
@@ -39,6 +39,7 @@ class ComfyUIService:
             width=width,
             height=height,
             duration=duration,
+            seed=seed,
             cost=cost,
             status="queued",
             result_path=ref_json,

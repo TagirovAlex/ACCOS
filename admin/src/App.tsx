@@ -7,7 +7,7 @@ import { dataProvider } from "./services/dataProvider";
 import { lightTheme } from "./assets/themes/light";
 import { darkTheme } from "./assets/themes/dark";
 import { Dashboard } from "./pages/Dashboard";
-import { UserList, UserEdit, UserCreate } from "./pages/Users";
+import { UserList, UserEdit, UserCreate, UserShow } from "./pages/Users";
 import { GroupList, GroupEdit, GroupCreate } from "./pages/Groups";
 import { ChatList, ChatShow } from "./pages/Chats";
 import { GenerationList, GenerationShow } from "./pages/Generations";
@@ -62,7 +62,7 @@ const App = () => (
     darkTheme={darkTheme}
     requireAuth
   >
-    <Resource name="users" options={{ label: "👥 Пользователи" }} list={UserList} edit={UserEdit} create={UserCreate} />
+    <Resource name="users" options={{ label: "👥 Пользователи" }} list={UserList} edit={UserEdit} create={UserCreate} show={UserShow} />
     <Resource name="groups" options={{ label: "🔐 Группы доступа" }} list={GroupList} edit={GroupEdit} create={GroupCreate} />
     <Resource name="chats" options={{ label: "💬 Чаты" }} list={ChatList} show={ChatShow} />
     <Resource name="generations" options={{ label: "🎨 Генерации" }} list={GenerationList} show={GenerationShow} />

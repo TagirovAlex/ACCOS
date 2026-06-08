@@ -33,7 +33,12 @@ class LDAPAdapter(BaseAdapter):
             safe_username = escape_filter_chars(username)
             user_dn = f"{self.domain}\\{username}"
             server = Server(self.server, get_info=ALL)
-            conn = Connection(server, user=user_dn, password=password, authentication=NTLM, auto_bind=True)
+            conn = None
+            try:
+                upn = f"{username}@{self.domain.lower()}"
+                conn = Connection(server, user=upn, password=password, authentication="SIMPLE", auto_bind=True)
+            except Exception:
+                conn = Connection(server, user=user_dn, password=password, authentication=NTLM, auto_bind=True)
             conn.search(
                 search_base=self.base_dn,
                 search_filter=f"(sAMAccountName={safe_username})",
@@ -70,11 +75,15 @@ class LDAPAdapter(BaseAdapter):
 
     def _bind_connection(self) -> Connection:
         """Create an LDAP connection using available bind credentials.
-        Tries: 1) NTLM with bind_username, 2) bind_dn with SIMPLE, 3) anonymous."""
+        Tries: 1) UPN format with SIMPLE, 2) NTLM with bind_username, 3) bind_dn with SIMPLE, 4) anonymous."""
         server = Server(self.server, get_info=ALL)
         if self.bind_username:
-            user = f"{self.domain}\\{self.bind_username}"
-            return Connection(server, user=user, password=self.bind_password, authentication=NTLM, auto_bind=True)
+            upn = f"{self.bind_username}@{self.domain.lower()}"
+            try:
+                return Connection(server, user=upn, password=self.bind_password, authentication="SIMPLE", auto_bind=True)
+            except Exception:
+                user = f"{self.domain}\\{self.bind_username}"
+                return Connection(server, user=user, password=self.bind_password, authentication=NTLM, auto_bind=True)
         if self.bind_dn and self.bind_password:
             return Connection(server, user=self.bind_dn, password=self.bind_password, authentication="SIMPLE", auto_bind=True)
         return Connection(server, auto_bind=True)
@@ -158,7 +167,7 @@ class MockLDAPAdapter(BaseAdapter):
             {"dn": "CN=ACCOS Users,OU=ACCOS,DC=fidelio,DC=local", "cn": "ACCOS Users", "description": "ACCOS application users"},
             {"dn": "CN=ACCOS Admins,OU=ACCOS,DC=fidelio,DC=local", "cn": "ACCOS Admins", "description": "ACCOS administrators"},
         ]
-        if search:
+        if search and search != "*":
             s = search.lower()
             mock = [g for g in mock if s in g["cn"].lower() or s in g["dn"].lower()]
         return mock

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import random
 import uuid
 import os
 from pathlib import Path
@@ -32,10 +33,11 @@ class ComfyUIAdapter(BaseAdapter):
         width = kwargs.get("width", 1024)
         height = kwargs.get("height", 1024)
         duration = kwargs.get("duration", 5)
+        seed = kwargs.get("seed", -1)
         poll_timeout_minutes = kwargs.get("poll_timeout_minutes", 30)
         poll_interval = kwargs.get("poll_interval", 3)
         return await self.run_workflow(
-            workflow_type, prompt, images, width, height, duration,
+            workflow_type, prompt, images, width, height, duration, seed,
             poll_timeout_minutes=poll_timeout_minutes,
             poll_interval=poll_interval,
         )
@@ -85,6 +87,19 @@ class ComfyUIAdapter(BaseAdapter):
                     inputs["prompt"] = prompt
         return workflow
 
+    def _apply_seed(self, workflow: dict, seed: int) -> dict:
+        if seed == -1:
+            seed = random.randint(0, 2**32 - 1)
+        for node in workflow.values():
+            if not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs", {})
+            if not isinstance(inputs, dict):
+                continue
+            if "seed" in inputs:
+                inputs["seed"] = seed
+        return workflow
+
     async def upload_image(self, file_path: str) -> str | None:
         filename = os.path.basename(file_path)
         try:
@@ -105,7 +120,7 @@ class ComfyUIAdapter(BaseAdapter):
             return None
 
     async def run_workflow(self, workflow_type: str, prompt: str, images: list[str] = None,
-                           width: int = 1024, height: int = 1024, duration: int = 5,
+                           width: int = 1024, height: int = 1024, duration: int = 5, seed: int = -1,
                            poll_timeout_minutes: int = 30, poll_interval: int = 3) -> dict:
         workflow = await self._load_workflow(workflow_type)
         if not workflow:
@@ -120,6 +135,7 @@ class ComfyUIAdapter(BaseAdapter):
                 uploaded_images.append(result)
 
         workflow = self._apply_prompt(workflow, prompt, uploaded_images)
+        workflow = self._apply_seed(workflow, seed)
 
         prompt_id = str(uuid.uuid4())
         payload = {"prompt": workflow, "client_id": "accos"}

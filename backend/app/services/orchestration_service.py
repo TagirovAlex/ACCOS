@@ -1,17 +1,14 @@
 import json
 import logging
-from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import PROJECT_ROOT
 from app.repositories.generation_repository import GenerationRepository
 from app.services.economy_service import EconomyService
 
 logger = logging.getLogger(__name__)
-
-
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 class OrchestrationService:

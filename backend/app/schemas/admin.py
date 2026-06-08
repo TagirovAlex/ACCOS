@@ -20,6 +20,8 @@ class AdminUserResponse(BaseModel):
     is_active: bool
     is_admin: bool
     created_at: datetime
+    avatar_path: str | None = None
+    last_login: datetime | None = None
 
 
 class AdminUserListResponse(BaseResponse):

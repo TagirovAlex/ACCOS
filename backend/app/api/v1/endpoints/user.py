@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import PROJECT_ROOT
 from app.core.dependencies import get_db, get_current_user_id
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import BalanceResponse
@@ -13,7 +14,7 @@ from app.services.economy_service import EconomyService
 
 router = APIRouter(prefix="/user", tags=["user"])
 
-AVATAR_DIR = Path(__file__).parent.parent.parent.parent.parent / "static" / "avatars"
+AVATAR_DIR = PROJECT_ROOT / "static" / "avatars"
 AVATAR_MAX_SIZE = 256
 
 
@@ -62,10 +63,14 @@ async def update_profile(
     updates = {}
     if body.default_system_prompt is not None:
         updates["default_system_prompt"] = body.default_system_prompt
-    if body.full_name is not None:
-        updates["full_name"] = body.full_name
-    if body.email is not None:
-        updates["email"] = body.email
+    if user.auth_source == "ldap":
+        if body.full_name is not None or body.email is not None:
+            pass
+    else:
+        if body.full_name is not None:
+            updates["full_name"] = body.full_name
+        if body.email is not None:
+            updates["email"] = body.email
     user = await repo.update(uuid.UUID(user_id), **updates)
     return ProfileResponse(
         id=str(user.id),
@@ -100,12 +105,12 @@ async def upload_avatar(
         from PIL import Image
         import io
         img = Image.open(io.BytesIO(image_data))
-        img.thumbnail((AVATAR_MAX_SIZE, AVATAR_MAX_SIZE), Image.LANCZOS)
-        canvas = Image.new("RGB", (AVATAR_MAX_SIZE, AVATAR_MAX_SIZE), (255, 255, 255))
-        x = (AVATAR_MAX_SIZE - img.width) // 2
-        y = (AVATAR_MAX_SIZE - img.height) // 2
-        canvas.paste(img, (x, y))
-        canvas.save(filepath, "JPEG", quality=85)
+        size = min(img.width, img.height)
+        left = (img.width - size) // 2
+        top = (img.height - size) // 2
+        img = img.crop((left, top, left + size, top + size))
+        img = img.resize((AVATAR_MAX_SIZE, AVATAR_MAX_SIZE), Image.LANCZOS)
+        img.save(filepath, "JPEG", quality=85)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -19,24 +19,30 @@ import { getMe, logout, type User } from "./services/auth";
 
 const DRAWER_WIDTH = 220;
 
-const navItems = [
-  { path: "/", label: "Дашборд", icon: <HomeIcon /> },
-  { path: "/chat", label: "Чат", icon: <ChatIcon /> },
-  { path: "/generate", label: "Новая генерация", icon: <AutoAwesomeIcon /> },
-  { path: "/history", label: "История", icon: <HistoryIcon /> },
-  { path: "/profile", label: "Профиль", icon: <SettingsIcon /> },
-];
-
 function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
   const location = useLocation();
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
+  const [avatarError, setAvatarError] = useState(false);
   const theme = useMemo(() => createTheme(darkMode ? darkTheme : lightTheme), [darkMode]);
+
+  const canGenerate = user.permissions?.includes("generate");
+  const canChat = user.permissions?.includes("chat");
+
+  const navItems = [
+    { path: "/", label: "Дашборд", icon: <HomeIcon /> },
+    ...(canChat ? [{ path: "/chat", label: "Чат", icon: <ChatIcon /> }] : []),
+    ...(canGenerate ? [{ path: "/generate", label: "Новая генерация", icon: <AutoAwesomeIcon /> }] : []),
+    ...(canGenerate ? [{ path: "/history", label: "История", icon: <HistoryIcon /> }] : []),
+    { path: "/profile", label: "Профиль", icon: <SettingsIcon /> },
+  ];
 
   const handleTheme = () => {
     const next = !darkMode;
     setDarkMode(next);
     localStorage.setItem("theme", next ? "dark" : "light");
   };
+
+  const avatarUrl = user.avatar_path ? `/${user.avatar_path}` : null;
 
   return (
     <ThemeProvider theme={theme}>
@@ -49,7 +55,11 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
             <Chip icon={<AccountBalanceWalletIcon />} label={`${user.balance} MS`} size="small" sx={{ mr: 2, bgcolor: "rgba(255,255,255,0.15)", color: "inherit", fontWeight: 600 }} />
             <FormControlLabel control={<Switch checked={darkMode} onChange={handleTheme} size="small" />} label="" sx={{ mr: 1 }} />
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: 2 }}>
-              <Avatar sx={{ width: 28, height: 28, bgcolor: "rgba(255,255,255,0.25)", fontSize: 14 }}>{user.full_name?.[0] || user.username[0]}</Avatar>
+              <Avatar
+                src={avatarError ? undefined : (avatarUrl || undefined)}
+                onError={() => setAvatarError(true)}
+                sx={{ width: 28, height: 28, bgcolor: "rgba(255,255,255,0.25)", fontSize: 14 }}
+              >{user.full_name?.[0] || user.username[0]}</Avatar>
               <Typography variant="body2" sx={{ display: { xs: "none", sm: "block" } }}>{user.full_name || user.username}</Typography>
             </Box>
             <Button color="inherit" onClick={onLogout} startIcon={<LogoutIcon />} sx={{ display: { xs: "none", sm: "flex" } }}>Выйти</Button>
@@ -71,7 +81,7 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
         <Box component="main" sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", overflowY: "auto", pt: "64px", px: 3, pb: 3, minHeight: 0 }}>
           <Routes>
             <Route path="/" element={<ErrorBoundary><DashboardPage user={user} /></ErrorBoundary>} />
-            <Route path="/chat" element={<ErrorBoundary><ChatPage /></ErrorBoundary>} />
+            <Route path="/chat" element={<ErrorBoundary><ChatPage user={user} /></ErrorBoundary>} />
             <Route path="/generate" element={<ErrorBoundary><GenerationPage /></ErrorBoundary>} />
             <Route path="/history" element={<ErrorBoundary><GenerationPage viewHistory /></ErrorBoundary>} />
             <Route path="/profile" element={<ErrorBoundary><ProfilePage user={user} /></ErrorBoundary>} />

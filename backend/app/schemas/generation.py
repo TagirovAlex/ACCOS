@@ -13,6 +13,7 @@ class GenerateRequest(BaseModel):
     width: int = 1024
     height: int = 1024
     duration: int = 5
+    seed: int = -1
     reference_images: list[str] = []
 
 
