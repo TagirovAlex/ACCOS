@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     admin_password: str = "admin123"
     cors_origins: str = '["http://localhost:3000","http://localhost:5173"]'
     log_level: str = "DEBUG"
+    rate_limits_enabled: bool = True
 
     @property
     def cors_origin_list(self) -> List[str]:

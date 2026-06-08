@@ -1,4 +1,4 @@
-import { List, Datagrid, TextField, EmailField, BooleanField, NumberField, Edit, SimpleForm, TextInput, NumberInput, Create } from "react-admin";
+import { List, Datagrid, TextField, EmailField, BooleanField, NumberField, Edit, SimpleForm, TextInput, NumberInput, BooleanInput, Create } from "react-admin";
 
 export const UserList = () => (
   <List>
@@ -17,8 +17,11 @@ export const UserEdit = () => (
     <SimpleForm>
       <TextInput source="username" label="Логин" disabled />
       <TextInput source="email" label="Email" disabled />
+      <TextInput source="password" label="Новый пароль" type="password" helperText="Оставьте пустым, чтобы не менять" />
       <NumberInput source="balance" label="Баланс" />
       <TextInput source="permissions" label="Права" />
+      <BooleanInput source="is_admin" label="Администратор" />
+      <BooleanInput source="is_active" label="Активен" />
     </SimpleForm>
   </Edit>
 );
@@ -27,8 +30,12 @@ export const UserCreate = () => (
   <Create>
     <SimpleForm>
       <TextInput source="username" label="Логин" required />
-      <TextInput source="email" label="Email" required />
-      <NumberInput source="balance" label="Начальный баланс" defaultValue={0} />
+      <TextInput source="email" label="Email" />
+      <TextInput source="password" label="Пароль" type="password" required />
+      <NumberInput source="balance" label="Начальный баланс" defaultValue={100} />
+      <TextInput source="permissions" label="Права" defaultValue="chat" />
+      <BooleanInput source="is_admin" label="Администратор" defaultValue={false} />
+      <BooleanInput source="is_active" label="Активен" defaultValue={true} />
     </SimpleForm>
   </Create>
 );

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, UploadFile, File
-from sqlalchemy.ext.asyncio import AsyncSession
-import aiofiles
 import os
 import uuid
 from pathlib import Path
+
+import aiofiles
+from fastapi import APIRouter, Depends, UploadFile, File
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, get_current_user_id
 from app.schemas.generation import GenerateResponse
@@ -35,7 +36,7 @@ async def image_to_edit(
         saved_paths.append(str(save_path))
 
     service = OrchestrationService(db)
-    result = await service.image_to_edit(user_id, generation_id, edit_workflow, prompt, saved_paths)
+    result = await service.enqueue_image_to_edit(user_id, generation_id, edit_workflow, prompt, saved_paths)
 
     for p in saved_paths:
         try:
@@ -55,5 +56,5 @@ async def image_to_video(
     db: AsyncSession = Depends(get_db),
 ):
     service = OrchestrationService(db)
-    result = await service.image_to_video(user_id, generation_id, prompt, duration)
+    result = await service.enqueue_image_to_video(user_id, generation_id, prompt, duration)
     return GenerateResponse(**result)

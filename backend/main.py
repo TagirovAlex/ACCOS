@@ -2,17 +2,23 @@ import asyncio
 import logging
 import os
 import traceback
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+from app.core.rate_limit import limiter
 
 from app.core.config import settings
 from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin
 from app.services.accrual_service import run_auto_accrual
+from app.services.queue_worker import queue_worker_loop
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.DEBUG),
@@ -30,23 +36,27 @@ file_handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s %(modul
 logging.getLogger().addHandler(file_handler)
 
 _accrual_task = None
+_queue_worker_task = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _accrual_task
+    global _accrual_task, _queue_worker_task
     logger.info("Starting accrual scheduler...")
 
     async def accrual_loop():
         while True:
-            await run_auto_accrual()
-            await asyncio.sleep(3600)
+            interval = await run_auto_accrual()
+            await asyncio.sleep(interval)
 
     _accrual_task = asyncio.create_task(accrual_loop())
+    _queue_worker_task = asyncio.create_task(queue_worker_loop())
+    logger.info("Queue worker started")
     yield
-    if _accrual_task:
-        _accrual_task.cancel()
-        logger.info("Accrual scheduler stopped")
+    for task in (_accrual_task, _queue_worker_task):
+        if task:
+            task.cancel()
+    logger.info("Background tasks stopped")
 
 
 app = FastAPI(
@@ -55,6 +65,9 @@ app = FastAPI(
     docs_url="/docs",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,13 +80,44 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="../static"), name="static")
 
+generated_dir = Path("../static/generated")
+generated_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _error_detail(request: Request, exc: Exception, status: int, error_id: str) -> dict:
+    body = {
+        "success": False,
+        "error_id": error_id,
+        "status_code": status,
+        "error": str(exc),
+        "request": {
+            "method": request.method,
+            "path": request.url.path,
+            "query": str(request.url.query),
+        },
+    }
+    if settings.log_level.upper() == "DEBUG":
+        body["traceback"] = traceback.format_exc()
+    return body
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    error_id = str(uuid.uuid4())[:8]
+    logger.error(f"[{error_id}] HTTP {exc.status_code} {request.method} {request.url.path}: {exc.detail}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=_error_detail(request, exc, exc.status_code, error_id),
+    )
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled error: {exc}\n{traceback.format_exc()}")
+    error_id = str(uuid.uuid4())[:8]
+    logger.error(f"[{error_id}] 500 {request.method} {request.url.path}: {exc}\n{traceback.format_exc()}")
     return JSONResponse(
         status_code=500,
-        content={"success": False, "error": str(exc)},
+        content=_error_detail(request, exc, 500, error_id),
     )
 
 app.include_router(auth.router, prefix="/api/v1")

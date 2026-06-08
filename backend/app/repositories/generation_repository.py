@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.models.generation import GenerationRecord
 from app.db.models.image_asset import ImageAsset
@@ -16,6 +17,7 @@ class GenerationRepository(BaseRepository[GenerationRecord]):
         result = await self.session.execute(
             select(GenerationRecord)
             .where(GenerationRecord.user_id == user_id)
+            .options(selectinload(GenerationRecord.assets))
             .order_by(desc(GenerationRecord.created_at))
             .offset(skip)
             .limit(limit)

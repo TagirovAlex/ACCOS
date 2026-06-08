@@ -1,3 +1,4 @@
+import json
 import logging
 from uuid import UUID
 
@@ -15,9 +16,8 @@ class ComfyUIService:
         self.session = session
         self.generation_repo = GenerationRepository(session)
         self.economy = EconomyService(session)
-        self.comfyui = ComfyUIAdapter()
 
-    async def generate(self, user_id: str, workflow_type: str, prompt: str, width: int = 1024, height: int = 1024, duration: int = 5) -> dict:
+    async def enqueue_generation(self, user_id: str, workflow_type: str, prompt: str, width: int = 1024, height: int = 1024, duration: int = 5, reference_images: list[str] | None = None) -> dict:
         uid = UUID(user_id)
 
         cost = self.economy.calculate_cost("image_gen", width=width, height=height)
@@ -30,6 +30,8 @@ class ComfyUIService:
         if not deduct["success"]:
             return {"success": False, "error": deduct.get("error", "Insufficient balance")}
 
+        ref_json = json.dumps(reference_images or [])
+
         record = await self.generation_repo.create(
             user_id=uid,
             workflow_type=workflow_type,
@@ -38,36 +40,48 @@ class ComfyUIService:
             height=height,
             duration=duration,
             cost=cost,
-            status="processing",
+            status="queued",
+            result_path=ref_json,
         )
 
-        result = await self.comfyui.execute(
-            workflow_type=workflow_type,
-            prompt=prompt,
-            width=width,
-            height=height,
-            duration=duration,
-        )
+        await self.session.flush()
 
-        if result["success"]:
-            record.status = "completed"
-            images = []
-            for img in result.get("images", []):
-                asset = await self.generation_repo.create_asset(
-                    generation_id=record.id,
-                    user_id=uid,
-                    filename=img["filename"],
-                    file_path=f"{img.get('subfolder', '')}/{img['filename']}",
-                )
-                images.append({"id": str(asset.id), "filename": img["filename"]})
-            await self.session.flush()
-            return {"success": True, "generation_id": str(record.id), "images": images, "cost": cost}
-        else:
-            record.status = "failed"
-            record.error_message = result.get("error")
-            await self.session.flush()
-            await self.economy.add_balance(user_id, cost)
-            return {"success": False, "error": result.get("error", "Generation failed")}
+        return {
+            "success": True,
+            "generation_id": str(record.id),
+            "cost": cost,
+            "status": "queued",
+        }
+
+    async def get_generation_status(self, generation_id: str, user_id: str) -> dict:
+        uid = UUID(user_id)
+        gen_id = UUID(generation_id)
+        record = await self.generation_repo.get(gen_id)
+        if not record:
+            return {"success": False, "error": "Generation not found"}
+        if str(record.user_id) != user_id:
+            return {"success": False, "error": "Access denied"}
+
+        assets = []
+        for a in record.assets or []:
+            assets.append({
+                "id": str(a.id),
+                "filename": a.filename,
+                "file_path": a.file_path,
+            })
+
+        return {
+            "success": True,
+            "generation_id": str(record.id),
+            "workflow_type": record.workflow_type,
+            "prompt": record.prompt,
+            "status": record.status,
+            "cost": record.cost,
+            "error_message": record.error_message,
+            "images": assets,
+            "created_at": record.created_at,
+            "updated_at": record.updated_at,
+        }
 
     async def get_history(self, user_id: str) -> dict:
         uid = UUID(user_id)
@@ -82,6 +96,10 @@ class ComfyUIService:
                     "status": r.status,
                     "cost": r.cost,
                     "created_at": r.created_at,
+                    "images": [
+                        {"id": str(a.id), "filename": a.filename, "file_path": a.file_path}
+                        for a in (r.assets or [])
+                    ],
                 }
                 for r in records
             ],

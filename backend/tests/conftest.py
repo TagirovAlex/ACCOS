@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 TEST_DB_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/accos_test"
 os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ["LDAP_SERVER"] = "ldap://localhost:389"
+os.environ["RATE_LIMITS_ENABLED"] = "false"
 
 from app.core.dependencies import get_db
 from app.db.base import Base

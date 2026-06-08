@@ -80,6 +80,16 @@ class ChatService:
             ],
         }
 
+    async def delete_chat(self, user_id: str, session_id: str) -> dict:
+        sid = UUID(session_id)
+        chat = await self.chat_repo.get(sid)
+        if not chat:
+            return {"success": False, "error": "Chat not found"}
+        if str(chat.user_id) != user_id:
+            return {"success": False, "error": "Access denied"}
+        ok = await self.chat_repo.delete(sid)
+        return {"success": ok, "error": None if ok else "Failed to delete chat"}
+
     async def send_message(self, user_id: str, session_id: str, message: str) -> dict:
         uid = UUID(user_id)
         sid = UUID(session_id)

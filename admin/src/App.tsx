@@ -8,10 +8,11 @@ import { darkTheme } from "./assets/themes/dark";
 import { Dashboard } from "./pages/Dashboard";
 import { UserList, UserEdit, UserCreate } from "./pages/Users";
 import { GroupList, GroupEdit, GroupCreate } from "./pages/Groups";
-import { ChatList } from "./pages/Chats";
-import { GenerationList } from "./pages/Generations";
-import { AssetList } from "./pages/Assets";
-import { SettingsEdit } from "./pages/Settings";
+import { ChatList, ChatShow } from "./pages/Chats";
+import { GenerationList, GenerationShow } from "./pages/Generations";
+import { AssetList, AssetShow } from "./pages/Assets";
+import { SettingsList, SettingsEdit, SettingsCreate } from "./pages/Settings";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const CustomLayout = (props: LayoutProps) => {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
@@ -39,20 +40,53 @@ const CustomLayout = (props: LayoutProps) => {
 };
 
 const App = () => (
-  <Admin
+  <ErrorBoundary><Admin
     authProvider={authProvider}
     dataProvider={dataProvider}
     dashboard={Dashboard}
     layout={CustomLayout}
     requireAuth
   >
-    <Resource name="users" options={{ label: "Пользователи" }} list={UserList} edit={UserEdit} create={UserCreate} />
-    <Resource name="groups" options={{ label: "Группы доступа" }} list={GroupList} edit={GroupEdit} create={GroupCreate} />
-    <Resource name="chats" options={{ label: "Чаты" }} list={ChatList} />
-    <Resource name="generations" options={{ label: "Генерации" }} list={GenerationList} />
-    <Resource name="assets" options={{ label: "Ресурсы" }} list={AssetList} />
-    <Resource name="settings" options={{ label: "Настройки" }} edit={SettingsEdit} />
-  </Admin>
+    <Resource
+      name="users"
+      options={{ label: "Пользователи" }}
+      list={UserList}
+      edit={UserEdit}
+      create={UserCreate}
+    />
+    <Resource
+      name="groups"
+      options={{ label: "Группы доступа" }}
+      list={GroupList}
+      edit={GroupEdit}
+      create={GroupCreate}
+    />
+    <Resource
+      name="chats"
+      options={{ label: "Чаты" }}
+      list={ChatList}
+      show={ChatShow}
+    />
+    <Resource
+      name="generations"
+      options={{ label: "Генерации" }}
+      list={GenerationList}
+      show={GenerationShow}
+    />
+    <Resource
+      name="assets"
+      options={{ label: "Ресурсы" }}
+      list={AssetList}
+      show={AssetShow}
+    />
+    <Resource
+      name="settings"
+      options={{ label: "Настройки" }}
+      list={SettingsList}
+      edit={SettingsEdit}
+      create={SettingsCreate}
+    />
+  </Admin></ErrorBoundary>
 );
 
 export default App;

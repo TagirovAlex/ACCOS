@@ -24,6 +24,25 @@ class AdminUserListResponse(BaseResponse):
     users: list[AdminUserResponse] = []
 
 
+class AdminUserUpdate(BaseModel):
+    balance: float | None = None
+    permissions: str | None = None
+    is_active: bool | None = None
+    is_admin: bool | None = None
+    full_name: str | None = None
+    password: str | None = None
+
+
+class AdminUserCreate(BaseModel):
+    username: str
+    email: str = ""
+    password: str = ""
+    balance: float = 100.0
+    permissions: str = "chat"
+    is_admin: bool = False
+    is_active: bool = True
+
+
 class AdminGroupCreate(BaseModel):
     name: str
     ad_group_dn: str
@@ -71,11 +90,10 @@ class AdminSettingUpdate(BaseModel):
     description: str | None = None
 
 
-class AdminUserUpdate(BaseModel):
-    balance: float | None = None
-    permissions: str | None = None
-    is_active: bool | None = None
-    full_name: str | None = None
+class AdminSettingCreate(BaseModel):
+    key: str
+    value: str
+    description: str | None = None
 
 
 class AdminBalanceAdjust(BaseModel):
@@ -98,6 +116,35 @@ class AdminChatListResponse(BaseResponse):
     chats: list[AdminChatResponse] = []
 
 
+class AdminMessageResponse(BaseModel):
+    id: str
+    role: str
+    content: str
+    tokens_input: int | None = None
+    tokens_output: int | None = None
+    cost: float | None = None
+    created_at: datetime
+
+
+class AdminChatDetailResponse(BaseResponse):
+    id: str
+    user_id: str
+    username: str
+    title: str
+    system_prompt: str | None = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    messages: list[AdminMessageResponse] = []
+
+
+class AdminGenerationAssetResponse(BaseModel):
+    id: str
+    filename: str
+    file_path: str
+    file_size: int | None = None
+
+
 class AdminGenerationResponse(BaseModel):
     id: str
     user_id: str
@@ -113,12 +160,32 @@ class AdminGenerationListResponse(BaseResponse):
     generations: list[AdminGenerationResponse] = []
 
 
+class AdminGenerationDetailResponse(BaseResponse):
+    id: str
+    user_id: str
+    username: str
+    workflow_type: str
+    prompt: str
+    width: int | None = None
+    height: int | None = None
+    duration: int | None = None
+    status: str
+    cost: float
+    error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    images: list[AdminGenerationAssetResponse] = []
+
+
 class AdminAssetResponse(BaseModel):
     id: str
     user_id: str
     generation_id: str | None = None
     filename: str
+    file_path: str
     file_size: int | None = None
+    width: int | None = None
+    height: int | None = None
     created_at: datetime
 
 

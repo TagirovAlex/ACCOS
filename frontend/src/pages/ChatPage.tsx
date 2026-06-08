@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { Box, TextField, Button, Typography, Paper, List, ListItem, ListItemText, Divider, IconButton } from "@mui/material";
+import { Box, TextField, Button, Typography, Paper, List, ListItem, ListItemText, Divider, IconButton, Alert, Snackbar, CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { api } from "../services/api";
+import { SimpleMarkdown } from "../components/SimpleMarkdown";
 
 interface Chat {
   id: string;
@@ -22,34 +24,55 @@ export const ChatPage = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [typing, setTyping] = useState(false);
+  const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => { loadChats(); }, []);
   useEffect(() => { if (activeChat) loadMessages(activeChat); }, [activeChat]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, typing]);
 
   const loadChats = async () => {
     try {
       const res: any = await api("GET", "/chat/list");
       setChats(res.chats || []);
-    } catch { /* ignore */ }
+    } catch (e: any) {
+      setError("Не удалось загрузить чаты");
+    }
   };
 
   const loadMessages = async (id: string) => {
     try {
       const res: any = await api("GET", `/chat/${id}`);
       setMessages(res.messages || []);
-    } catch { setMessages([]); }
+    } catch {
+      setMessages([]);
+      setError("Не удалось загрузить сообщения");
+    }
   };
 
   const createChat = async () => {
     try {
       const res: any = await api("POST", "/chat/create", { title: `Chat ${chats.length + 1}` });
-      if (res.id) {
-        setChats(prev => [...prev, res]);
-        setActiveChat(res.id);
+      if (res.chat?.id) {
+        setChats(prev => [...prev, res.chat]);
+        setActiveChat(res.chat.id);
       }
-    } catch { /* ignore */ }
+    } catch {
+      setError("Не удалось создать чат");
+    }
+  };
+
+  const deleteChat = async (id: string) => {
+    try {
+      await api("DELETE", `/chat/${id}`);
+      setChats(prev => prev.filter(c => c.id !== id));
+      if (activeChat === id) setActiveChat(null);
+    } catch {
+      setError("Не удалось удалить чат");
+    }
+    setDeleteTarget(null);
   };
 
   const sendMessage = async () => {
@@ -57,15 +80,18 @@ export const ChatPage = () => {
     const msg = input;
     setInput("");
     setLoading(true);
+    setTyping(true);
     const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: msg, created_at: new Date().toISOString() };
     setMessages(prev => [...prev, userMsg]);
     try {
       const res: any = await api("POST", `/chat/${activeChat}/send`, { message: msg });
       const reply: Message = { id: res.id || `resp-${Date.now()}`, role: "assistant", content: res.message || res.content, created_at: new Date().toISOString() };
       setMessages(prev => [...prev, reply]);
-    } catch {
-      setMessages(prev => prev.filter(m => m.id !== userMsg.id));
+    } catch (e: any) {
+      setMessages(prev => prev.map(m => m.id === userMsg.id ? { ...m, content: `${m.content}\n\n⚠️ Ошибка отправки: ${e.message}` } : m));
+      setError("Ошибка отправки сообщения");
     }
+    setTyping(false);
     setLoading(false);
   };
 
@@ -74,10 +100,16 @@ export const ChatPage = () => {
       <Paper sx={{ width: 260, p: 2, overflow: "auto", flexShrink: 0 }}>
         <Button variant="outlined" startIcon={<AddIcon />} fullWidth onClick={createChat} sx={{ mb: 2 }}>Новый чат</Button>
         <List dense>
+          {chats.length === 0 && !loading && (
+            <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 2 }}>Нет чатов</Typography>
+          )}
           {chats.map(c => (
             <ListItem key={c.id} component="button" onClick={() => setActiveChat(c.id)}
-              sx={{ cursor: "pointer", bgcolor: activeChat === c.id ? "action.selected" : "transparent", borderRadius: 1, mb: 0.5, textAlign: "left", display: "block" }}>
-              <ListItemText primary={c.title} primaryTypographyProps={{ noWrap: true }} />
+              sx={{ cursor: "pointer", bgcolor: activeChat === c.id ? "action.selected" : "transparent", borderRadius: 1, mb: 0.5, textAlign: "left", display: "flex", gap: 0.5 }}>
+              <ListItemText primary={c.title} primaryTypographyProps={{ noWrap: true }} sx={{ flex: 1 }} />
+              <IconButton size="small" onClick={e => { e.stopPropagation(); setDeleteTarget(c.id); }} sx={{ opacity: 0.5, "&:hover": { opacity: 1 } }}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
             </ListItem>
           ))}
         </List>
@@ -86,13 +118,28 @@ export const ChatPage = () => {
         {activeChat ? (
           <>
             <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
+              {messages.length === 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 4 }}>Начните диалог</Typography>
+              )}
               {messages.map(m => (
                 <Box key={m.id} sx={{ mb: 2, textAlign: m.role === "user" ? "right" : "left" }}>
-                  <Paper sx={{ display: "inline-block", p: 1.5, bgcolor: m.role === "user" ? "primary.main" : "background.paper", color: m.role === "user" ? "primary.contrastText" : "text.primary" }}>
-                    <Typography variant="body2">{m.content}</Typography>
+                  <Paper sx={{ display: "inline-block", p: 1.5, maxWidth: "80%", bgcolor: m.role === "user" ? "primary.main" : "background.paper", color: m.role === "user" ? "primary.contrastText" : "text.primary", wordBreak: "break-word" }}>
+                    {m.role === "assistant" ? <SimpleMarkdown text={m.content} /> : <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{m.content}</Typography>}
+                    <Typography variant="caption" sx={{ display: "block", mt: 0.5, opacity: 0.6, textAlign: "right" }}>
+                      {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </Typography>
                   </Paper>
                 </Box>
               ))}
+              {typing && (
+                <Box sx={{ mb: 2, textAlign: "left" }}>
+                  <Paper sx={{ display: "inline-flex", p: 1.5, bgcolor: "background.paper" }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <CircularProgress size={12} /> ассистент печатает...
+                    </Typography>
+                  </Paper>
+                </Box>
+              )}
               <div ref={bottomRef} />
             </Box>
             <Divider />
@@ -107,6 +154,17 @@ export const ChatPage = () => {
           </Box>
         )}
       </Paper>
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
+        <DialogTitle>Удалить чат?</DialogTitle>
+        <DialogContent><DialogContentText>Это действие нельзя отменить. Все сообщения будут удалены.</DialogContentText></DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>Отмена</Button>
+          <Button color="error" onClick={() => deleteTarget && deleteChat(deleteTarget)}>Удалить</Button>
+        </DialogActions>
+      </Dialog>
+      <Snackbar open={!!error} autoHideDuration={4000} onClose={() => setError("")}>
+        <Alert severity="warning" onClose={() => setError("")} variant="filled">{error}</Alert>
+      </Snackbar>
     </Box>
   );
 };

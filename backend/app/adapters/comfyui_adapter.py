@@ -47,20 +47,25 @@ class ComfyUIAdapter(BaseAdapter):
             return json.load(f)
 
     def _apply_prompt(self, workflow: dict, prompt: str, images: list[str] = None) -> dict:
-        workflow_str = json.dumps(workflow)
+        img_iter = iter(images or [])
         for node in workflow.values():
-            if isinstance(node, dict):
-                inputs = node.get("inputs", {})
-                if isinstance(inputs, dict):
-                    if "text" in inputs and isinstance(inputs["text"], str) and prompt:
-                        inputs["text"] = prompt
-                    if "prompt" in inputs and isinstance(inputs["prompt"], str) and prompt:
-                        inputs["prompt"] = prompt
-        if images:
-            workflow_str = json.dumps(workflow)
-            for i, img in enumerate(images):
-                workflow_str = workflow_str.replace(f"__image_{i}__", img)
-            workflow = json.loads(workflow_str)
+            if not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs", {})
+            if not isinstance(inputs, dict):
+                continue
+            class_type = node.get("class_type", "")
+
+            if class_type == "LoadImage" and "image" in inputs:
+                try:
+                    inputs["image"] = next(img_iter)
+                except StopIteration:
+                    break
+            else:
+                if "text" in inputs and isinstance(inputs["text"], str) and not inputs["text"] and prompt:
+                    inputs["text"] = prompt
+                if "prompt" in inputs and isinstance(inputs["prompt"], str) and not inputs["prompt"] and prompt:
+                    inputs["prompt"] = prompt
         return workflow
 
     async def upload_image(self, file_path: str) -> str | None:
@@ -75,7 +80,8 @@ class ComfyUIAdapter(BaseAdapter):
                         data={"overwrite": "true"},
                     )
                     response.raise_for_status()
-                    return filename
+                    data = response.json()
+                    return data.get("name", filename)
         except Exception as e:
             logger.error(f"Image upload failed: {e}")
             return None
@@ -114,6 +120,23 @@ class ComfyUIAdapter(BaseAdapter):
         except Exception as e:
             logger.error(f"ComfyUI error: {e}")
             return {"success": False, "error": str(e)}
+
+    async def download_image(self, filename: str, subfolder: str = "", image_type: str = "output", save_path: str = "") -> str | None:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                params = {"filename": filename, "subfolder": subfolder, "type": image_type}
+                response = await client.get(
+                    f"{self.base_url}/view",
+                    params=params,
+                )
+                response.raise_for_status()
+                os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                with open(save_path, "wb") as f:
+                    f.write(response.content)
+                return save_path
+        except Exception as e:
+            logger.error(f"Failed to download image {filename}: {e}")
+            return None
 
     async def _poll_result(self, client: httpx.AsyncClient, prompt_id: str, max_attempts: int = 60) -> dict:
         import asyncio

@@ -1,264 +1,610 @@
-# 🤖 ACCOS — AI Content & Chat Orchestrator Service
+# ACCOS — AI Content & Chat Orchestrator Service
 
-**Название Проекта:** AI Content & Chat Orchestrator Service (ACCOS)
-**Версия ТЗ:** 1.2 (Реализованная)
-**Цель проекта:** Предоставить сотрудникам локальной сети унифицированный, экономически управляемый интерфейс для взаимодействия с LLM (чат-ассистент) и ComfyUI (генерация изображений/видео), используя предопределенные рабочие процессы.
+**Цель:** Предоставить сотрудникам локальной сети унифицированный, экономически управляемый интерфейс для работы с LLM (чат-ассистент через LMStudio) и ComfyUI (генерация/редактирование изображений и видео) по предопределённым workflow.
 
----
-
-## 📋 1. Общие Положения
-
-### 1.1. Назначение Системы
-ACCOS — это бэкенд-сервис, который выступает в роли оркестратора между пользователем (через фронтенд), LLM (интеграция с LMStudio) и ComfyUI. Он управляет контекстом чатов, выполняет вызовы генерации по заданным шаблонам и строго контролирует расход внутренней валюты пользователя.
-
-### 1.2. Архитектурный Стек
-*   **Бэкенд:** Python 3.11 / FastAPI (async/await) — строго асинхронные эндпоинты
-*   **База Данных:** PostgreSQL 17 / SQLAlchemy 2.0 (async) + asyncpg
-*   **Миграции:** Alembic (async)
-*   **Фронтент (Admin):** React 19 + react-admin 5 + MUI 7 + Vite
-*   **Фронтент (User):** React — Phase 6
-*   **AI Интеграция:** LMStudio API (HTTP) + ComfyUI API (HTTP + WebSocket poll)
-*   **Авторизация:** LDAP/AD через python-ldap (реальный + Mock для разработки)
-*   **Аутентификация:** JWT (HS256)
-
-### 1.3. Требования к Доступу и Безопасности
-1.  **Аутентификация:** Все запросы проходят проверку JWT токена.
-2.  **Авторизация Групп:** Система проверяет принадлежность пользователя к группам AD. Права и тариф задаются через модель `UserGroup` (AD группа → permissions + start_balance).
-3.  **Начальный Баланс:** При первом логине баланс устанавливается согласно `UserGroup` для его AD группы, либо из `default_start_balance` глобальных настроек.
+**Стек:** Python 3.11 / FastAPI (async) + PostgreSQL 17 + SQLAlchemy 2.0 (async) / asyncpg + Alembic + React 19 / MUI 7 / Vite  
+**Интеграции:** LMStudio API, ComfyUI API, LDAP/AD  
+**Аутентификация:** JWT (HS256)
 
 ---
 
-## ⚙️ 2. Функциональные Требования (Реализовано)
+## Статус проекта
 
-### 2.1. Модуль Чат-Ассистента (LMStudio)
-*   ✅ **FR-CHAT-001:** Создание и продолжение чат-сессий.
-*   ✅ **FR-CHAT-002:** Системный промпт для каждого чата (переопределяемый).
-*   ✅ **FR-CHAT-003:** История диалога (сообщения хранятся в `ChatMessage`, передаются как context).
-*   ✅ **FR-CHAT-004:** Атомарное списание токенов + вызов LMStudio API + возврат ответа.
-
-### 2.2. Модуль Генерации Изображений (ComfyUI)
-*   ✅ **FR-IMG-001:** Выбор предустановленного Workflow из 6 доступных JSON-шаблонов.
-*   ✅ **FR-IMG-002:** Передача текстового промпта и генерация по Workflow.
-*   ✅ **FR-IMG-003 (Z-Image):** Генерация изображения по промпту (`ZIT.json`).
-*   ✅ **FR-IMG-004 (Qwen Image Edit):** Редактирование по 1, 2 или 3 референсам (соответствующие QWEN edit 1/2/3 pic.json).
-*   ✅ Загрузка референсных изображений через `UploadFile`, сохранение в папку пользователя.
-*   ✅ Расчёт стоимости генерации перед запуском, атомарное списание с баланса.
-
-### 2.3. Модуль Генерации Видео (ComfyUI)
-*   ⏳ **FR-VID-001:** Workflow зарезервированы — `text_to_video.json` и `image_to_video.json`.
-*   ⏳ **FR-VID-002:** Будет реализовано после подключения видеомодели на ComfyUI.
-
-### 2.4. Модуль Оркестрации (Workflow Chaining)
-*   ✅ **FR-ORCH-001:** Изображение → Редактирование (Qwen Image Edit). Принимает asset_id + промпт + опционально новые референсы.
-*   ✅ **FR-ORCH-002:** Изображение → Видео (Image-to-Video). Принимает asset_id как первый кадр.
-*   🔧 Оркестратор проверяет тип asset (image/generated), списывает стоимость за оба этапа суммарно.
+| Область | Статус |
+|---------|--------|
+| Бэкенд (FastAPI) | ✅ Завершён (Phases 0–4) |
+| Admin API | ✅ Завершён (Phase 5) |
+| Admin Panel (React) | ✅ Завершён (Phase 5) |
+| User Frontend (React) | ✅ Завершён (Phase 6) |
+| Тесты (26/26) | ✅ Все проходят |
+| Коммитов | 6 |
+| Ветка | `master` |
 
 ---
 
-## 💰 3. Экономический Модуль
-
-### 3.1. Валюта
-*   **Единица:** Внутренняя валюта ("Кредиты").
-*   **Хранение:** Поле `balance` в таблице `users`.
-*   **Автоначисление:** Планируется в Phase 5 (Admin Panel → cron).
-
-### 3.2. Расчет Стоимости LLM (Чат)
-```python
-Cost_LLM = (InputTokens × Rate_In) + (OutputTokens × Rate_Out)
-```
-
-### 3.3. Расчет Стоимости Генерации Изображений (ComfyUI)
-*   **Z-Image (Генерация):** `Cost = BaseCost + (Width × Height) × Rate_Pixel`
-*   **Qwen Image Edit:** `Cost = BaseCost_Edit + (Avg_Ref_Size × Height) × Rate_Pixel`
-
-### 3.4. Расчет Стоимости Генерации Видео (ComfyUI)
-```python
-Cost_Video = BaseCost_Vid + (Resolution × Duration) × Rate_Sec
-```
-
-### 3.5. Транзакционный Процесс
-1.  **Транзакция:** Все операции атомарны в PostgreSQL (`async with session.begin()`).
-2.  **Проверка/Списание:** Перед вызовом API проверяется баланс и списывается стоимость.
-3.  **Выполнение:** Вызов LMStudio / ComfyUI.
-4.  **Фиксация:** COMMIT при успехе, ROLLBACK при ошибке.
-
----
-
-## 🛠️ 4. Административные Функции (Phase 5 — в работе)
-
-### 4.1. Управление Пользователями и Материалами
-*   ✅ Просмотр списка пользователей, чатов, генераций, asset'ов.
-*   ✅ Корректировка баланса пользователя администратором.
-*   ✅ Принудительное удаление чатов и генераций.
-*   🚧 Управление архивами (бэкапы, логи, файлы генераций).
-
-### 4.2. Управление Группами Доступа (UserGroup)
-*   ✅ Создание/редактирование групп AD.
-*   ✅ Настройка прав для каждой группы: `chat_only`, `chat_generation`, `images_only`, `edit_only`, `full_access`.
-*   ✅ Стартовый баланс для участников группы.
-*   ✅ Автоматическое применение прав и баланса при первом входе пользователя.
-
-### 4.3. Настройка Системы (AdminSettings)
-*   ✅ Хранение конфигурации LMStudio (endpoint, model, api_key) — в БД с fallback на `.env`.
-*   ✅ Хранение конфигурации ComfyUI (endpoint, api_key).
-*   ✅ Глобальные коэффициенты стоимости (BaseCost, Rate_Pixel, Rate_Sec и т.д.).
-*   ✅ Настройка CORS origins.
-*   ✅ Изменение через Admin API + React Admin Panel.
-
-### 4.4. Темы оформления
-*   ✅ Светлая и тёмная тема в Admin Panel.
-*   ✅ Переключение через Switch в шапке.
-*   ✅ Сохранение выбора в localStorage.
-*   ✅ CSS-переменные для кастомных стилей.
-
----
-
-## 🗺️ 5. Карта Проекта (Roadmap)
-
-| Этап | Название Этапа | Статус |
-| :--- | :--- | :--- |
-| **Phase 0** | **Setup & Core DB** | ✅ Завершена |
-| **Phase 1** | **Auth & Economy Core** | ✅ Завершена |
-| **Phase 2** | **LLM Chat Module** | ✅ Завершена |
-| **Phase 3** | **ComfyUI Integration (Image)** | ✅ Завершена |
-| **Phase 4** | **Advanced Features & Orchestration** | ✅ Завершена |
-| **Phase 5** | **Admin Panel (API + React)** | 🚧 В работе |
-| **Phase 6** | **User Frontend** | ⏳ Ожидает |
-
----
-
-## 📁 Структура проекта
+## Структура проекта
 
 ```
 C:\Github\ACCOS\
-├── backend/                    # FastAPI сервер
+│
+├── backend/                        # FastAPI сервер
 │   ├── app/
-│   │   ├── api/v1/endpoints/   # 12 роутов (auth, user, chat, generation, orchestration, admin)
-│   │   ├── core/               # config, security, dependencies, exceptions
-│   │   ├── db/models/          # User, ChatSession, ChatMessage, GenerationRecord, ImageAsset, AdminSettings, UserGroup
-│   │   ├── repositories/       # Repository Pattern (base, user, chat, generation, settings)
-│   │   ├── services/           # auth, economy, chat, comfyui, admin, orchestration
-│   │   ├── adapters/           # LMStudio, ComfyUI, LDAP (real + Mock)
-│   │   ├── schemas/            # auth, chat, generation, admin
-│   │   └── modules/            # BaseModule, ChatModule, ComfyUIModule
-│   ├── alembic/                # Миграции (4 версии)
-│   ├── tests/                  # pytest тесты
-│   ├── requirements.txt
-│   └── main.py
-├── frontend/                   # React (пользователь) — Phase 6 ⏳
-├── admin/                      # React Admin Panel — Phase 5 🚧
+│   │   ├── __init__.py
+│   │   │
+│   │   ├── api/v1/endpoints/       # Роуты (контроллеры FastAPI)
+│   │   │   ├── auth.py             # POST /login, GET /me
+│   │   │   ├── user.py             # GET /balance
+│   │   │   ├── chat.py             # CRUD чатов + отправка сообщений
+│   │   │   ├── generation.py       # Запуск генерации + история
+│   │   │   ├── orchestration.py    # Image→Edit, Image→Video
+│   │   │   └── admin.py            # 16 админских эндпоинтов
+│   │   │
+│   │   ├── core/                   # Ядро приложения
+│   │   │   ├── config.py           # Pydantic Settings (читает config/.env)
+│   │   │   ├── security.py         # JWT create/verify + bcrypt
+│   │   │   ├── dependencies.py     # get_db, get_current_user_id
+│   │   │   └── exceptions.py       # Кастомные исключения
+│   │   │
+│   │   ├── db/                     # База данных
+│   │   │   ├── base.py             # DeclarativeBase
+│   │   │   ├── session.py          # engine + async_session_factory
+│   │   │   └── models/
+│   │   │       ├── user.py         # User (users)
+│   │   │       ├── user_group.py   # UserGroup (user_groups)
+│   │   │       ├── chat.py         # ChatSession + ChatMessage
+│   │   │       ├── generation.py   # GenerationRecord (generation_records)
+│   │   │       ├── image_asset.py  # ImageAsset (image_assets)
+│   │   │       └── admin_settings.py  # AdminSettings (admin_settings)
+│   │   │
+│   │   ├── repositories/           # Паттерн Repository
+│   │   │   ├── base.py             # Generic BaseRepository<T>
+│   │   │   ├── user_repository.py
+│   │   │   ├── chat_repository.py
+│   │   │   ├── generation_repository.py
+│   │   │   ├── group_repository.py
+│   │   │   └── settings_repository.py
+│   │   │
+│   │   ├── services/               # Бизнес-логика
+│   │   │   ├── auth_service.py     # LDAP → JWT, auto-create user
+│   │   │   ├── economy_service.py  # Strategy Pattern: LLM/Image/Video Cost
+│   │   │   ├── chat_service.py     # Чат: история, LLM вызов, списание
+│   │   │   ├── comfyui_service.py  # ComfyUI: генерация, история
+│   │   │   ├── orchestration_service.py  # Image→Edit, Image→Video
+│   │   │   ├── admin_service.py    # Все админские CRUD
+│   │   │   └── accrual_service.py  # Автоначисление баланса каждые 3600с
+│   │   │
+│   │   ├── adapters/               # Внешние интеграции
+│   │   │   ├── base.py             # BaseAdapter (ABC)
+│   │   │   ├── ldap_adapter.py     # LDAPAdapter + MockLDAPAdapter
+│   │   │   ├── lmstudio_adapter.py # LMStudio chat/completions
+│   │   │   └── comfyui_adapter.py  # ComfyUI upload/run/poll
+│   │   │
+│   │   ├── schemas/                # Pydantic схемы
+│   │   │   ├── auth.py             # LoginRequest, TokenResponse, UserInfoResponse
+│   │   │   ├── chat.py             # ChatCreateRequest, ChatSendRequest, ...
+│   │   │   ├── generation.py       # GenerateRequest, GenerateResponse, ...
+│   │   │   └── admin.py            # 20+ Admin схем
+│   │   │
+│   │   └── modules/                # Подключаемые модули (BaseModule)
+│   │       ├── base.py             # BaseModule (ABC)
+│   │       ├── chat_module.py      # ChatModule
+│   │       └── comfyui_module.py   # ComfyUIModule
+│   │
+│   ├── alembic/                    # Миграции
+│   │   ├── env.py, script.py.mako
+│   │   └── versions/
+│   │       ├── 5419b7ff722a_initial_migration.py
+│   │       └── 032cd001e02b_add_usergroup_model_and_user_permissions.py
+│   │
+│   ├── tests/                      # pytest (26 тестов)
+│   │   ├── conftest.py             # Фикстуры: БД, клиент, токены
+│   │   ├── test_health.py          # 1 тест
+│   │   ├── test_auth.py            # 6 тестов
+│   │   ├── test_chat.py            # 4 теста
+│   │   ├── test_economy.py         # 5 тестов
+│   │   ├── test_generation.py      # 2 теста
+│   │   └── test_admin.py           # 8 тестов
+│   │
+│   ├── requirements.txt            # Python зависимости
+│   └── main.py                     # Точка входа FastAPI
+│
+├── admin/                          # React Admin Panel
 │   ├── src/
-│   │   ├── assets/themes/      # light.ts, dark.ts
-│   │   ├── assets/styles/      # CSS/MUI overrides
-│   │   ├── pages/              # Dashboard, Users, Groups, Chats, Generations, Assets, Settings
-│   │   ├── services/           # api, authProvider, dataProvider
-│   │   └── App.tsx             # react-admin + theme toggle
+│   │   ├── App.tsx                 # react-admin + theme toggle
+│   │   ├── services/
+│   │   │   ├── api.ts              # HTTP helper (Bearer token)
+│   │   │   ├── authProvider.ts     # react-admin AuthProvider
+│   │   │   └── dataProvider.ts     # react-admin DataProvider
+│   │   ├── pages/
+│   │   │   ├── Dashboard.tsx       # Статистика (количество)
+│   │   │   ├── Users.tsx           # CRUD пользователей
+│   │   │   ├── Groups.tsx          # CRUD групп
+│   │   │   ├── Chats.tsx           # Просмотр чатов (read-only)
+│   │   │   ├── Generations.tsx     # Просмотр генераций (read-only)
+│   │   │   ├── Assets.tsx          # Просмотр ресурсов (read-only)
+│   │   │   └── Settings.tsx        # Редактирование настроек
+│   │   └── assets/themes/
+│   │       ├── light.ts            # Светлая тема MUI
+│   │       └── dark.ts             # Тёмная тема MUI
 │   └── package.json
-├── config/                     # Единое место для конфигов
-│   ├── .env                    # Секреты (в .gitignore)
-│   ├── .env.example            # Шаблон
-│   └── alembic.ini
-├── static/                     # Статические файлы
-│   ├── css/global.css          # CSS-переменные для тем
-│   ├── js/                     # Общие скрипты
-│   ├── images/                 # Изображения
-│   └── templates/              # HTML-шаблоны (admin_preview.html)
-├── workflows/                  # ComfyUI JSON шаблоны
-│   ├── ZIT.json                # Text-to-Image (Z-Image)
-│   ├── QWEN edit 1 pic.json    # Редактирование по 1 референсу
-│   ├── QWEN edit 2 pic.json    # Редактирование по 2 референсам
-│   ├── QWEN edit 3 pic.json    # Редактирование по 3 референсам
-│   ├── text_to_video.json      # Зарезервировано
-│   └── image_to_video.json     # Зарезервировано
+│
+├── frontend/                       # React User Frontend
+│   ├── src/
+│   │   ├── App.tsx                 # BrowserRouter, MUI theme, Layout, Auth guard
+│   │   ├── services/
+│   │   │   ├── api.ts              # HTTP helper + uploadFile
+│   │   │   └── auth.ts             # login(), getMe(), logout()
+│   │   ├── pages/
+│   │   │   ├── LoginPage.tsx       # Форма входа
+│   │   │   ├── DashboardPage.tsx   # Баланс, права, информация
+│   │   │   ├── ChatPage.tsx        # Чат-интерфейс
+│   │   │   └── GenerationPage.tsx  # Генерация (выбор workflow + промпт)
+│   │   └── assets/themes/
+│   │       ├── light.ts
+│   │       └── dark.ts
+│   └── package.json
+│
+├── config/                         # Конфигурация (единая папка)
+│   ├── .env                        # Фактические секреты (gitignored)
+│   ├── .env.example                # Шаблон с дефолтами
+│   └── alembic.ini                 # Alembic (script_location → backend/alembic)
+│
+├── static/                         # Статические файлы
+│   ├── css/global.css              # CSS-переменные (светлая/тёмная тема)
+│   ├── js/                         # (пусто)
+│   ├── images/                     # (пусто)
+│   └── templates/
+│       └── admin_preview.html      # HTML-превью админки (демо)
+│
+├── workflows/                      # ComfyUI шаблоны
+│   ├── ZIT.json                    # Text-to-Image (Z-Image)
+│   ├── QWEN edit 1 pic.json        # Редактирование 1 референс
+│   ├── QWEN edit 2 pic.json        # Редактирование 2 референса
+│   ├── QWEN edit 3 pic.json        # Редактирование 3 референса
+│   ├── text_to_video.json          # ⏳ зарезервировано
+│   └── image_to_video.json         # ⏳ зарезервировано
+│
 ├── .gitignore
-├── AGENTS.md                   # Правила для AI-агента
-├── CHANGELOG.md                # Лог изменений
-└── README.md                   # Этот файл
+├── AGENTS.md                       # Инструкции для AI-агента
+├── CHANGELOG.md                    # Лог всех изменений
+└── README.md                       # Этот файл
 ```
 
 ---
 
-## 🔌 API Эндпоинты
+## База данных
 
-### Публичные (Phase 0-4)
+### Схема
 
-| Path | Метод | Описание |
-|------|-------|----------|
-| `/api/v1/health` | GET | Проверка сервера |
-| `/api/v1/auth/login` | POST | Вход (LDAP) → JWT |
-| `/api/v1/auth/me` | GET | Профиль + баланс + права |
-| `/api/v1/user/balance` | GET | Текущий баланс |
-| `/api/v1/chat/create` | POST | Создать чат |
-| `/api/v1/chat/list` | GET | Список чатов |
-| `/api/v1/chat/{id}` | GET | История чата |
-| `/api/v1/chat/{id}/send` | POST | Отправить сообщение |
-| `/api/v1/generate/` | POST | Запустить генерацию |
-| `/api/v1/generate/history` | GET | История генераций |
-| `/api/v1/orchestrate/image-to-edit/{id}` | POST | Референс → редактирование |
-| `/api/v1/orchestrate/image-to-video/{id}` | POST | Референс → видео |
+```
+┌─────────────────────┐       ┌──────────────────┐
+│       users         │       │   user_groups    │
+├─────────────────────┤       ├──────────────────┤
+│ id (PK)             │────┐  │ id (PK)          │
+│ username (UQ, IX)   │    └──│ group_id (FK)    │
+│ email               │       │ name (UQ)        │
+│ full_name           │       │ ad_group_dn (UQ) │
+│ balance             │       │ permissions      │
+│ permissions         │       │ start_balance    │
+│ group_id (FK)       │       │ description      │
+│ is_active           │       │ is_active        │
+│ is_admin            │       │ created_at       │
+│ created_at          │       │ updated_at       │
+│ updated_at          │       └──────────────────┘
+└───────┬─────────────┘
+        │
+        │ 1:N
+        │
+┌───────┴──────────────────┐    ┌───────────────────────┐
+│   chat_sessions          │    │   chat_messages       │
+├──────────────────────────┤    ├───────────────────────┤
+│ id (PK)                  │ 1:N│ id (PK)               │
+│ user_id (FK)             │────│ session_id (FK)       │
+│ title                    │    │ role (user/assistant)  │
+│ system_prompt            │    │ content               │
+│ is_active                │    │ tokens_input          │
+│ created_at               │    │ tokens_output         │
+│ updated_at               │    │ cost                  │
+└──────────────────────────┘    │ created_at            │
+                                └───────────────────────┘
 
-### Admin API (Phase 5)
+┌──────────────────────────┐    ┌───────────────────────┐
+│   generation_records     │    │   image_assets        │
+├──────────────────────────┤    ├───────────────────────┤
+│ id (PK)                  │ 1:N│ id (PK)               │
+│ user_id (FK)             │────│ generation_id (FK)    │
+│ workflow_type            │    │ user_id (FK)          │
+│ prompt                   │    │ filename              │
+│ width, height, duration  │    │ file_path             │
+│ cost                     │    │ file_size, width,     │
+│ status                   │    │   height              │
+│ result_path              │    │ is_reference          │
+│ error_message            │    │ created_at            │
+│ created_at / updated_at  │    │ deleted_at            │
+└──────────────────────────┘    └───────────────────────┘
 
-| Path | Метод | Описание |
-|------|-------|----------|
-| `/api/v1/admin/users` | GET | Список пользователей |
-| `/api/v1/admin/balance/adjust` | POST | Коррекция баланса |
-| `/api/v1/admin/groups` | GET | Список групп AD |
-| `/api/v1/admin/groups` | POST | Создать группу |
-| `/api/v1/admin/groups/{id}` | PUT | Обновить группу |
-| `/api/v1/admin/chats` | GET | Список всех чатов |
-| `/api/v1/admin/chats/{id}` | DELETE | Удалить чат |
-| `/api/v1/admin/generations` | GET | Список генераций |
-| `/api/v1/admin/generations/{id}` | DELETE | Удалить генерацию |
-| `/api/v1/admin/assets` | GET | Список ресурсов |
-| `/api/v1/admin/settings` | GET | Настройки системы |
-| `/api/v1/admin/settings/{key}` | PUT | Изменить настройку |
+┌───────────────────────┐
+│   admin_settings      │
+├───────────────────────┤
+│ id (PK)               │
+│ key (UQ, IX)          │
+│ value                 │
+│ description           │
+└───────────────────────┘
+```
+
+### Модели
+
+| Файл | Класс | Таблица | Описание |
+|------|-------|---------|----------|
+| `db/models/user.py` | `User` | `users` | Пользователи системы, баланс, права |
+| `db/models/user_group.py` | `UserGroup` | `user_groups` | Группы AD → права + стартовый баланс |
+| `db/models/chat.py` | `ChatSession` | `chat_sessions` | Сессии чатов |
+| `db/models/chat.py` | `ChatMessage` | `chat_messages` | Сообщения чатов (user/assistant) |
+| `db/models/generation.py` | `GenerationRecord` | `generation_records` | Записи генераций |
+| `db/models/image_asset.py` | `ImageAsset` | `image_assets` | Сгенерированные/загруженные изображения |
+| `db/models/admin_settings.py` | `AdminSettings` | `admin_settings` | Ключ-значение настроек системы |
 
 ---
 
-## 🚀 Быстрый старт
+## API Endpoints
+
+### Публичные (JWT не требуется)
+
+| Метод | Path | Описание | Request | Response |
+|-------|------|----------|---------|----------|
+| GET | `/api/v1/health` | Проверка сервера | — | `{"status":"ok","version":"1.0.0"}` |
+
+### Auth (JWT не требуется для /login)
+
+| Метод | Path | Описание | Request | Response |
+|-------|------|----------|---------|----------|
+| POST | `/api/v1/auth/login` | Аутентификация (LDAP) → JWT | `LoginRequest` | `TokenResponse` |
+| GET | `/api/v1/auth/me` | Профиль + баланс + права | JWT Bearer | `UserInfoResponse` |
+
+### User
+
+| Метод | Path | Описание | Request | Response |
+|-------|------|----------|---------|----------|
+| GET | `/api/v1/user/balance` | Текущий баланс | JWT Bearer | `BalanceResponse` |
+
+### Chat
+
+| Метод | Path | Описание | Request | Response |
+|-------|------|----------|---------|----------|
+| POST | `/api/v1/chat/create` | Создать чат-сессию | `ChatCreateRequest` | `ChatSessionResponse` |
+| GET | `/api/v1/chat/list` | Список чатов пользователя | JWT Bearer | `ChatListResponse` |
+| GET | `/api/v1/chat/{session_id}` | История сообщений | JWT Bearer | `ChatHistoryResponse` |
+| POST | `/api/v1/chat/{session_id}/send` | Отправить сообщение | `ChatSendRequest` | `ChatSendResponse` |
+
+### Generation
+
+| Метод | Path | Описание | Request | Response |
+|-------|------|----------|---------|----------|
+| POST | `/api/v1/generate/` | Запустить workflow | `GenerateRequest` | `GenerateResponse` |
+| GET | `/api/v1/generate/history` | История генераций | JWT Bearer | `HistoryResponse` |
+
+### Orchestration
+
+| Метод | Path | Описание | Request | Response |
+|-------|------|----------|---------|----------|
+| POST | `/api/v1/orchestrate/image-to-edit/{generation_id}` | Редактировать изображение | multipart (files + params) | `GenerateResponse` |
+| POST | `/api/v1/orchestrate/image-to-video/{generation_id}` | Создать видео из изображения | query params | `GenerateResponse` |
+
+### Admin (все требуют JWT + is_admin=True)
+
+| Метод | Path | Описание |
+|-------|------|----------|
+| GET | `/api/v1/admin/users` | Список пользователей |
+| GET | `/api/v1/admin/users/{user_id}` | Пользователь по ID |
+| PUT | `/api/v1/admin/users/{user_id}` | Обновить пользователя |
+| DELETE | `/api/v1/admin/users/{user_id}` | Удалить пользователя |
+| POST | `/api/v1/admin/balance/adjust` | Коррекция баланса |
+| GET | `/api/v1/admin/groups` | Список групп |
+| POST | `/api/v1/admin/groups` | Создать группу |
+| PUT | `/api/v1/admin/groups/{group_id}` | Обновить группу |
+| DELETE | `/api/v1/admin/groups/{group_id}` | Удалить группу |
+| GET | `/api/v1/admin/chats` | Все чаты |
+| DELETE | `/api/v1/admin/chats/{chat_id}` | Удалить чат |
+| GET | `/api/v1/admin/generations` | Все генерации |
+| DELETE | `/api/v1/admin/generations/{gen_id}` | Удалить генерацию |
+| GET | `/api/v1/admin/assets` | Все assets |
+| GET | `/api/v1/admin/settings` | Все настройки |
+| PUT | `/api/v1/admin/settings/{key}` | Обновить настройку |
+
+---
+
+## Сервисы — полное описание
+
+### `auth_service.py`
+```python
+class AuthService:
+    __init__(self, session: AsyncSession)
+    _authenticate_ldap(username, password) -> dict       # LDAP + Mock fallback
+    _resolve_group_and_permissions(ldap_result) -> tuple  # UserGroup из AD групп
+    authenticate(username, password) -> dict              # LDAP → create user → JWT
+    get_user_info(user_id) -> dict                        # Профиль из БД
+```
+
+### `economy_service.py`
+```python
+class PricingStrategy(ABC):                # abstract calculate_cost(**kwargs)
+class LLMCostStrategy(PricingStrategy):    # cost = input*0.001 + output*0.002
+class ImageGenCostStrategy(PricingStrategy): # cost = 1.0 + (w*h)*0.0001
+class ImageEditCostStrategy(PricingStrategy): # cost = 0.5 + (ref*h)*0.00005
+class VideoGenCostStrategy(PricingStrategy):  # cost = 5.0 + (res*dur)*0.5
+
+class EconomyService:
+    strategies = {"llm": LLMCostStrategy, ...}
+    @classmethod calculate_cost(operation_type, **params) -> float
+    async get_balance(user_id) -> dict
+    async deduct_balance(user_id, amount) -> dict
+    async add_balance(user_id, amount) -> dict
+```
+
+### `chat_service.py`
+```python
+class ChatService:
+    __init__(self, session)                     # chat_repo, user_repo, economy, llm adapter
+    async create_chat(user_id, title, system_prompt) -> dict
+    async list_chats(user_id) -> dict
+    async get_history(session_id) -> dict
+    async send_message(user_id, session_id, message) -> dict  # LLM → deduct → save
+```
+
+### `comfyui_service.py`
+```python
+class ComfyUIService:
+    __init__(self, session)                     # generation_repo, economy, comfyui adapter
+    async generate(user_id, workflow_type, prompt, width, height, duration) -> dict
+    async get_history(user_id) -> dict
+```
+
+### `orchestration_service.py`
+```python
+class OrchestrationService:
+    __init__(self, session)
+    async image_to_edit(user_id, generation_id, edit_workflow, prompt, reference_images) -> dict
+    async image_to_video(user_id, generation_id, prompt, duration) -> dict
+```
+
+### `admin_service.py`
+```python
+class AdminService:
+    __init__(self, session)                     # user_repo, group_repo, settings_repo
+    async get_user(user_id) -> dict
+    async update_user(user_id, data) -> dict
+    async delete_user(user_id) -> dict
+    async delete_group(group_id) -> dict
+    async list_users() -> dict
+    async adjust_balance(admin_id, target_user_id, amount) -> dict
+    async list_groups() -> dict
+    async create_group(name, ad_group_dn, options...) -> dict
+    async update_group(group_id, **kwargs) -> dict
+    async list_all_chats() -> dict
+    async force_delete_chat(chat_id) -> dict
+    async list_all_generations() -> dict
+    async force_delete_generation(gen_id) -> dict
+    async list_all_assets() -> dict
+    async get_settings() -> dict
+    async update_setting(key, value, description) -> dict
+```
+
+### `accrual_service.py`
+```python
+async run_auto_accrual()  # Добавляет auto_accrual_amount каждому активному пользователю
+```
+
+### `main.py` — lifespan
+```python
+lifespan(app):  # Запускает accrual_loop (asyncio task, каждые 3600с)
+```
+
+---
+
+## Адаптеры (внешние интеграции)
+
+### `base.py`
+```python
+class BaseAdapter(ABC):
+    async def execute(self, **kwargs) -> Any: ...
+```
+
+### `ldap_adapter.py`
+```python
+class LDAPAdapter(BaseAdapter):       # Реальный LDAP через ldap3
+    execute(username, password) → dict с {authenticated, email, full_name, groups}
+class MockLDAPAdapter(BaseAdapter):   # Заглушка для разработки
+    execute(username, password) → admin/admin123 = успех, иначе = провал
+```
+
+### `lmstudio_adapter.py`
+```python
+class LMStudioAdapter(BaseAdapter):
+    execute(messages) → chat_completion(messages)
+    chat_completion(messages) → POST /v1/chat/completions → {success, content, tokens}
+```
+
+### `comfyui_adapter.py`
+```python
+class ComfyUIAdapter(BaseAdapter):
+    execute(workflow_type, prompt, images, width, height, duration) → run_workflow(...)
+    _load_workflow(workflow_type) → dict|None      # JSON из workflows/
+    _apply_prompt(workflow, prompt, images) → dict  # Inject prompt + placeholders
+    upload_image(file_path) → str|None               # POST /upload/image
+    run_workflow(workflow_type, prompt, images, ...) → dict
+    _poll_result(client, prompt_id, max_attempts) → dict  # Каждые 2с до 60 попыток
+```
+
+---
+
+## Repository Layer
+
+### `base.py` — Generic
+```python
+class BaseRepository[ModelType]:
+    async get(id: UUID) -> ModelType | None
+    async list(skip=0, limit=100) -> list[ModelType]
+    async create(**kwargs) -> ModelType
+    async update(id: UUID, **kwargs) -> ModelType | None
+    async delete(id: UUID, hard=False) -> bool
+    async count() -> int
+```
+
+### Конкретные репозитории
+
+| Репозиторий | Модель | Доп. методы |
+|-------------|--------|-------------|
+| `UserRepository` | `User` | `get_by_username`, `get_by_email`, `update_balance`, `get_balance` |
+| `ChatRepository` | `ChatSession` | `get_user_chats`, `get_messages`, `add_message` |
+| `GenerationRepository` | `GenerationRecord` | `get_user_generations`, `create_asset` |
+| `GroupRepository` | `UserGroup` | `get_by_name`, `get_by_ad_group_dn` |
+| `SettingsRepository` | `AdminSettings` | `get_by_key`, `set_value`, `get_all_as_dict` |
+
+---
+
+## Pydantic Schemas
+
+| Файл | Схемы |
+|------|-------|
+| `schemas/auth.py` | `BaseResponse`, `LoginRequest`, `TokenResponse`, `UserInfoResponse`, `BalanceResponse` |
+| `schemas/chat.py` | `ChatCreateRequest`, `ChatSendRequest`, `ChatSessionResponse`, `ChatMessageResponse`, `ChatListResponse`, `ChatHistoryResponse`, `ChatSendResponse` |
+| `schemas/generation.py` | `GenerateRequest`, `GenerateResponse`, `GenerationRecordResponse`, `HistoryResponse`, `AdminGroupResponse`, `AdminGroupListResponse` |
+| `schemas/admin.py` | 20 схем: `AdminUserResponse`, `AdminGroupCreate/Update`, `AdminSettingUpdate`, `AdminChatResponse`, `AdminGenerationResponse`, `AdminAssetResponse`, `AdminBalanceAdjust`, etc. |
+
+---
+
+## Конфигурация
+
+### `config/.env`
+
+| Параметр | Тип | Дефолт | Описание |
+|----------|-----|--------|----------|
+| `DATABASE_URL` | str | `postgresql+asyncpg://postgres:postgres@localhost:5432/accos` | Подключение к БД |
+| `JWT_SECRET_KEY` | str | `super-secret-key` | Секрет для JWT |
+| `JWT_ALGORITHM` | str | `HS256` | Алгоритм JWT |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | int | `60` | Время жизни токена |
+| `LDAP_SERVER` | str | `ldap://localhost:389` | LDAP сервер |
+| `LDAP_DOMAIN` | str | `DOMAIN` | Домен AD |
+| `LDAP_BASE_DN` | str | `DC=domain,DC=local` | Base DN |
+| `LMSTUDIO_BASE_URL` | str | `http://localhost:1234/v1` | LMStudio endpoint |
+| `LMSTUDIO_MODEL` | str | `default` | Модель LLM |
+| `COMFYUI_BASE_URL` | str | `http://localhost:8188` | ComfyUI endpoint |
+| `ADMIN_USERNAME` | str | `admin` | Локальный админ (fallback) |
+| `ADMIN_PASSWORD` | str | `admin123` | Пароль локального админа |
+| `CORS_ORIGINS` | str (JSON) | `["http://localhost:3000","http://localhost:5173"]` | Разрешённые origin'ы |
+| `LOG_LEVEL` | str | `DEBUG` | Уровень логирования |
+
+### Настройки в БД (AdminSettings)
+
+Эти настройки можно менять через Admin API / Admin Panel, они имеют приоритет над `.env`:
+
+| Ключ | Тип | Описание |
+|------|-----|----------|
+| `default_permissions` | str | Права по умолчанию (`chat`, `full_access`, ...) |
+| `default_start_balance` | float | Стартовый баланс новых пользователей |
+| `auto_accrual_interval_minutes` | int | Интервал автоначисления (не используется — заменён на asyncio task с 3600с) |
+| `auto_accrual_amount` | float | Сумма автоначисления |
+
+---
+
+## Тестирование
 
 ```bash
-# 1. Клонировать и войти
-cd C:\Github\ACCOS
-
-# 2. Настроить окружение
 cd backend
+.venv\Scripts\python -m pytest tests/ -v    # 26 passed, 0 failed
+```
+
+### Фикстуры (conftest.py)
+
+| Фикстура | Scope | Описание |
+|----------|-------|----------|
+| `event_loop` | session | Event loop для asyncio |
+| `test_engine` | session | Движок БД (NullPool) + create/drop tables |
+| `session` | function | Сессия SQLAlchemy на один тест |
+| `client` | function | httpx AsyncClient с FastAPI + override get_db |
+| `admin_token` | function | JWT токен админа (LDAP замокан) |
+| `user_token` | function | JWT токен обычного пользователя (LDAP замокан) |
+
+### Покрытие тестов
+
+| Файл | Тесты | Что тестирует |
+|------|-------|---------------|
+| `test_auth.py` | 6 | Логин (успех/ошибка/новый пользователь), /me, /health |
+| `test_chat.py` | 4 | Создание, список, отправка, история |
+| `test_economy.py` | 5 | LLM/Image/Edit/Video cost + unknown strategy |
+| `test_generation.py` | 2 | Запуск workflow, история |
+| `test_admin.py` | 8 | Все админские CRUD + проверка прав |
+| `test_health.py` | 1 | Health check |
+
+---
+
+## Быстрый старт
+
+```powershell
+# 1. Виртуальное окружение
+cd C:\Github\ACCOS\backend
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 3. Настроить config/.env (скопировать из .env.example)
-# 4. Применить миграции БД
+# 2. База данных
+# Убедитесь что PostgreSQL 17 запущен на localhost:5432
+# База accos должна существовать
 alembic -c ../config/alembic.ini upgrade head
 
-# 5. Запустить backend
-uvicorn main:app --reload
+# 3. Настройки
+# Скопируйте config/.env.example в config/.env и отредактируйте
 
-# 6. (отдельный терминал) Запустить Admin Panel
-cd admin
-npm run dev
+# 4. Запуск бэкенда
+uvicorn main:app --reload --port 8000
 
-# → Backend: http://127.0.0.1:8000
-# → Admin:  http://127.0.0.1:5173
-# → Документация API: http://127.0.0.1:8000/docs
+# 5. (отдельный терминал) Admin Panel
+cd C:\Github\ACCOS\admin
+npm run dev                      # → http://localhost:5173
+
+# 6. (отдельный терминал) User Frontend
+cd C:\Github\ACCOS\frontend
+npm run dev                      # → http://localhost:3000
+
+# → Документация API: http://localhost:8000/docs
 ```
 
 ---
 
-## 🧠 Правила разработки (для AI-агента)
+## Roadmap
 
-1.  **Транзакционная Целостность:** Все операции с балансом — атомарны в PostgreSQL.
-2.  **Изоляция Процессов:** Логика разделена на сервисы/классы. FastAPI — Controller.
-3.  **Паттерны:** Repository (БД) + Strategy (расчёт стоимости) + Adapter (внешние интеграции).
-4.  **Модульность:** Все интеграции через абстрактные классы (BaseAdapter, BaseModule).
-5.  **Генерация:**
-    *   **ZIT.json (Generator):** Prompt → изображение.
-    *   **QWEN edit N pic.json (Editor):** Prompt + N референсов → отредактированное изображение.
-6.  **Только async/await:** Никаких синхронных `def` для эндпоинтов.
-7.  **Без комментариев:** Код самодокументируемый.
-8.  **Автокоммит:** После каждой завершённой фазы.
+| Фаза | Описание | Статус |
+|------|----------|--------|
+| Phase 0 | Scaffold, модели, Alembic, config, базовый CRUD | ✅ |
+| Phase 1 | Auth (LDAP + JWT), Economy (Strategy), AdminSettings | ✅ |
+| Phase 2 | Chat (LMStudio, системный промпт, история, списание) | ✅ |
+| Phase 3 | ComfyUI (6 workflow, Image/Video gen, расчёт стоимости) | ✅ |
+| Phase 4 | Оркестрация (Image→Edit, Image→Video) | ✅ |
+| Phase 5 | Admin API + React Admin Panel | ✅ |
+| Phase 6 | User Frontend (React) | ✅ |
+| **Будущее** | **Что можно сделать дальше** | |
+| — | Видео-генерация (text_to_video.json, image_to_video.json) | ⏳ |
+| — | E2E тесты (Cypress/Playwright) | 📝 |
+| — | CI/CD (GitHub Actions) | 📝 |
+| — | Документация Swagger (дополнить описания) | 📝 |
+| — | Мониторинг и алертинг | 📝 |
+| — | Rate limiting | 📝 |
 
 ---
 
-*Подробнее о ходе разработки — в `CHANGELOG.md` и `AGENTS.md`.*
+## Ключевые архитектурные решения
+
+1. **Только async/await** — все эндпоинты и сервисы асинхронные
+2. **Repository Pattern** — доступ к БД только через репозитории
+3. **Strategy Pattern** — расчёт стоимости через стратегии (легко добавить новые типы)
+4. **Adapter Pattern** — внешние интеграции через BaseAdapter (легко мокать, легко заменять)
+5. **Module Pattern** — подключаемые модули (BaseModule), хотя сейчас все роуты зарегистрированы в main.py напрямую
+6. **JWT без refresh** — access token живёт 60 минут, refresh не реализован
+7. **LDAP fallback** — при недоступности реального LDAP работает MockLDAPAdapter (локальный admin)
+8. **NullPool в тестах** — изолированные соединения для избежания блокировок asyncpg
+9. **Автоаккреал** — asyncio background task (не APScheduler) каждые 3600с
+
+---
+
+*Подробнее: `CHANGELOG.md` (лог изменений), `AGENTS.md` (правила для AI-агента)*

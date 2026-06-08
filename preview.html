@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACCOS Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Roboto',sans-serif;background:#f5f5f5;color:#333;line-height:1.5}
+.tabs{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.12);position:sticky;top:0;z-index:100;display:flex;justify-content:center;gap:0;padding:0;border-bottom:1px solid #e0e0e0}
+.tabs button{padding:12px 24px;border:none;background:transparent;font-family:'Roboto',sans-serif;font-size:0.875rem;font-weight:500;color:#666;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;text-transform:uppercase;letter-spacing:0.5px}
+.tabs button:hover{color:#1976d2;background:rgba(25,118,210,0.04)}
+.tabs button.active{color:#1976d2;border-bottom-color:#1976d2}
+.container{max-width:1200px;margin:0 auto;padding:24px 16px}
+.section{display:none}
+.section.active{display:block}
+.card{background:#fff;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:16px}
+.card-bordered{border-left:4px solid #1976d2}
+h4{font-size:2rem;font-weight:700;line-height:1.2}
+h5{font-size:1.5rem;font-weight:600}
+h6{font-size:1.25rem;font-weight:600}
+.body2{font-size:0.875rem;color:#666}
+.caption{font-size:0.75rem;color:#999}
+.grid{display:grid;gap:16px}
+.grid-3{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.grid-4{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.grid-2{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
+.flex{display:flex}
+.flex-col{flex-direction:column}
+.flex-1{flex:1}
+.gap-1{gap:8px}
+.gap-2{gap:16px}
+.gap-3{gap:24px}
+.items-center{align-items:center}
+.justify-between{justify-content:space-between}
+.justify-center{justify-content:center}
+.flex-wrap{flex-wrap:wrap}
+.mb-1{margin-bottom:8px}
+.mb-2{margin-bottom:16px}
+.mb-3{margin-bottom:24px}
+.mt-1{margin-top:8px}
+.mt-2{margin-top:16px}
+.mt-3{margin-top:24px}
+.text-center{text-align:center}
+.text-right{text-align:right}
+.w-full{width:100%}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:4px;font-family:'Roboto',sans-serif;font-size:0.875rem;font-weight:500;cursor:pointer;border:none;transition:background 0.2s,box-shadow 0.2s;text-transform:uppercase;letter-spacing:0.5px;line-height:1.75;text-decoration:none}
+.btn-contained{background:#1976d2;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.2)}
+.btn-contained:hover{background:#1565c0;box-shadow:0 2px 6px rgba(0,0,0,0.3)}
+.btn-outlined{background:transparent;color:#1976d2;border:1px solid #1976d2}
+.btn-outlined:hover{background:rgba(25,118,210,0.04)}
+.btn-text{background:transparent;color:#1976d2;padding:6px 8px}
+.btn-text:hover{background:rgba(25,118,210,0.04)}
+.btn:disabled{opacity:0.5;cursor:default;pointer-events:none}
+.btn-sm{padding:4px 10px;font-size:0.8125rem}
+
+.textfield{width:100%;padding:10px 14px;border:1px solid #c4c4c4;border-radius:4px;font-family:'Roboto',sans-serif;font-size:1rem;transition:border-color 0.2s;outline:none}
+.textfield:focus{border-color:#1976d2;box-shadow:0 0 0 1px #1976d2}
+.textfield-sm{padding:6px 10px;font-size:0.875rem}
+
+.chip{display:inline-flex;align-items:center;padding:4px 10px;border-radius:16px;font-size:0.8125rem;line-height:1;font-weight:500;white-space:nowrap}
+.chip-default{background:#e0e0e0;color:#333}
+.chip-success{background:#4caf50;color:#fff}
+.chip-error{background:#ef5350;color:#fff}
+.chip-outlined{background:transparent;border:1px solid #bdbdbd;color:#666}
+.chip-outlined-red{background:transparent;border:1px solid #ef5350;color:#ef5350}
+
+.skeleton{background:#e0e0e0;border-radius:4px;position:relative;overflow:hidden}
+.skeleton::after{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent);animation:shimmer 1.5s infinite}
+@keyframes shimmer{to{left:100%}}
+.skeleton-text{height:16px;margin-bottom:8px;width:60%}
+.skeleton-text-sm{height:12px;margin-bottom:6px}
+.skeleton-rounded{width:64px;height:64px;border-radius:4px}
+.skeleton-chip{width:80px;height:24px;border-radius:16px}
+
+.chat-layout{display:flex;height:calc(100vh - 100px);gap:16px}
+.sidebar{width:260px;background:#fff;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:16px;overflow:auto;flex-shrink:0}
+.chat-main{flex:1;background:#fff;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,0.1);display:flex;flex-direction:column;overflow:hidden}
+
+.msg-user{text-align:right;margin-bottom:16px}
+.msg-user .bubble{display:inline-block;padding:12px;max-width:80%;background:#1976d2;color:#fff;border-radius:4px;word-break:break-word;text-align:left}
+.msg-assistant{text-align:left;margin-bottom:16px}
+.msg-assistant .bubble{display:inline-block;padding:12px;max-width:80%;background:#fff;color:#333;border-radius:4px;word-break:break-word;border:1px solid #e0e0e0}
+.msg-time{font-size:0.75rem;opacity:0.6;display:block;margin-top:4px;text-align:right}
+
+.md-code-block{background:#f0f0f0;border-radius:4px;padding:8px 12px;font-family:'Consolas','Courier New',monospace;font-size:0.8125rem;overflow-x:auto;margin:4px 0;white-space:pre-wrap;word-break:break-word}
+.md-inline-code{background:#f0f0f0;padding:2px 6px;border-radius:3px;font-family:'Consolas','Courier New',monospace;font-size:0.8125rem}
+.md-bold{font-weight:700}
+.md-italic{font-style:italic}
+
+.stat-card{padding:16px;background:#fff;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,0.1);display:flex;align-items:center;gap:16px;border-left:4px solid #1976d2}
+.stat-card .icon{font-size:2rem}
+.stat-card .value{font-size:2rem;font-weight:700}
+.stat-card .label{font-size:0.875rem;color:#666}
+
+.workflow-card{background:#fff;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,0.1);padding:16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;border:2px solid transparent;transition:border-color 0.2s}
+.workflow-card:hover{border-color:#1976d2}
+.workflow-card.locked{opacity:0.6}
+.workflow-card.active{border-color:#1976d2}
+
+.history-item{padding:12px;background:#f5f5f5;border-radius:4px;margin-bottom:12px}
+
+.stacktrace{font-size:11px;background:#f5f5f5;padding:16px;border-radius:4px;overflow:auto;max-height:300px;white-space:pre-wrap;word-break:break-word;font-family:'Consolas','Courier New',monospace;line-height:1.5}
+
+.upload-zone{padding:24px;border:2px dashed #c4c4c4;border-radius:4px;text-align:center;color:#999;cursor:pointer;transition:border-color 0.2s}
+.upload-zone:hover{border-color:#1976d2;color:#1976d2}
+
+.delete-btn{opacity:0.5;cursor:pointer;background:none;border:none;font-size:1.2rem;color:#666;padding:4px;border-radius:50%;transition:opacity 0.2s;line-height:1}
+.delete-btn:hover{opacity:1;background:rgba(0,0,0,0.04)}
+
+.brand{font-size:1.5rem;font-weight:700;color:#1976d2;text-align:center;margin-bottom:24px}
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <button class="active" onclick="switchTab('login')">Авторизация</button>
+  <button onclick="switchTab('user')">Пользовательский</button>
+  <button onclick="switchTab('admin')">Админ</button>
+  <button onclick="switchTab('error')">Ошибка</button>
+</div>
+
+<!-- ===== LOGIN ===== -->
+<div id="section-login" class="section active">
+<div class="container" style="max-width:400px">
+  <div class="brand" style="margin-top:64px">ACCOS</div>
+  <div class="card">
+    <h6 style="margin-bottom:24px;text-align:center">Вход в систему</h6>
+    <div class="flex flex-col gap-2">
+      <input class="textfield" type="text" placeholder="Имя пользователя" value="admin">
+      <input class="textfield" type="password" placeholder="Пароль" value="********">
+      <button class="btn btn-contained w-full" style="padding:10px 16px;justify-content:center;margin-top:8px">Войти</button>
+    </div>
+    <p class="caption text-center" style="margin-top:16px">ACCOS v1.0.0</p>
+  </div>
+</div>
+</div>
+
+<!-- ===== USER DASHBOARD + CHAT + GENERATION ===== -->
+<div id="section-user" class="section">
+<div class="container">
+
+  <!-- User Dashboard -->
+  <h5 class="mb-3">Дашборд</h5>
+  <div class="grid grid-3 mb-3">
+    <div class="card">
+      <div class="body2">Баланс</div>
+      <h4 style="color:#1976d2">4 500 кредитов</h4>
+    </div>
+    <div class="card">
+      <div class="body2">Пользователь</div>
+      <h6>admin</h6>
+    </div>
+    <div class="card">
+      <div class="body2">Права доступа</div>
+      <h6>full</h6>
+    </div>
+  </div>
+
+  <div class="flex justify-between items-center mb-2">
+    <h6>История генераций</h6>
+    <button class="btn btn-text btn-sm">Все генерации</button>
+  </div>
+
+  <!-- Mock history items -->
+  <div class="flex flex-col gap-2">
+    <div class="card" style="cursor:pointer;padding:12px 16px">
+      <div class="flex gap-2 items-center">
+        <div style="width:64px;height:64px;flex-shrink:0;border-radius:4px;overflow:hidden;background:#e3f2fd;display:flex;align-items:center;justify-content:center">
+          <img src="https://via.placeholder.com/64/1976d2/fff?text=ZIT" alt="" style="width:100%;height:100%;object-fit:cover">
+        </div>
+        <div class="flex-1" style="min-width:0">
+          <div class="body2" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Z-Image (текст → изображение)</div>
+          <div class="body2" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">красивый закат над горами, цифровая живопись</div>
+          <div class="flex gap-1 items-center" style="margin-top:4px">
+            <span class="chip chip-success">completed</span>
+            <span class="caption">14 кр.</span>
+            <span class="caption">07.06.2026, 14:32</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="cursor:pointer;padding:12px 16px">
+      <div class="flex gap-2 items-center">
+        <div style="width:64px;height:64px;flex-shrink:0;border-radius:4px;overflow:hidden;background:#fff3e0;display:flex;align-items:center;justify-content:center">
+          <img src="https://via.placeholder.com/64/7b1fa2/fff?text=ED1" alt="" style="width:100%;height:100%;object-fit:cover">
+        </div>
+        <div class="flex-1" style="min-width:0">
+          <div class="body2" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Qwen Edit (1 референс)</div>
+          <div class="body2" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">заменить фон на ночной город</div>
+          <div class="flex gap-1 items-center" style="margin-top:4px">
+            <span class="chip chip-default">processing</span>
+            <span class="caption">28 кр.</span>
+            <span class="caption">07.06.2026, 15:10</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="cursor:pointer;padding:12px 16px">
+      <div class="flex gap-2 items-center">
+        <div style="width:64px;height:64px;flex-shrink:0;border-radius:4px;overflow:hidden;background:#e8f5e9;display:flex;align-items:center;justify-content:center">
+          <img src="https://via.placeholder.com/64/388e3c/fff?text=ED2" alt="" style="width:100%;height:100%;object-fit:cover">
+        </div>
+        <div class="flex-1" style="min-width:0">
+          <div class="body2" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Qwen Edit (2 референса)</div>
+          <div class="body2" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">объединить два изображения в одно</div>
+          <div class="flex gap-1 items-center" style="margin-top:4px">
+            <span class="chip chip-error">failed</span>
+            <span class="caption">0 кр.</span>
+            <span class="caption">06.06.2026, 22:45</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skeleton -->
+    <div class="card" style="padding:12px 16px">
+      <div class="flex gap-2 items-center">
+        <div class="skeleton skeleton-rounded"></div>
+        <div class="flex-1">
+          <div class="skeleton skeleton-text" style="width:40%"></div>
+          <div class="skeleton skeleton-text" style="width:80%"></div>
+          <div class="skeleton skeleton-chip"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #e0e0e0;margin:32px 0">
+
+  <!-- Chat Page -->
+  <h5 class="mb-3">Чат</h5>
+  <div class="chat-layout">
+    <div class="sidebar">
+      <button class="btn btn-outlined w-full" style="margin-bottom:16px;justify-content:center">+ Новый чат</button>
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center gap-1" style="padding:6px 12px;cursor:pointer;background:rgba(25,118,210,0.08);border-radius:4px">
+          <span class="body2 flex-1" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">Chat 1</span>
+          <button class="delete-btn">&times;</button>
+        </div>
+        <div class="flex items-center gap-1" style="padding:6px 12px;cursor:pointer;border-radius:4px">
+          <span class="body2 flex-1" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Chat 2</span>
+          <button class="delete-btn">&times;</button>
+        </div>
+        <div class="flex items-center gap-1" style="padding:6px 12px;cursor:pointer;border-radius:4px">
+          <span class="body2 flex-1" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Chat 3</span>
+          <button class="delete-btn">&times;</button>
+        </div>
+      </div>
+    </div>
+    <div class="chat-main">
+      <div class="flex-1" style="overflow:auto;padding:16px">
+        <!-- user message -->
+        <div class="msg-user">
+          <div class="bubble">
+            <div>Напиши код на Python для сортировки списка</div>
+            <span class="msg-time" style="color:rgba(255,255,255,0.7)">14:35</span>
+          </div>
+        </div>
+        <!-- assistant with SimpleMarkdown -->
+        <div class="msg-assistant">
+          <div class="bubble">
+            <div class="flex flex-col gap-1">
+              <div>Вот пример <strong class="md-bold">сортировки пузырьком</strong> на <code class="md-inline-code">Python</code>:</div>
+              <div class="md-code-block">def bubble_sort(arr):<br>    n = len(arr)<br>    for i in range(n):<br>        for j in range(0, n-i-1):<br>            if arr[j] &gt; arr[j+1]:<br>                arr[j], arr[j+1] = arr[j+1], arr[j]<br>    return arr</div>
+              <div>Также можно использовать встроенную <code class="md-inline-code">sorted()</code>.</div>
+              <div><em class="md-italic">Временная сложность: O(n²)</em></div>
+            </div>
+            <span class="msg-time">14:35</span>
+          </div>
+        </div>
+        <!-- user message -->
+        <div class="msg-user">
+          <div class="bubble">
+            <div>А как насчёт быстрой сортировки?</div>
+            <span class="msg-time" style="color:rgba(255,255,255,0.7)">14:36</span>
+          </div>
+        </div>
+        <!-- assistant again -->
+        <div class="msg-assistant">
+          <div class="bubble">
+            <div class="flex flex-col gap-1">
+              <div><strong class="md-bold">Quick Sort</strong> (<em class="md-italic">рекурсивная</em>):</div>
+              <div class="md-code-block">def quick_sort(arr):<br>    if len(arr) &lt;= 1:<br>        return arr<br>    pivot = arr[0]<br>    left = [x for x in arr[1:] if x &lt;= pivot]<br>    right = [x for x in arr[1:] if x &gt; pivot]<br>    return quick_sort(left) + [pivot] + quick_sort(right)</div>
+            </div>
+            <span class="msg-time">14:36</span>
+          </div>
+        </div>
+        <!-- typing indicator -->
+        <div style="text-align:left;margin-bottom:16px">
+          <div class="bubble" style="display:inline-flex;padding:12px;background:#fff;border:1px solid #e0e0e0;border-radius:4px">
+            <span class="body2" style="color:#666;display:flex;align-items:center;gap:8px">
+              <span class="skeleton" style="width:12px;height:12px;border-radius:50%;display:inline-block;animation:shimmer 1.5s infinite"></span>
+              ассистент печатает...
+            </span>
+          </div>
+        </div>
+      </div>
+      <div style="border-top:1px solid #e0e0e0;padding:16px;display:flex;gap:8px">
+        <input class="textfield textfield-sm" placeholder="Введите сообщение..." style="flex:1">
+        <button class="btn btn-contained btn-sm" style="padding:6px 12px;min-width:40px;justify-content:center">→</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Dialog Mock -->
+  <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:200;display:flex;align-items:center;justify-content:center" onclick="this.style.display='none'">
+    <div style="background:#fff;border-radius:4px;box-shadow:0 4px 20px rgba(0,0,0,0.2);padding:24px;max-width:400px;width:100%" onclick="event.stopPropagation()">
+      <h6 class="mb-2">Удалить чат?</h6>
+      <p class="body2 mb-2">Это действие нельзя отменить. Все сообщения будут удалены.</p>
+      <div class="flex gap-2 justify-center" style="margin-top:16px">
+        <button class="btn btn-outlined btn-sm" onclick="this.closest('[style]').closest('[style]').style.display='none'">Отмена</button>
+        <button class="btn btn-contained btn-sm" style="background:#ef5350" onclick="this.closest('[style]').closest('[style]').style.display='none'">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #e0e0e0;margin:32px 0">
+
+  <!-- Generation Page -->
+  <h5 class="mb-3">Генерация</h5>
+  <div style="display:flex;gap:24px;flex-wrap:wrap">
+    <div style="flex:1 1 60%;min-width:300px">
+
+      <!-- Workflow cards as grid -->
+      <div class="grid grid-4" style="margin-bottom:16px">
+        <div class="workflow-card active">
+          <div>
+            <div class="body2" style="font-weight:600">ZIT</div>
+            <div class="caption">текст → изображение</div>
+          </div>
+          <span style="font-size:1.5rem;color:#1976d2">✓</span>
+        </div>
+        <div class="workflow-card">
+          <div>
+            <div class="body2" style="font-weight:600">Qwen Edit 1</div>
+            <div class="caption">1 референс</div>
+          </div>
+          <span style="font-size:1rem;color:#999">🔓</span>
+        </div>
+        <div class="workflow-card locked">
+          <div>
+            <div class="body2" style="font-weight:600">Qwen Edit 2</div>
+            <div class="caption">2 референса</div>
+          </div>
+          <span style="font-size:1rem;color:#999">🔒</span>
+        </div>
+        <div class="workflow-card locked">
+          <div>
+            <div class="body2" style="font-weight:600">Qwen Edit 3</div>
+            <div class="caption">3 референса</div>
+          </div>
+          <span style="font-size:1rem;color:#999">🔒</span>
+        </div>
+      </div>
+
+      <!-- Main gen card -->
+      <div class="card mb-3">
+        <div class="flex flex-col gap-2">
+          <select class="textfield" style="appearance:auto;cursor:pointer">
+            <option>Z-Image (текст → изображение)</option>
+            <option>Qwen Edit (1 референс)</option>
+            <option>Qwen Edit (2 референса)</option>
+            <option>Qwen Edit (3 референса)</option>
+          </select>
+          <textarea class="textfield" rows="3" placeholder="Опишите, что хотите получить..." style="resize:vertical;font-family:'Roboto',sans-serif">красивый закат над горами, цифровая живопись</textarea>
+          <div class="upload-zone">
+            <div class="body2">Перетащите файлы или нажмите для выбора</div>
+            <div class="caption">Референс-изображения (0/3)</div>
+          </div>
+          <div class="flex gap-1 flex-wrap mb-1">
+            <span class="chip chip-default">ref_image_01.jpg <button class="delete-btn" style="font-size:0.8rem;margin-left:4px">&times;</button></span>
+          </div>
+          <div class="flex gap-2 items-center">
+            <button class="btn btn-contained">Сгенерировать</button>
+            <span class="skeleton" style="width:100%;height:4px;border-radius:2px;display:inline-block;flex:1"></span>
+          </div>
+          <div style="background:#e8f5e9;border-radius:4px;padding:12px;display:flex;align-items:center;gap:8px">
+            <span style="color:#2e7d32">✅</span>
+            <span class="body2">Генерация завершена! Списано 14 кредитов</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result Card -->
+      <div class="card">
+        <h6 class="mb-2">Результат</h6>
+        <div class="body2">ID: gen_a1b2c3d4</div>
+        <div class="body2">Списано: 14 кредитов</div>
+        <div class="body2">Статус: ✅ Готово</div>
+        <div class="flex gap-2 flex-wrap mt-2">
+          <div style="max-width:300px">
+            <img src="https://via.placeholder.com/300/1976d2/fff?text=Result" alt="result" style="width:100%;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
+            <div class="caption">generation_result.png</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- History sidebar -->
+    <div style="flex:1 1 35%;min-width:280px">
+      <div class="card">
+        <div class="flex justify-between items-center mb-2">
+          <h6>История</h6>
+          <button class="btn btn-text btn-sm">Загрузить</button>
+        </div>
+
+        <div class="history-item">
+          <div class="body2" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Z-Image (текст → изображение)</div>
+          <div class="caption" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">красивый закат над горами</div>
+          <div class="flex gap-1 items-center mt-1">
+            <span class="chip chip-success">completed</span>
+            <span class="caption">14 кр.</span>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="body2" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Qwen Edit (1 референс)</div>
+          <div class="caption" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">заменить фон на ночной город</div>
+          <div class="flex gap-1 items-center mt-1">
+            <span class="chip chip-default">processing</span>
+            <span class="caption">28 кр.</span>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="body2" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Qwen Edit (2 референса)</div>
+          <div class="caption" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">объединить два изображения</div>
+          <div class="flex gap-1 items-center mt-1">
+            <span class="chip chip-error">failed</span>
+            <span class="caption">0 кр.</span>
+          </div>
+        </div>
+
+        <!-- Loading state -->
+        <div class="history-item">
+          <div class="skeleton skeleton-text" style="width:40%"></div>
+          <div class="skeleton skeleton-text" style="width:80%"></div>
+          <div class="skeleton skeleton-chip"></div>
+        </div>
+        <div class="history-item">
+          <div class="skeleton skeleton-text" style="width:40%"></div>
+          <div class="skeleton skeleton-text" style="width:80%"></div>
+          <div class="skeleton skeleton-chip"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ===== ADMIN DASHBOARD ===== -->
+<div id="section-admin" class="section">
+<div class="container">
+  <h5 class="mb-3">ACCOS Admin</h5>
+  <div class="grid grid-3 mb-3">
+    <div class="stat-card" style="border-left-color:#1976d2">
+      <span class="icon" style="color:#1976d2">👥</span>
+      <div>
+        <div class="value">12</div>
+        <div class="label">Пользователи</div>
+      </div>
+    </div>
+    <div class="stat-card" style="border-left-color:#388e3c">
+      <span class="icon" style="color:#388e3c">👤</span>
+      <div>
+        <div class="value">4</div>
+        <div class="label">Группы доступа</div>
+      </div>
+    </div>
+    <div class="stat-card" style="border-left-color:#f57c00">
+      <span class="icon" style="color:#f57c00">💬</span>
+      <div>
+        <div class="value">48</div>
+        <div class="label">Чаты</div>
+      </div>
+    </div>
+    <div class="stat-card" style="border-left-color:#7b1fa2">
+      <span class="icon" style="color:#7b1fa2">✨</span>
+      <div>
+        <div class="value">156</div>
+        <div class="label">Генерации</div>
+      </div>
+    </div>
+    <div class="stat-card" style="border-left-color:#00796b">
+      <span class="icon" style="color:#00796b">🖼️</span>
+      <div>
+        <div class="value">89</div>
+        <div class="label">Ресурсы (изображения)</div>
+      </div>
+    </div>
+    <!-- skeleton card -->
+    <div class="stat-card" style="border-left-color:#bdbdbd">
+      <span class="skeleton" style="width:32px;height:32px;border-radius:50%;flex-shrink:0"></span>
+      <div style="flex:1">
+        <div class="skeleton skeleton-text" style="width:60px;height:32px;margin-bottom:4px"></div>
+        <div class="skeleton skeleton-text-sm" style="width:80px"></div>
+      </div>
+    </div>
+  </div>
+
+  <h6 class="mb-2">Быстрые действия</h6>
+  <div class="flex gap-1 flex-wrap">
+    <button class="btn btn-contained">+ Создать пользователя</button>
+    <button class="btn btn-outlined">+ Создать группу</button>
+    <button class="btn btn-outlined">+ Добавить настройку</button>
+  </div>
+</div>
+</div>
+
+<!-- ===== ERROR PAGE ===== -->
+<div id="section-error" class="section">
+<div class="container" style="display:flex;align-items:center;justify-content:center;min-height:60vh">
+  <div class="card" style="max-width:640px;width:100%;padding:32px;text-align:center">
+    <div style="font-size:64px;margin-bottom:16px">⚠️</div>
+    <h4 style="font-weight:700;font-size:3rem">500</h4>
+    <h6 style="color:#666;margin-bottom:8px">Внутренняя ошибка сервера</h6>
+    <div class="body2" style="font-family:'Consolas','Courier New',monospace;background:#f5f5f5;padding:12px;border-radius:4px;text-align:left;white-space:pre-wrap;word-break:break-word;margin-top:8px;margin-bottom:16px">
+      Unexpected error: 'NoneType' object has no attribute 'get'
+    </div>
+
+    <div class="flex gap-1 justify-center flex-wrap mb-2">
+      <span class="chip chip-outlined-red">HTTP 500</span>
+      <span class="chip chip-outlined">ID: err_a1b2c3d4</span>
+      <span class="chip chip-outlined">Exception</span>
+      <span class="chip chip-outlined">ValueError</span>
+    </div>
+
+    <div style="text-align:left;margin-top:16px">
+      <div class="caption mb-1">Stacktrace:</div>
+      <div class="stacktrace">Traceback (most recent call last):<br>  File "app/api/v1/endpoints/generate.py", line 42, in generate<br>    result = await service.process(workflow_type, prompt)<br>  File "app/services/generation.py", line 87, in process<br>    config = workflow_config.get("params")<br>AttributeError: 'NoneType' object has no attribute 'get'<br><br>During handling of the above exception, another exception occurred:<br><br>Traceback (most recent call last):<br>  File "app/core/exceptions.py", line 25, in wrapper<br>    return await func(*args, **kwargs)<br>  File "app/api/v1/endpoints/generate.py", line 48, in generate<br>    raise ValueError(f"Workflow configuration missing: {workflow_type}")<br>ValueError: Workflow configuration missing: qwen_edit_3</div>
+    </div>
+
+    <div class="flex gap-2 justify-center mt-3">
+      <button class="btn btn-outlined" onclick="window.history.back()">Назад</button>
+      <button class="btn btn-contained">Повторить</button>
+      <button class="btn btn-text" onclick="window.location.reload()">Обновить страницу</button>
+    </div>
+    <div class="mt-2">
+      <a href="#" style="color:#1976d2;text-decoration:none;font-size:0.875rem" onclick="switchTab('login');return false">на главную</a>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('section-' + name).classList.add('active');
+  document.querySelector('.tabs button[onclick*="' + name + '"]').classList.add('active');
+}
+</script>
+
+</body>
+</html>

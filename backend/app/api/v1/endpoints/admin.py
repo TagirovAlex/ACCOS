@@ -7,14 +7,18 @@ from app.schemas.admin import (
     AdminUserListResponse,
     AdminUserResponse,
     AdminUserUpdate,
+    AdminUserCreate,
     AdminGroupListResponse,
     AdminGroupCreate,
     AdminGroupUpdate,
     AdminSettingListResponse,
     AdminSettingUpdate,
+    AdminSettingCreate,
     AdminBalanceAdjust,
     AdminChatListResponse,
+    AdminChatDetailResponse,
     AdminGenerationListResponse,
+    AdminGenerationDetailResponse,
     AdminAssetListResponse,
     BaseResponse,
 )
@@ -31,13 +35,24 @@ async def _require_admin(user_id: str = Depends(get_current_user_id), db: AsyncS
     return user_id
 
 
-@router.get("/users", response_model=AdminUserListResponse)
-async def list_users(
+@router.get("/dashboard", response_model=BaseResponse)
+async def get_dashboard_stats(
     user_id: str = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return AdminUserListResponse(**await service.list_users())
+    return await service.get_dashboard_stats()
+
+
+@router.get("/users", response_model=AdminUserListResponse)
+async def list_users(
+    skip: int = 0,
+    limit: int = 100,
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    return AdminUserListResponse(**await service.list_users(skip=skip, limit=limit))
 
 
 @router.get("/users/{user_id}", response_model=AdminUserResponse)
@@ -51,6 +66,16 @@ async def get_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
+
+
+@router.post("/users", response_model=BaseResponse)
+async def create_user(
+    request: AdminUserCreate,
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    return BaseResponse(**await service.create_user(request.model_dump()))
 
 
 @router.put("/users/{user_id}", response_model=BaseResponse)
@@ -96,11 +121,13 @@ async def adjust_balance(
 
 @router.get("/groups", response_model=AdminGroupListResponse)
 async def list_groups(
+    skip: int = 0,
+    limit: int = 100,
     user_id: str = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return AdminGroupListResponse(**await service.list_groups())
+    return AdminGroupListResponse(**await service.list_groups(skip=skip, limit=limit))
 
 
 @router.post("/groups", response_model=BaseResponse)
@@ -134,11 +161,26 @@ async def update_group(
 
 @router.get("/chats", response_model=AdminChatListResponse)
 async def list_chats(
+    skip: int = 0,
+    limit: int = 100,
     user_id: str = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return AdminChatListResponse(**await service.list_all_chats())
+    return AdminChatListResponse(**await service.list_all_chats(skip=skip, limit=limit))
+
+
+@router.get("/chats/{chat_id}", response_model=AdminChatDetailResponse)
+async def get_chat_detail(
+    chat_id: str,
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    chat = await service.get_chat_detail(chat_id)
+    if not chat:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+    return chat
 
 
 @router.delete("/chats/{chat_id}", response_model=BaseResponse)
@@ -153,11 +195,26 @@ async def delete_chat(
 
 @router.get("/generations", response_model=AdminGenerationListResponse)
 async def list_generations(
+    skip: int = 0,
+    limit: int = 100,
     user_id: str = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return AdminGenerationListResponse(**await service.list_all_generations())
+    return AdminGenerationListResponse(**await service.list_all_generations(skip=skip, limit=limit))
+
+
+@router.get("/generations/{gen_id}", response_model=AdminGenerationDetailResponse)
+async def get_generation_detail(
+    gen_id: str,
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    gen = await service.get_generation_detail(gen_id)
+    if not gen:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Generation not found")
+    return gen
 
 
 @router.delete("/generations/{gen_id}", response_model=BaseResponse)
@@ -172,11 +229,26 @@ async def delete_generation(
 
 @router.get("/assets", response_model=AdminAssetListResponse)
 async def list_assets(
+    skip: int = 0,
+    limit: int = 100,
     user_id: str = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return AdminAssetListResponse(**await service.list_all_assets())
+    return AdminAssetListResponse(**await service.list_all_assets(skip=skip, limit=limit))
+
+
+@router.get("/assets/{asset_id}", response_model=BaseResponse)
+async def get_asset_detail(
+    asset_id: str,
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    asset = await service.get_asset_detail(asset_id)
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    return asset
 
 
 @router.get("/settings", response_model=AdminSettingListResponse)
@@ -188,6 +260,16 @@ async def get_settings(
     return AdminSettingListResponse(**await service.get_settings())
 
 
+@router.post("/settings", response_model=BaseResponse)
+async def create_setting(
+    request: AdminSettingCreate,
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    return BaseResponse(**await service.create_setting(request.key, request.value, request.description))
+
+
 @router.put("/settings/{key}", response_model=BaseResponse)
 async def update_setting(
     key: str,
@@ -197,3 +279,13 @@ async def update_setting(
 ):
     service = AdminService(db)
     return BaseResponse(**await service.update_setting(key, request.value, request.description))
+
+
+@router.delete("/settings/{key}", response_model=BaseResponse)
+async def delete_setting(
+    key: str,
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    return BaseResponse(**await service.delete_setting(key))

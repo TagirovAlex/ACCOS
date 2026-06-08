@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Box, Card, CardContent, TextField, Button, Typography, Alert } from "@mui/material";
 import { login } from "../services/auth";
 
+import type { User } from "../services/auth";
+
 interface Props {
-  onLogin: () => void;
+  onLogin: (user: User) => void;
 }
 
 export const LoginPage = ({ onLogin }: Props) => {
@@ -15,8 +17,8 @@ export const LoginPage = ({ onLogin }: Props) => {
     e.preventDefault();
     setError("");
     try {
-      await login(username, password);
-      onLogin();
+      const user = await login(username, password);
+      onLogin(user);
     } catch (err: any) {
       setError(err.message || "Login failed");
     }

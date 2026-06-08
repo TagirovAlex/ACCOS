@@ -10,6 +10,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ChatPage } from "./pages/ChatPage";
 import { GenerationPage } from "./pages/GenerationPage";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { getMe, logout, type User } from "./services/auth";
 
 const DRAWER_WIDTH = 220;
@@ -58,9 +59,9 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
         </Drawer>
         <Box component="main" sx={{ flexGrow: 1, p: 3, mt: 64 }}>
           <Routes>
-            <Route path="/" element={<DashboardPage user={user} />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/generate" element={<GenerationPage />} />
+            <Route path="/" element={<ErrorBoundary><DashboardPage user={user} /></ErrorBoundary>} />
+            <Route path="/chat" element={<ErrorBoundary><ChatPage /></ErrorBoundary>} />
+            <Route path="/generate" element={<ErrorBoundary><GenerationPage /></ErrorBoundary>} />
           </Routes>
         </Box>
       </Box>
@@ -87,9 +88,7 @@ function AppContent() {
     return (
       <ThemeProvider theme={createTheme(lightTheme)}>
         <CssBaseline />
-        <LoginPage onLogin={() => {
-          getMe().then(setUser);
-        }} />
+        <LoginPage onLogin={(u) => { setUser(u); }} />
       </ThemeProvider>
     );
   }

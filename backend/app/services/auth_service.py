@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.ldap_adapter import LDAPAdapter, MockLDAPAdapter
 from app.core.config import settings
-from app.core.security import create_access_token
+from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.repositories.user_repository import UserRepository
 from app.repositories.settings_repository import SettingsRepository
 
@@ -74,10 +74,12 @@ class AuthService:
         elif username == settings.admin_username and not user.is_admin:
             await self.user_repo.update(user.id, is_admin=True)
             user.is_admin = True
-        token = create_access_token(subject=str(user.id))
+        access = create_access_token(subject=str(user.id))
+        refresh = create_refresh_token(subject=str(user.id))
         return {
             "success": True,
-            "access_token": token,
+            "access_token": access,
+            "refresh_token": refresh,
             "token_type": "bearer",
             "user": {
                 "id": str(user.id),
@@ -88,6 +90,22 @@ class AuthService:
                 "permissions": user.permissions,
                 "is_admin": user.is_admin,
             },
+        }
+
+    async def refresh_token(self, refresh_token: str) -> dict:
+        payload = decode_token(refresh_token)
+        if not payload or payload.get("type") != "refresh":
+            return {"success": False, "error": "Invalid or expired refresh token"}
+        user = await self.user_repo.get(UUID(payload["sub"]))
+        if not user:
+            return {"success": False, "error": "User not found"}
+        access = create_access_token(subject=str(user.id))
+        refresh = create_refresh_token(subject=str(user.id))
+        return {
+            "success": True,
+            "access_token": access,
+            "refresh_token": refresh,
+            "token_type": "bearer",
         }
 
     async def get_user_info(self, user_id: str) -> dict:
