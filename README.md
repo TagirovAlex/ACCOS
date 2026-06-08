@@ -561,6 +561,8 @@ npm test   # из корня проекта
 
 ---
 
+> **Полная инструкция по развёртыванию:** [`DEPLOYMENT.md`](DEPLOYMENT.md) (Windows, Debian, nginx, systemd, HTTPS, обслуживание)
+
 ## Быстрый старт
 
 ```powershell
