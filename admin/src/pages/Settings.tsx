@@ -51,8 +51,15 @@ function stripCategory(desc: string): string {
   return desc.replace(/^\[.+?\]\s*/, "");
 }
 
-function isBoolean(v: string): boolean {
+const BOOLEAN_KEYS = new Set(["require_ad_group_for_login", "ldap_enabled"]);
+
+function isBoolean(key: string, v: string): boolean {
+  if (!BOOLEAN_KEYS.has(key)) return false;
   return ["true", "false", "1", "0", "yes", "no"].includes(v.toLowerCase());
+}
+
+function isNumeric(key: string): boolean {
+  return /^(cost_|auto_accrual|default_start_balance|comfyui_poll_interval)/.test(key);
 }
 
 const FIELD_DISPLAY_NAMES: Record<string, string> = {
@@ -82,8 +89,9 @@ const FIELD_DISPLAY_NAMES: Record<string, string> = {
   cost_image_edit_qwen: "Стоимость редактирования (Qwen)",
   cost_video_gen: "Стоимость генерации видео",
   cost_video_img2video: "Стоимость image-to-video",
-  accrual_amount: "Сумма начисления",
-  accrual_interval_hours: "Интервал начисления (часы)",
+  auto_accrual_amount: "Сумма начисления (MS)",
+  auto_accrual_interval_minutes: "Интервал начисления (минуты)",
+  auto_accrual_time: "Время начисления (HH:MM, по серверу)",
 };
 
 const MASKED_KEYS = new Set(["ldap_bind_password", "llm_api_key"]);
@@ -101,13 +109,28 @@ function SettingField({
   const desc = stripCategory(setting.description);
   const helper = desc || setting.key;
 
-  if (isBoolean(value)) {
+  if (isBoolean(setting.key, value)) {
     const checked = ["true", "1", "yes"].includes(value.toLowerCase());
     return (
       <FormControlLabel
         control={<Switch checked={checked} onChange={(e) => onChange(setting.key, e.target.checked ? "true" : "false")} />}
         label={<><strong>{label}</strong><br /><Typography variant="caption" color="text.secondary">{helper}</Typography></>}
         sx={{ mb: 1 }}
+      />
+    );
+  }
+
+  if (isNumeric(setting.key)) {
+    return (
+      <MuiTextField
+        label={label}
+        helperText={helper}
+        value={value}
+        onChange={(e) => onChange(setting.key, e.target.value)}
+        fullWidth
+        type="number"
+        slotProps={{ htmlInput: { step: "any", min: 0 } }}
+        sx={{ mb: 2 }}
       />
     );
   }

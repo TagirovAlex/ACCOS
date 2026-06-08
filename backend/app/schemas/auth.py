@@ -20,6 +20,7 @@ class TokenResponse(BaseResponse):
     refresh_token: str = ""
     token_type: str = "bearer"
     is_admin: bool = False
+    admin_role: str = "none"
 
 
 class UserInfoResponse(BaseResponse):
@@ -30,6 +31,7 @@ class UserInfoResponse(BaseResponse):
     balance: float
     permissions: str = "chat"
     is_admin: bool
+    admin_role: str = "none"
     auth_source: str = "local"
     avatar_path: str | None = None
 

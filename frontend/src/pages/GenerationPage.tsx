@@ -17,11 +17,13 @@ import CropSquareIcon from "@mui/icons-material/CropSquare";
 import TuneIcon from "@mui/icons-material/Tune";
 import { api } from "../services/api";
 
-const WORKFLOWS = [
-  { value: "z_image", label: "Z-Image (текст → изображение)", needsRefs: false },
-  { value: "qwen_edit_1", label: "Qwen Edit (1 референс)", needsRefs: true, maxRefs: 1 },
-  { value: "qwen_edit_2", label: "Qwen Edit (2 референса)", needsRefs: true, maxRefs: 2 },
-  { value: "qwen_edit_3", label: "Qwen Edit (3 референса)", needsRefs: true, maxRefs: 3 },
+const ALL_WORKFLOWS = [
+  { value: "z_image", label: "Z-Image (текст → изображение)", needsRefs: false, mode: "generate" },
+  { value: "qwen_edit_1", label: "Qwen Edit (1 референс)", needsRefs: true, maxRefs: 1, mode: "edit" },
+  { value: "qwen_edit_2", label: "Qwen Edit (2 референса)", needsRefs: true, maxRefs: 2, mode: "edit" },
+  { value: "qwen_edit_3", label: "Qwen Edit (3 референса)", needsRefs: true, maxRefs: 3, mode: "edit" },
+  { value: "text_to_video", label: "Текст → Видео", needsRefs: false, mode: "video" },
+  { value: "image_to_video", label: "Изображение → Видео", needsRefs: true, maxRefs: 1, mode: "video" },
 ];
 
 const RESOLUTION_PRESETS = [
@@ -60,10 +62,23 @@ interface HistoryItem {
   images: ImageAsset[];
 }
 
-export const GenerationPage = ({ viewHistory: forceHistory }: { viewHistory?: boolean }) => {
+const MODE_TITLES: Record<string, string> = {
+  generate: "Генерация",
+  edit: "Редактирование",
+  video: "Видео",
+};
+
+const MODE_DEFAULT_WORKFLOW: Record<string, string> = {
+  generate: "z_image",
+  edit: "qwen_edit_1",
+  video: "text_to_video",
+};
+
+export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }: { mode?: string; viewHistory?: boolean }) => {
   const [searchParams] = useSearchParams();
   const [viewHistory, setViewHistory] = useState(forceHistory || searchParams.get("view") === "history");
-  const [workflow, setWorkflow] = useState("z_image");
+  const WORKFLOWS = ALL_WORKFLOWS.filter(w => w.mode === mode || mode === "all");
+  const [workflow, setWorkflow] = useState(MODE_DEFAULT_WORKFLOW[mode] || "z_image");
   const [prompt, setPrompt] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
@@ -286,12 +301,12 @@ export const GenerationPage = ({ viewHistory: forceHistory }: { viewHistory?: bo
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={700} mb={3}>Генерация</Typography>
+      <Typography variant="h5" fontWeight={700} mb={3}>{MODE_TITLES[mode] || "Генерация"}</Typography>
 
       {viewHistory && (
         <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
           <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={() => setViewHistory(false)}>
-            Новая генерация
+            {MODE_TITLES[mode] || "Новая генерация"}
           </Button>
         </Box>
       )}
@@ -303,7 +318,7 @@ export const GenerationPage = ({ viewHistory: forceHistory }: { viewHistory?: bo
             <CardContent>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
                 <AutoAwesomeIcon color="primary" />
-                <Typography variant="h6" fontWeight={600}>Новая генерация</Typography>
+                <Typography variant="h6" fontWeight={600}>Новая {MODE_TITLES[mode]?.toLowerCase() || "генерация"}</Typography>
               </Box>
               <TextField select label="Workflow" fullWidth value={workflow} onChange={e => { setWorkflow(e.target.value); setFiles([]); setPreviewUrls([]); }} margin="normal">
                 {WORKFLOWS.map(w => <MenuItem key={w.value} value={w.value}>{w.label}</MenuItem>)}

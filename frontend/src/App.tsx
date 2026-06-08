@@ -4,6 +4,8 @@ import { ThemeProvider, CssBaseline, createTheme, AppBar, Toolbar, Typography, B
 import HomeIcon from "@mui/icons-material/Home";
 import ChatIcon from "@mui/icons-material/Chat";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import EditIcon from "@mui/icons-material/Edit";
+import MovieIcon from "@mui/icons-material/Movie";
 import HistoryIcon from "@mui/icons-material/History";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
@@ -26,13 +28,17 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
   const theme = useMemo(() => createTheme(darkMode ? darkTheme : lightTheme), [darkMode]);
 
   const canGenerate = user.permissions?.includes("generate");
+  const canEdit = user.permissions?.includes("edit");
+  const canVideo = user.permissions?.includes("video");
   const canChat = user.permissions?.includes("chat");
 
   const navItems = [
     { path: "/", label: "Дашборд", icon: <HomeIcon /> },
     ...(canChat ? [{ path: "/chat", label: "Чат", icon: <ChatIcon /> }] : []),
-    ...(canGenerate ? [{ path: "/generate", label: "Новая генерация", icon: <AutoAwesomeIcon /> }] : []),
-    ...(canGenerate ? [{ path: "/history", label: "История", icon: <HistoryIcon /> }] : []),
+    ...(canGenerate ? [{ path: "/generate", label: "Генерация", icon: <AutoAwesomeIcon /> }] : []),
+    ...(canEdit ? [{ path: "/edit", label: "Редактирование", icon: <EditIcon /> }] : []),
+    ...(canVideo ? [{ path: "/video", label: "Видео", icon: <MovieIcon /> }] : []),
+    ...(canGenerate || canEdit || canVideo ? [{ path: "/history", label: "История", icon: <HistoryIcon /> }] : []),
     { path: "/profile", label: "Профиль", icon: <SettingsIcon /> },
   ];
 
@@ -82,8 +88,10 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
           <Routes>
             <Route path="/" element={<ErrorBoundary><DashboardPage user={user} /></ErrorBoundary>} />
             <Route path="/chat" element={<ErrorBoundary><ChatPage user={user} /></ErrorBoundary>} />
-            <Route path="/generate" element={<ErrorBoundary><GenerationPage /></ErrorBoundary>} />
-            <Route path="/history" element={<ErrorBoundary><GenerationPage viewHistory /></ErrorBoundary>} />
+            <Route path="/generate" element={<ErrorBoundary><GenerationPage mode="generate" /></ErrorBoundary>} />
+            <Route path="/edit" element={<ErrorBoundary><GenerationPage mode="edit" /></ErrorBoundary>} />
+            <Route path="/video" element={<ErrorBoundary><GenerationPage mode="video" /></ErrorBoundary>} />
+            <Route path="/history" element={<ErrorBoundary><GenerationPage mode="all" viewHistory /></ErrorBoundary>} />
             <Route path="/profile" element={<ErrorBoundary><ProfilePage user={user} /></ErrorBoundary>} />
           </Routes>
         </Box>

@@ -6,18 +6,21 @@ type AuthResult = {
   access_token?: string;
   error?: string;
   is_admin?: boolean;
+  admin_role?: string;
 };
 
 export const authProvider: AuthProvider = {
   async login({ username, password }) {
     const result = await apiRequest<AuthResult>("POST", "/auth/login", { username, password });
     if (result.success && result.access_token) {
-      if (!result.is_admin) {
+      const role = result.admin_role || (result.is_admin ? "super_admin" : "none");
+      if (role === "none") {
         throw new Error("Требуются права администратора");
       }
       setToken(result.access_token);
       localStorage.setItem("token", result.access_token);
       localStorage.setItem("username", username);
+      localStorage.setItem("admin_role", role);
     } else {
       throw new Error(result.error || "Login failed");
     }
@@ -44,7 +47,8 @@ export const authProvider: AuthProvider = {
     setToken(token);
     try {
       const result = await apiRequest<AuthResult>("GET", "/auth/me");
-      return result.is_admin ? "admin" : "user";
+      if (result.admin_role) localStorage.setItem("admin_role", result.admin_role);
+      return result.admin_role || (result.is_admin ? "super_admin" : "user");
     } catch {
       return undefined;
     }

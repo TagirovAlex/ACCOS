@@ -39,7 +39,10 @@ class AdminService:
                 "group_id": str(user.group_id) if user.group_id else None,
                 "auth_source": user.auth_source,
                 "is_active": user.is_active,
-                "is_admin": user.is_admin, "created_at": user.created_at,
+                "is_admin": user.is_admin,
+                "admin_role": user.admin_role,
+                "admin_group_id": str(user.admin_group_id) if user.admin_group_id else None,
+                "created_at": user.created_at,
                 "avatar_path": user.avatar_path, "last_login": user.last_login,
             }
         except Exception:
@@ -52,11 +55,11 @@ class AdminService:
                 return {"success": False, "error": "User not found"}
             if user.auth_source == "ldap" and "password" in data and data["password"]:
                 return {"success": False, "error": "Нельзя сменить пароль доменного пользователя"}
-            allowed = {"balance", "permissions", "is_active", "is_admin", "full_name", "group_id"}
+            allowed = {"balance", "permissions", "is_active", "is_admin", "admin_role", "admin_group_id", "full_name", "group_id"}
             update_data = {}
             for k, v in data.items():
                 if k in allowed and v is not None:
-                    if k == "group_id":
+                    if k in ("group_id", "admin_group_id"):
                         update_data[k] = UUID(v) if v else None
                     else:
                         update_data[k] = v
@@ -83,6 +86,7 @@ class AdminService:
                 auth_source="local",
                 group_id=UUID(data["group_id"]) if data.get("group_id") else None,
                 is_admin=data.get("is_admin", False),
+                admin_role=data.get("admin_role", "none"),
                 is_active=data.get("is_active", True),
             )
             return {
@@ -98,6 +102,7 @@ class AdminService:
                     "auth_source": user.auth_source or "local",
                     "is_active": user.is_active,
                     "is_admin": user.is_admin,
+                    "admin_role": user.admin_role,
                     "created_at": user.created_at,
                 },
             }
@@ -138,7 +143,10 @@ class AdminService:
                     "group_id": str(u.group_id) if u.group_id else None,
                     "auth_source": u.auth_source,
                     "is_active": u.is_active,
-                    "is_admin": u.is_admin, "created_at": u.created_at,
+                    "is_admin": u.is_admin,
+                    "admin_role": u.admin_role,
+                    "admin_group_id": str(u.admin_group_id) if u.admin_group_id else None,
+                    "created_at": u.created_at,
                     "avatar_path": u.avatar_path, "last_login": u.last_login,
                 }
                 for u in users

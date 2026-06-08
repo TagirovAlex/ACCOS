@@ -22,6 +22,7 @@ async def login(request: Request, login_req: LoginRequest, db: AsyncSession = De
         refresh_token=result.get("refresh_token", ""),
         token_type=result["token_type"],
         is_admin=result.get("user", {}).get("is_admin", False),
+        admin_role=result.get("user", {}).get("admin_role", "none"),
     )
 
 

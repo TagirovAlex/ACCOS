@@ -13,10 +13,20 @@ class GenerationRepository(BaseRepository[GenerationRecord]):
     def __init__(self, session: AsyncSession):
         super().__init__(session, GenerationRecord)
 
-    async def get_user_generations(self, user_id: UUID, skip: int = 0, limit: int = 50) -> list[GenerationRecord]:
+    async def get_user_generations(self, user_id: UUID, skip: int = 0, limit: int = 50, workflow_type: str | None = None) -> list[GenerationRecord]:
+        stmt = select(GenerationRecord).where(
+            GenerationRecord.user_id == user_id,
+            GenerationRecord.deleted_at.is_(None),
+        )
+        if workflow_type:
+            if workflow_type == "generate":
+                stmt = stmt.where(GenerationRecord.workflow_type == "z_image")
+            elif workflow_type == "edit":
+                stmt = stmt.where(GenerationRecord.workflow_type.startswith("qwen_edit"))
+            elif workflow_type == "video":
+                stmt = stmt.where(GenerationRecord.workflow_type.in_(["text_to_video", "image_to_video"]))
         result = await self.session.execute(
-            select(GenerationRecord)
-            .where(GenerationRecord.user_id == user_id, GenerationRecord.deleted_at.is_(None))
+            stmt
             .options(selectinload(GenerationRecord.assets))
             .order_by(desc(GenerationRecord.created_at))
             .offset(skip)

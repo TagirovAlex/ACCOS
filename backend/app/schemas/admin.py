@@ -19,6 +19,8 @@ class AdminUserResponse(BaseModel):
     auth_source: str = "local"
     is_active: bool
     is_admin: bool
+    admin_role: str = "none"
+    admin_group_id: str | None = None
     created_at: datetime
     avatar_path: str | None = None
     last_login: datetime | None = None
@@ -34,6 +36,8 @@ class AdminUserUpdate(BaseModel):
     group_id: str | None = None
     is_active: bool | None = None
     is_admin: bool | None = None
+    admin_role: str | None = None
+    admin_group_id: str | None = None
     full_name: str | None = None
     password: str | None = None
 
@@ -46,6 +50,7 @@ class AdminUserCreate(BaseModel):
     permissions: str = "chat"
     group_id: str | None = None
     is_admin: bool = False
+    admin_role: str = "none"
     is_active: bool = True
 
 

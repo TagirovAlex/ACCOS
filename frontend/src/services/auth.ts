@@ -8,6 +8,7 @@ export type User = {
   balance: number;
   permissions: string;
   is_admin: boolean;
+  admin_role?: string;
   auth_source?: string;
   avatar_path?: string | null;
 };

@@ -39,14 +39,21 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 async def _require_admin(user_id: str = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
     user = await UserRepository(db).get(UUID(user_id))
-    if not user or not user.is_admin:
+    if not user or user.admin_role not in ("super_admin", "group_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user_id
+
+
+async def _require_super_admin(user_id: str = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
+    user = await UserRepository(db).get(UUID(user_id))
+    if not user or user.admin_role != "super_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
     return user_id
 
 
 @router.get("/dashboard")
 async def get_dashboard_stats(
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -55,7 +62,7 @@ async def get_dashboard_stats(
 
 @router.get("/dashboard/activity")
 async def get_dashboard_activity(
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -129,7 +136,7 @@ async def delete_user(
 @router.delete("/groups/{group_id}", response_model=BaseResponse)
 async def delete_group(
     group_id: str,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -150,7 +157,7 @@ async def adjust_balance(
 async def list_groups(
     skip: int = 0,
     limit: int = 100,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -160,7 +167,7 @@ async def list_groups(
 @router.get("/groups/{group_id}", response_model=AdminGroupResponse)
 async def get_group(
     group_id: str,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -173,7 +180,7 @@ async def get_group(
 @router.post("/groups", response_model=BaseResponse)
 async def create_group(
     request: AdminGroupCreate,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -188,7 +195,7 @@ async def create_group(
 async def update_group(
     group_id: str,
     request: AdminGroupUpdate,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -203,7 +210,7 @@ async def update_group(
 async def list_chats(
     skip: int = 0,
     limit: int = 100,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -213,7 +220,7 @@ async def list_chats(
 @router.get("/chats/{chat_id}", response_model=AdminChatDetailResponse)
 async def get_chat_detail(
     chat_id: str,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -226,7 +233,7 @@ async def get_chat_detail(
 @router.delete("/chats/{chat_id}", response_model=BaseResponse)
 async def delete_chat(
     chat_id: str,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -240,7 +247,7 @@ async def delete_chat(
 async def list_generations(
     skip: int = 0,
     limit: int = 100,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -250,7 +257,7 @@ async def list_generations(
 @router.get("/generations/{gen_id}", response_model=AdminGenerationDetailResponse)
 async def get_generation_detail(
     gen_id: str,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -263,7 +270,7 @@ async def get_generation_detail(
 @router.delete("/generations/{gen_id}", response_model=BaseResponse)
 async def delete_generation(
     gen_id: str,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -277,7 +284,7 @@ async def delete_generation(
 async def list_assets(
     skip: int = 0,
     limit: int = 100,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -287,7 +294,7 @@ async def list_assets(
 @router.get("/assets/{asset_id}")
 async def get_asset_detail(
     asset_id: str,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -299,7 +306,7 @@ async def get_asset_detail(
 
 @router.get("/settings", response_model=AdminSettingListResponse)
 async def get_settings(
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -309,7 +316,7 @@ async def get_settings(
 @router.post("/settings", response_model=BaseResponse)
 async def create_setting(
     request: AdminSettingCreate,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -320,7 +327,7 @@ async def create_setting(
 async def update_setting(
     key: str,
     request: AdminSettingUpdate,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -330,7 +337,7 @@ async def update_setting(
 @router.delete("/settings/{key}", response_model=BaseResponse)
 async def delete_setting(
     key: str,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -339,7 +346,7 @@ async def delete_setting(
 
 @router.get("/backups", response_model=BackupListResponse)
 async def list_backups(
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = BackupService()
@@ -349,7 +356,7 @@ async def list_backups(
 
 @router.post("/backups", response_model=BackupCreateResponse)
 async def create_backup(
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = BackupService()
@@ -360,7 +367,7 @@ async def create_backup(
 @router.delete("/backups/{filename}", response_model=BaseResponse)
 async def delete_backup(
     filename: str,
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = BackupService()
@@ -371,7 +378,7 @@ async def delete_backup(
 @router.get("/ldap-groups", response_model=LdapGroupListResponse)
 async def list_ldap_groups(
     search: str = "",
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     sr = SettingsRepository(db)
@@ -399,7 +406,7 @@ async def list_ldap_groups(
 
 @router.get("/ldap-test", response_model=LdapTestResponse)
 async def test_ldap_connection(
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     sr = SettingsRepository(db)

@@ -1,8 +1,9 @@
 import logging
 import uuid
 from pathlib import Path
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException, status
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,8 +14,18 @@ from app.schemas.generation import (
     GenerationStatusResponse, UploadResponse, BaseResponse,
 )
 from app.services.comfyui_service import ComfyUIService
+from app.repositories.user_repository import UserRepository
 
 router = APIRouter(prefix="/generate", tags=["generation"])
+
+WORKFLOW_PERMISSION = {
+    "z_image": "generate",
+    "qwen_edit_1": "edit",
+    "qwen_edit_2": "edit",
+    "qwen_edit_3": "edit",
+    "text_to_video": "video",
+    "image_to_video": "video",
+}
 
 UPLOAD_DIR = Path(__file__).parent.parent.parent.parent.parent / "static" / "uploads"
 
@@ -66,6 +77,11 @@ async def generate(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
+    required = WORKFLOW_PERMISSION.get(body.workflow_type, "generate")
+    user = await UserRepository(db).get(UUID(user_id))
+    if user and required not in user.permissions:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail=f"Требуется право '{required}' для этого типа генерации")
     service = ComfyUIService(db)
     result = await service.enqueue_generation(
         user_id,
@@ -97,11 +113,12 @@ async def get_generation_status(
 @rate_limit("30/minute")
 async def get_history(
     request: Request,
+    workflow_type: str | None = None,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     service = ComfyUIService(db)
-    result = await service.get_history(user_id)
+    result = await service.get_history(user_id, workflow_type)
     return HistoryResponse(**result)
 
 

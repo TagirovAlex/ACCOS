@@ -62,13 +62,21 @@ const App = () => (
     darkTheme={darkTheme}
     requireAuth
   >
-    <Resource name="users" options={{ label: "👥 Пользователи" }} list={UserList} edit={UserEdit} create={UserCreate} show={UserShow} />
-    <Resource name="groups" options={{ label: "🔐 Группы доступа" }} list={GroupList} edit={GroupEdit} create={GroupCreate} />
-    <Resource name="chats" options={{ label: "💬 Чаты" }} list={ChatList} show={ChatShow} />
-    <Resource name="generations" options={{ label: "🎨 Генерации" }} list={GenerationList} show={GenerationShow} />
-    <Resource name="assets" options={{ label: "🖼 Ресурсы" }} list={AssetList} show={AssetShow} />
-    <Resource name="settings" options={{ label: "⚙ Настройки" }} list={SettingsList} edit={SettingsEdit} create={SettingsCreate} />
-    <Resource name="backups" options={{ label: "📦 Бэкапы" }} list={BackupList} />
+    {(permissions: string) => {
+      const adminRole = localStorage.getItem("admin_role") || (permissions === "admin" ? "super_admin" : "none");
+      const isSuperAdmin = adminRole === "super_admin";
+      return (
+        <>
+          <Resource name="users" options={{ label: "👥 Пользователи" }} list={UserList} edit={UserEdit} create={UserCreate} show={UserShow} />
+          {isSuperAdmin && <Resource name="groups" options={{ label: "🔐 Группы доступа" }} list={GroupList} edit={GroupEdit} create={GroupCreate} />}
+          {isSuperAdmin && <Resource name="chats" options={{ label: "💬 Чаты" }} list={ChatList} show={ChatShow} />}
+          {isSuperAdmin && <Resource name="generations" options={{ label: "🎨 Генерации" }} list={GenerationList} show={GenerationShow} />}
+          {isSuperAdmin && <Resource name="assets" options={{ label: "🖼 Ресурсы" }} list={AssetList} show={AssetShow} />}
+          {isSuperAdmin && <Resource name="settings" options={{ label: "⚙ Настройки" }} list={SettingsList} edit={SettingsEdit} create={SettingsCreate} />}
+          {isSuperAdmin && <Resource name="backups" options={{ label: "📦 Бэкапы" }} list={BackupList} />}
+        </>
+      );
+    }}
   </Admin>
 );
 

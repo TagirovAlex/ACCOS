@@ -114,6 +114,7 @@ class AuthService:
                 balance=start_balance,
                 permissions=permissions,
                 is_admin=is_admin,
+                admin_role="super_admin" if is_admin else "none",
                 auth_source="ldap" if is_ldap else "local",
                 avatar_path=avatar_path,
                 group_id=UUID(group_id) if group_id else None,
@@ -126,9 +127,13 @@ class AuthService:
             if avatar_path:
                 await self.user_repo.update(user.id, avatar_path=avatar_path)
                 user.avatar_path = avatar_path
-            if username == settings.admin_username and not user.is_admin:
-                await self.user_repo.update(user.id, is_admin=True)
-                user.is_admin = True
+            if username == settings.admin_username:
+                if not user.is_admin:
+                    await self.user_repo.update(user.id, is_admin=True)
+                    user.is_admin = True
+                if user.admin_role != "super_admin":
+                    await self.user_repo.update(user.id, admin_role="super_admin")
+                    user.admin_role = "super_admin"
         from datetime import datetime, timezone
         await self.user_repo.update(user.id, last_login=datetime.now(timezone.utc))
         access = create_access_token(subject=str(user.id))
@@ -146,6 +151,7 @@ class AuthService:
                 "balance": user.balance,
                 "permissions": user.permissions,
                 "is_admin": user.is_admin,
+                "admin_role": user.admin_role,
                 "auth_source": "ldap",
             },
         }
@@ -201,6 +207,7 @@ class AuthService:
             "balance": user.balance,
             "permissions": user.permissions,
             "is_admin": user.is_admin,
+            "admin_role": user.admin_role,
             "auth_source": user.auth_source,
             "avatar_path": user.avatar_path,
         }
