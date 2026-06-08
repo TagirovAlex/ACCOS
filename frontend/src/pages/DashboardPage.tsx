@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { Box, Card, CardContent, Typography, Grid, Chip, Button, Skeleton, Avatar } from "@mui/material";
+import { Box, Card, CardContent, Typography, Grid, Chip, Button, Skeleton, Avatar, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import PersonIcon from "@mui/icons-material/Person";
 import LockIcon from "@mui/icons-material/Lock";
 import ChatIcon from "@mui/icons-material/Chat";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import GridViewIcon from "@mui/icons-material/GridView";
 import type { User } from "../services/auth";
 import { api } from "../services/api";
 
@@ -34,6 +36,7 @@ export const DashboardPage = ({ user }: Props) => {
   const navigate = useNavigate();
   const [generations, setGenerations] = useState<HistoryGen[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "tiles">("list");
 
   useEffect(() => {
     api("GET", "/generate/history").then((res: any) => {
@@ -102,7 +105,17 @@ export const DashboardPage = ({ user }: Props) => {
 
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="h6" fontWeight={600}>История генераций</Typography>
-        <Button size="small" onClick={() => navigate("/history")} endIcon={<AutoAwesomeIcon />}>Все генерации</Button>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+          <ToggleButtonGroup value={viewMode} exclusive size="small" onChange={(_, v) => v && setViewMode(v)}>
+            <ToggleButton value="list" sx={{ px: 1, py: 0.25, textTransform: "none" }}>
+              <ViewListIcon fontSize="small" />
+            </ToggleButton>
+            <ToggleButton value="tiles" sx={{ px: 1, py: 0.25, textTransform: "none" }}>
+              <GridViewIcon fontSize="small" />
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Button size="small" onClick={() => navigate("/history")} endIcon={<AutoAwesomeIcon />}>Все генерации</Button>
+        </Box>
       </Box>
 
       {!loaded ? (
@@ -126,7 +139,7 @@ export const DashboardPage = ({ user }: Props) => {
             <Button variant="outlined" size="small" sx={{ mt: 2 }} onClick={() => navigate("/generate")}>Создать первую</Button>
           </CardContent>
         </Card>
-      ) : (
+      ) : viewMode === "list" ? (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           {generations.map(g => {
             const thumbnail = g.images?.[0];
@@ -150,6 +163,33 @@ export const DashboardPage = ({ user }: Props) => {
                       <Typography variant="caption" color="text.secondary">{g.cost} кр.</Typography>
                       <Typography variant="caption" color="text.secondary">{new Date(g.created_at).toLocaleString()}</Typography>
                     </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Box>
+      ) : (
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 2 }}>
+          {generations.map(g => {
+            const thumbnail = g.images?.[0];
+            return (
+              <Card key={g.id} sx={{ cursor: "pointer" }} onClick={() => navigate("/generate")}>
+                {thumbnail ? (
+                  <Box sx={{ width: "100%", height: 140, overflow: "hidden" }}>
+                    <img src={`/${thumbnail.file_path}`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  </Box>
+                ) : (
+                  <Box sx={{ width: "100%", height: 140, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
+                    <AutoAwesomeIcon sx={{ fontSize: 40, color: "text.disabled" }} />
+                  </Box>
+                )}
+                <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
+                  <Typography variant="body2" fontWeight={600} noWrap gutterBottom>{g.workflow_type}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{g.prompt}</Typography>
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                    <Chip label={statusLabels[g.status] || g.status} size="small" color={g.status === "completed" ? "success" : g.status === "failed" ? "error" : "default"} />
+                    <Typography variant="caption" color="text.secondary">{g.cost} кр.</Typography>
                   </Box>
                 </CardContent>
               </Card>

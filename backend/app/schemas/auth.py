@@ -30,6 +30,8 @@ class UserInfoResponse(BaseResponse):
     balance: float
     permissions: str = "chat"
     is_admin: bool
+    auth_source: str = "local"
+    avatar_path: str | None = None
 
 
 class BalanceResponse(BaseResponse):

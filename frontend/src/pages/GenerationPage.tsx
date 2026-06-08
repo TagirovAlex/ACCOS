@@ -431,12 +431,25 @@ export const GenerationPage = ({ viewHistory: forceHistory }: { viewHistory?: bo
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
                   {history.map((g: HistoryItem) => (
                     <Box key={g.id} onClick={() => setSelectedHistory(g)}
-                      sx={{ p: 1.5, bgcolor: "action.hover", borderRadius: 2, cursor: "pointer", "&:hover": { bgcolor: "action.selected" } }}>
-                      <Typography variant="body2" fontWeight={600} noWrap>{g.workflow_type}</Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{g.prompt}</Typography>
-                      <Box sx={{ display: "flex", gap: 1 }}>
-                        <Chip label={statusLabels[g.status] || g.status} size="small" color={g.status === "completed" ? "success" : g.status === "failed" ? "error" : "default"} />
-                        <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>{g.cost} кр.</Typography>
+                      sx={{ display: "flex", gap: 1.5, p: 1.5, bgcolor: "action.hover", borderRadius: 2, cursor: "pointer", "&:hover": { bgcolor: "action.selected" } }}>
+                      {g.images?.[0] ? (
+                        <Box sx={{ width: 56, height: 56, flexShrink: 0, borderRadius: 1.5, overflow: "hidden", bgcolor: "background.paper" }}>
+                          <img src={`/${g.images[0].file_path}`} alt=""
+                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                            onError={(e: any) => { e.target.style.display = "none"; }} />
+                        </Box>
+                      ) : (
+                        <Box sx={{ width: 56, height: 56, flexShrink: 0, borderRadius: 1.5, bgcolor: "background.paper", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <AutoAwesomeIcon sx={{ fontSize: 20, color: "text.disabled" }} />
+                        </Box>
+                      )}
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" fontWeight={600} noWrap>{g.workflow_type}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{g.prompt}</Typography>
+                        <Box sx={{ display: "flex", gap: 1 }}>
+                          <Chip label={statusLabels[g.status] || g.status} size="small" color={g.status === "completed" ? "success" : g.status === "failed" ? "error" : "default"} />
+                          <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>{g.cost} кр.</Typography>
+                        </Box>
                       </Box>
                     </Box>
                   ))}
