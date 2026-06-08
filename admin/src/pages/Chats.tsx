@@ -12,10 +12,10 @@ const MessagesList = () => {
       <Box sx={{ maxHeight: 400, overflow: "auto", display: "flex", flexDirection: "column", gap: 1, mt: 1 }}>
       {record.messages.map((m: any) => (
         <Box key={m.id} sx={{ textAlign: m.role === "user" ? "right" : "left" }}>
-          <Paper sx={{ display: "inline-block", p: 1, maxWidth: "80%", bgcolor: m.role === "user" ? "primary.light" : "grey.100", color: m.role === "user" ? "primary.contrastText" : "text.primary" }}>
+          <Paper sx={{ display: "inline-block", p: 1, maxWidth: "80%", bgcolor: (t) => m.role === "user" ? t.palette.primary.dark : t.palette.grey[t.palette.mode === "dark" ? 800 : 100], color: m.role === "user" ? "primary.contrastText" : "text.primary" }}>
             <Typography variant="caption" fontWeight={600}>{m.role === "user" ? "Пользователь" : "Ассистент"}</Typography>
             <Typography variant="body2" sx={{ mt: 0.25, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</Typography>
-            {m.cost != null && <Typography variant="caption" color="text.secondary">{m.cost} кр.</Typography>}
+            {m.cost != null && <Typography variant="caption" color="text.secondary">{m.cost} MS</Typography>}
           </Paper>
         </Box>
       ))}

@@ -1,7 +1,8 @@
+import logging
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request, UploadFile, File
+from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,16 +19,23 @@ UPLOAD_DIR = Path(__file__).parent.parent.parent.parent.parent / "static" / "upl
 MAX_IMAGE_DIM = 2048
 
 
+logger = logging.getLogger(__name__)
+
+
 def _resize_if_needed(file_path: Path) -> Path:
-    img = Image.open(file_path)
-    w, h = img.size
-    if w > MAX_IMAGE_DIM or h > MAX_IMAGE_DIM:
-        ratio = MAX_IMAGE_DIM / max(w, h)
-        new_size = (int(w * ratio), int(h * ratio))
-        img = img.resize(new_size, Image.LANCZOS)
-        rgb = img.convert("RGB") if img.mode in ("RGBA", "P") else img
-        rgb.save(file_path, quality=95)
-    return file_path
+    try:
+        img = Image.open(file_path)
+        w, h = img.size
+        if w > MAX_IMAGE_DIM or h > MAX_IMAGE_DIM:
+            ratio = MAX_IMAGE_DIM / max(w, h)
+            new_size = (int(w * ratio), int(h * ratio))
+            img = img.resize(new_size, Image.LANCZOS)
+            rgb = img.convert("RGB") if img.mode in ("RGBA", "P") else img
+            rgb.save(file_path, quality=95)
+        return file_path
+    except Exception as e:
+        logger.error(f"Image resize failed: {e}")
+        return file_path
 
 
 @router.post("/upload", response_model=UploadResponse)

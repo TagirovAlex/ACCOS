@@ -12,6 +12,11 @@ class ChatCreateRequest(BaseModel):
     system_prompt: str | None = None
 
 
+class ChatUpdateRequest(BaseModel):
+    title: str | None = None
+    system_prompt: str | None = None
+
+
 class ChatSendRequest(BaseModel):
     message: str
 
@@ -19,6 +24,7 @@ class ChatSendRequest(BaseModel):
 class ChatSessionResponse(BaseModel):
     id: str
     title: str
+    system_prompt: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -43,7 +49,7 @@ class ChatHistoryResponse(BaseResponse):
 
 
 class ChatSendResponse(BaseResponse):
-    message: str
-    tokens_input: int
-    tokens_output: int
-    cost: float
+    message: str = ""
+    tokens_input: int = 0
+    tokens_output: int = 0
+    cost: float = 0.0

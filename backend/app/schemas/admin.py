@@ -15,6 +15,7 @@ class AdminUserResponse(BaseModel):
     full_name: str | None = None
     balance: float
     permissions: str
+    group_id: str | None = None
     is_active: bool
     is_admin: bool
     created_at: datetime
@@ -27,6 +28,7 @@ class AdminUserListResponse(BaseResponse):
 class AdminUserUpdate(BaseModel):
     balance: float | None = None
     permissions: str | None = None
+    group_id: str | None = None
     is_active: bool | None = None
     is_admin: bool | None = None
     full_name: str | None = None
@@ -39,6 +41,7 @@ class AdminUserCreate(BaseModel):
     password: str = ""
     balance: float = 100.0
     permissions: str = "chat"
+    group_id: str | None = None
     is_admin: bool = False
     is_active: bool = True
 
@@ -191,3 +194,29 @@ class AdminAssetResponse(BaseModel):
 
 class AdminAssetListResponse(BaseResponse):
     assets: list[AdminAssetResponse] = []
+
+
+class BackupItem(BaseModel):
+    filename: str
+    size_bytes: int
+    created_at: str
+
+
+class BackupListResponse(BaseResponse):
+    backups: list[BackupItem] = []
+
+
+class BackupCreateResponse(BaseResponse):
+    filename: str = ""
+    size_bytes: int = 0
+    created_at: str = ""
+
+
+class LdapGroupItem(BaseModel):
+    dn: str
+    cn: str
+    description: str = ""
+
+
+class LdapGroupListResponse(BaseResponse):
+    groups: list[LdapGroupItem] = []

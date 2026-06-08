@@ -8,4 +8,5 @@ export const lightTheme = {
     secondary: { main: "#dc004e" },
     background: { default: "#f5f5f5", paper: "#ffffff" },
   },
+  typography: { fontFamily: 'Arial, Helvetica, sans-serif' },
 };

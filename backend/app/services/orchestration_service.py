@@ -1,4 +1,6 @@
+import json
 import logging
+from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +9,9 @@ from app.repositories.generation_repository import GenerationRepository
 from app.services.economy_service import EconomyService
 
 logger = logging.getLogger(__name__)
+
+
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 class OrchestrationService:
@@ -23,10 +28,12 @@ class OrchestrationService:
         if str(gen.user_id) != user_id:
             return {"success": False, "error": "Access denied"}
 
-        cost = self.economy.calculate_cost("image_edit", width=gen.width or 1024, height=gen.height or 1024)
+        cost = await self.economy.calculate_cost("image_edit", width=gen.width or 1024, height=gen.height or 1024)
         deduct = await self.economy.deduct_balance(user_id, cost)
         if not deduct["success"]:
             return {"success": False, "error": deduct.get("error", "Insufficient balance")}
+
+        ref_json = json.dumps(reference_images or [])
 
         record = await self.generation_repo.create(
             user_id=uid,
@@ -36,6 +43,7 @@ class OrchestrationService:
             height=gen.height,
             cost=cost,
             status="queued",
+            result_path=ref_json,
         )
 
         await self.session.flush()
@@ -54,10 +62,13 @@ class OrchestrationService:
         if not assets:
             return {"success": False, "error": "No source images found"}
 
-        cost = self.economy.calculate_cost("video_gen", resolution=(gen.width or 1024) * (gen.height or 1024), duration=duration)
+        cost = await self.economy.calculate_cost("video_gen", resolution=(gen.width or 1024) * (gen.height or 1024), duration=duration)
         deduct = await self.economy.deduct_balance(user_id, cost)
         if not deduct["success"]:
             return {"success": False, "error": deduct.get("error", "Insufficient balance")}
+
+        source_paths = [str(PROJECT_ROOT / a.file_path) for a in assets if a.file_path]
+        ref_json = json.dumps(source_paths)
 
         record = await self.generation_repo.create(
             user_id=uid,
@@ -68,6 +79,7 @@ class OrchestrationService:
             duration=duration,
             cost=cost,
             status="queued",
+            result_path=ref_json,
         )
 
         await self.session.flush()

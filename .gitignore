@@ -41,3 +41,6 @@ static/generated/
 # Database
 *.db
 *.sqlite3
+
+# Backups
+backups/

@@ -5,6 +5,7 @@ from app.core.dependencies import get_db, get_current_user_id
 from app.core.rate_limit import rate_limit
 from app.schemas.chat import (
     ChatCreateRequest,
+    ChatUpdateRequest,
     ChatSendRequest,
     ChatListResponse,
     ChatHistoryResponse,
@@ -50,8 +51,22 @@ async def get_chat(
     db: AsyncSession = Depends(get_db),
 ):
     service = ChatService(db)
-    result = await service.get_history(session_id)
+    result = await service.get_history(session_id, user_id=user_id)
     return ChatHistoryResponse(**result)
+
+
+@router.patch("/{session_id}", response_model=ChatSessionResponse)
+@rate_limit("30/minute")
+async def update_chat(
+    request: Request,
+    session_id: str,
+    body: ChatUpdateRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ChatService(db)
+    result = await service.update_chat(user_id, session_id, body.title, body.system_prompt)
+    return ChatSessionResponse(**result["chat"])
 
 
 @router.post("/{session_id}/send", response_model=ChatSendResponse)

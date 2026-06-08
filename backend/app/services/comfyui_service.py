@@ -20,11 +20,11 @@ class ComfyUIService:
     async def enqueue_generation(self, user_id: str, workflow_type: str, prompt: str, width: int = 1024, height: int = 1024, duration: int = 5, reference_images: list[str] | None = None) -> dict:
         uid = UUID(user_id)
 
-        cost = self.economy.calculate_cost("image_gen", width=width, height=height)
+        cost = await self.economy.calculate_cost("image_gen", width=width, height=height)
         if workflow_type.startswith("qwen"):
-            cost = self.economy.calculate_cost("image_edit", width=width, height=height, avg_ref_size=width)
+            cost = await self.economy.calculate_cost("image_edit", width=width, height=height, avg_ref_size=width)
         if workflow_type in ("text_to_video", "image_to_video"):
-            cost = self.economy.calculate_cost("video_gen", resolution=width * height, duration=duration)
+            cost = await self.economy.calculate_cost("video_gen", resolution=width * height, duration=duration)
 
         deduct = await self.economy.deduct_balance(user_id, cost)
         if not deduct["success"]:

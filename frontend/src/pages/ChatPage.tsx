@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef } from "react";
-import { Box, TextField, Button, Typography, Paper, List, ListItem, ListItemText, Divider, IconButton, Alert, Snackbar, CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
+import { Box, TextField, Button, Typography, Paper, List, ListItem, ListItemText, Divider, IconButton, Alert, Snackbar, CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Avatar, Chip } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import SettingsIcon from "@mui/icons-material/Settings";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
+import PersonIcon from "@mui/icons-material/Person";
 import { api } from "../services/api";
 import { SimpleMarkdown } from "../components/SimpleMarkdown";
 
 interface Chat {
   id: string;
   title: string;
+  system_prompt?: string;
 }
 
 interface Message {
@@ -16,6 +20,9 @@ interface Message {
   role: string;
   content: string;
   created_at: string;
+  tokens_input?: number;
+  tokens_output?: number;
+  cost?: number;
 }
 
 export const ChatPage = () => {
@@ -28,6 +35,12 @@ export const ChatPage = () => {
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [createDialog, setCreateDialog] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newSystemPrompt, setNewSystemPrompt] = useState("");
+  const [settingsDialog, setSettingsDialog] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editSystemPrompt, setEditSystemPrompt] = useState("");
 
   useEffect(() => { loadChats(); }, []);
   useEffect(() => { if (activeChat) loadMessages(activeChat); }, [activeChat]);
@@ -37,7 +50,7 @@ export const ChatPage = () => {
     try {
       const res: any = await api("GET", "/chat/list");
       setChats(res.chats || []);
-    } catch (e: any) {
+    } catch {
       setError("Не удалось загрузить чаты");
     }
   };
@@ -52,16 +65,49 @@ export const ChatPage = () => {
     }
   };
 
+  const openCreate = () => {
+    setNewTitle("");
+    setNewSystemPrompt("");
+    setCreateDialog(true);
+  };
+
   const createChat = async () => {
     try {
-      const res: any = await api("POST", "/chat/create", { title: `Chat ${chats.length + 1}` });
-      if (res.chat?.id) {
-        setChats(prev => [...prev, res.chat]);
-        setActiveChat(res.chat.id);
+      const body: any = { title: newTitle.trim() || `Chat ${chats.length + 1}` };
+      if (newSystemPrompt.trim()) body.system_prompt = newSystemPrompt.trim();
+      const res: any = await api("POST", "/chat/create", body);
+      if (res.id) {
+        setChats(prev => [...prev, res]);
+        setActiveChat(res.id);
       }
     } catch {
       setError("Не удалось создать чат");
     }
+    setCreateDialog(false);
+  };
+
+  const openSettings = () => {
+    const chat = chats.find(c => c.id === activeChat);
+    if (!chat) return;
+    setEditTitle(chat.title);
+    setEditSystemPrompt(chat.system_prompt || "");
+    setSettingsDialog(true);
+  };
+
+  const saveSettings = async () => {
+    if (!activeChat) return;
+    try {
+      const body: any = {};
+      if (editTitle.trim()) body.title = editTitle.trim();
+      body.system_prompt = editSystemPrompt.trim() || null;
+      const res: any = await api("PATCH", `/chat/${activeChat}`, body);
+      if (res.id) {
+        setChats(prev => prev.map(c => c.id === res.id ? { ...c, title: res.title, system_prompt: res.system_prompt } : c));
+      }
+    } catch {
+      setError("Не удалось сохранить настройки");
+    }
+    setSettingsDialog(false);
   };
 
   const deleteChat = async (id: string) => {
@@ -85,7 +131,15 @@ export const ChatPage = () => {
     setMessages(prev => [...prev, userMsg]);
     try {
       const res: any = await api("POST", `/chat/${activeChat}/send`, { message: msg });
-      const reply: Message = { id: res.id || `resp-${Date.now()}`, role: "assistant", content: res.message || res.content, created_at: new Date().toISOString() };
+      const reply: Message = {
+        id: res.id || `resp-${Date.now()}`,
+        role: "assistant",
+        content: res.message || res.content || "",
+        created_at: new Date().toISOString(),
+        tokens_input: res.tokens_input,
+        tokens_output: res.tokens_output,
+        cost: res.cost,
+      };
       setMessages(prev => [...prev, reply]);
     } catch (e: any) {
       setMessages(prev => prev.map(m => m.id === userMsg.id ? { ...m, content: `${m.content}\n\n⚠️ Ошибка отправки: ${e.message}` } : m));
@@ -95,17 +149,19 @@ export const ChatPage = () => {
     setLoading(false);
   };
 
+  const activeChatData = chats.find(c => c.id === activeChat);
+
   return (
-    <Box sx={{ display: "flex", height: "calc(100vh - 100px)", gap: 2 }}>
-      <Paper sx={{ width: 260, p: 2, overflow: "auto", flexShrink: 0 }}>
-        <Button variant="outlined" startIcon={<AddIcon />} fullWidth onClick={createChat} sx={{ mb: 2 }}>Новый чат</Button>
-        <List dense>
+    <Box sx={{ display: "flex", height: "100%", minHeight: 0, gap: 2 }}>
+      <Paper sx={{ width: 260, p: 2, overflow: "auto", flexShrink: 0, borderRadius: 2, display: "flex", flexDirection: "column" }}>
+        <Button variant="outlined" startIcon={<AddIcon />} fullWidth onClick={openCreate} sx={{ mb: 2 }}>Новый чат</Button>
+        <List dense sx={{ flex: 1, overflow: "auto" }}>
           {chats.length === 0 && !loading && (
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 2 }}>Нет чатов</Typography>
           )}
           {chats.map(c => (
             <ListItem key={c.id} component="button" onClick={() => setActiveChat(c.id)}
-              sx={{ cursor: "pointer", bgcolor: activeChat === c.id ? "action.selected" : "transparent", borderRadius: 1, mb: 0.5, textAlign: "left", display: "flex", gap: 0.5 }}>
+              sx={{ cursor: "pointer", bgcolor: activeChat === c.id ? "action.selected" : "transparent", borderRadius: 2, mb: 0.5, textAlign: "left", display: "flex", gap: 0.5 }}>
               <ListItemText primary={c.title} primaryTypographyProps={{ noWrap: true }} sx={{ flex: 1 }} />
               <IconButton size="small" onClick={e => { e.stopPropagation(); setDeleteTarget(c.id); }} sx={{ opacity: 0.5, "&:hover": { opacity: 1 } }}>
                 <DeleteIcon fontSize="small" />
@@ -114,29 +170,62 @@ export const ChatPage = () => {
           ))}
         </List>
       </Paper>
-      <Paper sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <Paper sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 2 }}>
         {activeChat ? (
           <>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2, py: 1, borderBottom: 1, borderColor: "divider" }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Typography variant="subtitle2">{activeChatData?.title}</Typography>
+                {activeChatData?.system_prompt && (
+                  <Chip label="System" size="small" color="info" variant="outlined" sx={{ height: 20, fontSize: 11 }} />
+                )}
+              </Box>
+              <IconButton size="small" onClick={openSettings} title="Настройки чата">
+                <SettingsIcon fontSize="small" />
+              </IconButton>
+            </Box>
             <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
               {messages.length === 0 && (
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 4 }}>Начните диалог</Typography>
-              )}
-              {messages.map(m => (
-                <Box key={m.id} sx={{ mb: 2, textAlign: m.role === "user" ? "right" : "left" }}>
-                  <Paper sx={{ display: "inline-block", p: 1.5, maxWidth: "80%", bgcolor: m.role === "user" ? "primary.main" : "background.paper", color: m.role === "user" ? "primary.contrastText" : "text.primary", wordBreak: "break-word" }}>
-                    {m.role === "assistant" ? <SimpleMarkdown text={m.content} /> : <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{m.content}</Typography>}
-                    <Typography variant="caption" sx={{ display: "block", mt: 0.5, opacity: 0.6, textAlign: "right" }}>
-                      {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </Typography>
-                  </Paper>
+                <Box sx={{ textAlign: "center", mt: 8 }}>
+                  <SmartToyIcon sx={{ fontSize: 48, color: "text.disabled", mb: 2 }} />
+                  <Typography variant="body2" color="text.secondary">Начните диалог</Typography>
                 </Box>
-              ))}
+              )}
+              {messages.map(m => {
+                const isUser = m.role === "user";
+                return (
+                  <Box key={m.id} sx={{ mb: 2, display: "flex", justifyContent: isUser ? "flex-end" : "flex-start", gap: 1 }}>
+                    {!isUser && <Avatar sx={{ width: 32, height: 32, bgcolor: "primary.main", mt: 0.5 }}><SmartToyIcon sx={{ fontSize: 18 }} /></Avatar>}
+                    <Box sx={{ maxWidth: "70%" }}>
+                      <Paper sx={{ p: 1.5, bgcolor: isUser ? "primary.main" : "background.paper", color: isUser ? "primary.contrastText" : "text.primary", borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px" }}>
+                        {isUser ? (
+                          <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{m.content}</Typography>
+                        ) : (
+                          <SimpleMarkdown text={m.content} />
+                        )}
+                      </Paper>
+                      <Typography variant="caption" sx={{ display: "block", mt: 0.25, opacity: 0.5, textAlign: isUser ? "right" : "left", px: 1 }}>
+                        {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        {!isUser && (m.tokens_input != null || m.tokens_output != null) && (
+                          <> · ↑{m.tokens_input ?? 0} ↓{m.tokens_output ?? 0}</>
+                        )}
+                        {!isUser && m.cost != null && (
+                          <> · {m.cost} MS</>
+                        )}
+                      </Typography>
+                    </Box>
+                    {isUser && <Avatar sx={{ width: 32, height: 32, bgcolor: "success.main", mt: 0.5 }}><PersonIcon sx={{ fontSize: 18 }} /></Avatar>}
+                  </Box>
+                );
+              })}
               {typing && (
-                <Box sx={{ mb: 2, textAlign: "left" }}>
-                  <Paper sx={{ display: "inline-flex", p: 1.5, bgcolor: "background.paper" }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <CircularProgress size={12} /> ассистент печатает...
-                    </Typography>
+                <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+                  <Avatar sx={{ width: 32, height: 32, bgcolor: "primary.main" }}><SmartToyIcon sx={{ fontSize: 18 }} /></Avatar>
+                  <Paper sx={{ p: 1.5, borderRadius: "16px 16px 16px 4px", bgcolor: "background.paper" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <CircularProgress size={12} />
+                      <Typography variant="body2" color="text.secondary">ассистент печатает...</Typography>
+                    </Box>
                   </Paper>
                 </Box>
               )}
@@ -144,16 +233,47 @@ export const ChatPage = () => {
             </Box>
             <Divider />
             <Box sx={{ p: 2, display: "flex", gap: 1 }}>
-              <TextField fullWidth size="small" placeholder="Введите сообщение..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()} disabled={loading} />
-              <IconButton color="primary" onClick={sendMessage} disabled={loading || !input.trim()}><SendIcon /></IconButton>
+              <TextField fullWidth size="small" placeholder="Введите сообщение..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()} disabled={loading} sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3 } }} />
+              <IconButton color="primary" onClick={sendMessage} disabled={loading || !input.trim()} sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}>
+                <SendIcon />
+              </IconButton>
             </Box>
           </>
         ) : (
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 2 }}>
+            <SmartToyIcon sx={{ fontSize: 64, color: "text.disabled" }} />
             <Typography color="text.secondary">Выберите или создайте чат</Typography>
           </Box>
         )}
       </Paper>
+
+      {/* Create dialog */}
+      <Dialog open={createDialog} onClose={() => setCreateDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Новый чат</DialogTitle>
+        <DialogContent>
+          <TextField autoFocus label="Название" fullWidth value={newTitle} onChange={e => setNewTitle(e.target.value)} sx={{ mb: 2, mt: 1 }} />
+          <TextField label="Системный промпт (необязательно)" fullWidth multiline minRows={3} value={newSystemPrompt} onChange={e => setNewSystemPrompt(e.target.value)} placeholder="Например: Ты — профессиональный помощник..." />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateDialog(false)}>Отмена</Button>
+          <Button variant="contained" onClick={createChat}>Создать</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Settings dialog */}
+      <Dialog open={settingsDialog} onClose={() => setSettingsDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Настройки чата</DialogTitle>
+        <DialogContent>
+          <TextField autoFocus label="Название" fullWidth value={editTitle} onChange={e => setEditTitle(e.target.value)} sx={{ mb: 2, mt: 1 }} />
+          <TextField label="Системный промпт" fullWidth multiline minRows={3} value={editSystemPrompt} onChange={e => setEditSystemPrompt(e.target.value)} placeholder="Оставьте пустым, чтобы убрать системный промпт" />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSettingsDialog(false)}>Отмена</Button>
+          <Button variant="contained" onClick={saveSettings}>Сохранить</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete dialog */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
         <DialogTitle>Удалить чат?</DialogTitle>
         <DialogContent><DialogContentText>Это действие нельзя отменить. Все сообщения будут удалены.</DialogContentText></DialogContent>
@@ -162,6 +282,7 @@ export const ChatPage = () => {
           <Button color="error" onClick={() => deleteTarget && deleteChat(deleteTarget)}>Удалить</Button>
         </DialogActions>
       </Dialog>
+
       <Snackbar open={!!error} autoHideDuration={4000} onClose={() => setError("")}>
         <Alert severity="warning" onClose={() => setError("")} variant="filled">{error}</Alert>
       </Snackbar>

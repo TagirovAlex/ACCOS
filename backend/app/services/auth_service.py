@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.repositories.user_repository import UserRepository
 from app.repositories.settings_repository import SettingsRepository
+from app.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +18,26 @@ class AuthService:
         self.session = session
         self.user_repo = UserRepository(session)
         self.settings_repo = SettingsRepository(session)
-        self.ldap = LDAPAdapter()
+        self.settings_svc = SettingsService(session)
+        self.ldap = None
+
+    async def _init_ldap(self):
+        if self.ldap is not None:
+            return
+        if not settings.ldap_enabled:
+            self.ldap = None
+            return
+        server = await self.settings_svc.get("ldap_server", settings.ldap_server)
+        domain = await self.settings_svc.get("ldap_domain", settings.ldap_domain)
+        base_dn = await self.settings_svc.get("ldap_base_dn", settings.ldap_base_dn)
+        self.ldap = LDAPAdapter(server=server, domain=domain, base_dn=base_dn)
 
     async def _authenticate_ldap(self, username: str, password: str) -> dict:
+        await self._init_ldap()
+        if not self.ldap:
+            logger.info("LDAP disabled, using local authentication fallback")
+            mock = MockLDAPAdapter()
+            return await mock.execute(username=username, password=password)
         result = await self.ldap.execute(username=username, password=password)
         if not result.get("authenticated"):
             logger.warning(f"LDAP failed ({result.get('error')}), trying local admin fallback")
@@ -54,10 +72,28 @@ class AuthService:
             start_balance = matched_group.start_balance
         return group_id, permissions, start_balance
 
+    async def _require_ad_group(self, username: str, ldap_result: dict) -> bool:
+        if username == settings.admin_username:
+            return True
+        require = await self.settings_svc.get_bool("require_ad_group_for_login", False)
+        if not require:
+            return True
+        ad_groups = ldap_result.get("groups", [])
+        if not ad_groups:
+            return False
+        from app.db.models.user_group import UserGroup
+        from sqlalchemy import select
+        result = await self.session.execute(
+            select(UserGroup).where(UserGroup.ad_group_dn.in_(ad_groups), UserGroup.is_active == True)
+        )
+        return result.scalar_one_or_none() is not None
+
     async def authenticate(self, username: str, password: str) -> dict:
         ldap_result = await self._authenticate_ldap(username, password)
         if not ldap_result.get("authenticated"):
             return {"success": False, "error": ldap_result.get("error", "Authentication failed")}
+        if not await self._require_ad_group(username, ldap_result):
+            return {"success": False, "error": "Доступ запрещён: пользователь не состоит ни в одной разрешённой доменной группе"}
         user = await self.user_repo.get_by_username(username)
         if not user:
             group_id, permissions, start_balance = await self._resolve_group_and_permissions(ldap_result)

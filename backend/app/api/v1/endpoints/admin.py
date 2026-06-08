@@ -9,6 +9,7 @@ from app.schemas.admin import (
     AdminUserUpdate,
     AdminUserCreate,
     AdminGroupListResponse,
+    AdminGroupResponse,
     AdminGroupCreate,
     AdminGroupUpdate,
     AdminSettingListResponse,
@@ -20,10 +21,16 @@ from app.schemas.admin import (
     AdminGenerationListResponse,
     AdminGenerationDetailResponse,
     AdminAssetListResponse,
+    BackupListResponse,
+    BackupCreateResponse,
+    LdapGroupListResponse,
     BaseResponse,
 )
 from app.services.admin_service import AdminService
+from app.services.backup_service import BackupService
 from app.repositories.user_repository import UserRepository
+from app.repositories.settings_repository import SettingsRepository
+from app.adapters.ldap_adapter import LDAPAdapter, MockLDAPAdapter
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -128,6 +135,19 @@ async def list_groups(
 ):
     service = AdminService(db)
     return AdminGroupListResponse(**await service.list_groups(skip=skip, limit=limit))
+
+
+@router.get("/groups/{group_id}", response_model=AdminGroupResponse)
+async def get_group(
+    group_id: str,
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    group = await service.get_group(group_id)
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+    return group
 
 
 @router.post("/groups", response_model=BaseResponse)
@@ -289,3 +309,60 @@ async def delete_setting(
 ):
     service = AdminService(db)
     return BaseResponse(**await service.delete_setting(key))
+
+
+@router.get("/backups", response_model=BackupListResponse)
+async def list_backups(
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = BackupService()
+    backups = await service.list_backups()
+    return BackupListResponse(success=True, backups=backups)
+
+
+@router.post("/backups", response_model=BackupCreateResponse)
+async def create_backup(
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = BackupService()
+    result = await service.create_backup()
+    return BackupCreateResponse(**result)
+
+
+@router.delete("/backups/{filename}", response_model=BaseResponse)
+async def delete_backup(
+    filename: str,
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = BackupService()
+    result = await service.delete_backup(filename)
+    return BaseResponse(**result)
+
+
+@router.get("/ldap-groups", response_model=LdapGroupListResponse)
+async def list_ldap_groups(
+    search: str = "",
+    user_id: str = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    sr = SettingsRepository(db)
+
+    async def _val(key: str, default: str) -> str:
+        s = await sr.get_by_key(key)
+        return s.value if s else default
+
+    server = await _val("ldap_server", settings.ldap_server)
+    domain = await _val("ldap_domain", settings.ldap_domain)
+    base_dn = await _val("ldap_base_dn", settings.ldap_base_dn)
+    bind_dn = await _val("ldap_bind_dn", "")
+    bind_password = await _val("ldap_bind_password", "")
+    if not server or not settings.ldap_enabled:
+        adapter = MockLDAPAdapter()
+    else:
+        adapter = LDAPAdapter(server=server, domain=domain, base_dn=base_dn,
+                              bind_dn=bind_dn or None, bind_password=bind_password or None)
+    groups = await adapter.list_groups(search)
+    return LdapGroupListResponse(success=True, groups=groups)

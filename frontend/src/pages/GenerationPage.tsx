@@ -1,6 +1,9 @@
 import { useState, useRef, useCallback } from "react";
-import { Box, Card, CardContent, Typography, TextField, Button, MenuItem, Alert, LinearProgress, Chip, Skeleton } from "@mui/material";
+import { Box, Card, CardContent, Typography, TextField, Button, MenuItem, Alert, LinearProgress, Chip, Skeleton, IconButton } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import HistoryIcon from "@mui/icons-material/History";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { api } from "../services/api";
 
 const WORKFLOWS = [
@@ -125,14 +128,25 @@ export const GenerationPage = () => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const statusLabels: Record<string, string> = {
+    completed: "Готово",
+    processing: "Обработка",
+    queued: "В очереди",
+    failed: "Ошибка",
+  };
+
   return (
     <Box>
-      <Typography variant="h5" mb={3}>Генерация</Typography>
+      <Typography variant="h5" fontWeight={700} mb={3}>Генерация</Typography>
 
       <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
         <Box sx={{ flex: "1 1 60%", minWidth: 300 }}>
           <Card sx={{ mb: 3 }}>
             <CardContent>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                <AutoAwesomeIcon color="primary" />
+                <Typography variant="h6" fontWeight={600}>Новая генерация</Typography>
+              </Box>
               <TextField select label="Workflow" fullWidth value={workflow} onChange={e => { setWorkflow(e.target.value); setFiles([]); }} margin="normal">
                 {WORKFLOWS.map(w => <MenuItem key={w.value} value={w.value}>{w.label}</MenuItem>)}
               </TextField>
@@ -140,8 +154,8 @@ export const GenerationPage = () => {
               <TextField label="Промпт" fullWidth multiline rows={3} value={prompt} onChange={e => setPrompt(e.target.value)} margin="normal" placeholder="Опишите, что хотите получить..." />
 
               {selectedWorkflow?.needsRefs && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" mb={1}>Референс-изображения ({files.length}/{selectedWorkflow.maxRefs})</Typography>
+                <Box sx={{ mt: 2, p: 2, bgcolor: "action.hover", borderRadius: 2 }}>
+                  <Typography variant="body2" fontWeight={600} mb={1}>Референс-изображения ({files.length}/{selectedWorkflow.maxRefs})</Typography>
                   <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
                     {files.map((f, i) => (
                       <Chip key={i} label={f.name} onDelete={() => removeFile(i)} deleteIcon={<CloseIcon fontSize="small" />} size="small" />
@@ -154,10 +168,10 @@ export const GenerationPage = () => {
                 </Box>
               )}
 
-              <Button variant="contained" onClick={handleGenerate} disabled={loading || !prompt.trim()} sx={{ mt: 2 }}>
+              <Button variant="contained" onClick={handleGenerate} disabled={loading || !prompt.trim()} sx={{ mt: 2 }} startIcon={<AutoAwesomeIcon />}>
                 {loading ? "Генерация..." : "Сгенерировать"}
               </Button>
-              {loading && <LinearProgress sx={{ mt: 2 }} />}
+              {loading && <LinearProgress sx={{ mt: 2, borderRadius: 1 }} />}
               {error && <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError("")}>{error}</Alert>}
             </CardContent>
           </Card>
@@ -165,16 +179,20 @@ export const GenerationPage = () => {
           {result && (
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>Результат</Typography>
-                <Typography variant="body2" color="text.secondary">ID: {result.generation_id}</Typography>
-                <Typography variant="body2" color="text.secondary">Списано: {result.cost} кредитов</Typography>
-                <Typography variant="body2" color="text.secondary">Статус: {result.status === "completed" ? "✅ Готово" : result.status === "processing" ? "⏳ Обработка..." : result.status === "queued" ? "⏳ В очереди..." : "❌ " + result.status}</Typography>
+                <Typography variant="h6" gutterBottom fontWeight={600}>Результат</Typography>
+                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mb: 2 }}>
+                  <Chip label={`ID: ${result.generation_id.slice(0, 8)}...`} size="small" variant="outlined" />
+                  <Chip label={`${result.cost} кредитов`} size="small" variant="outlined" />
+                  <Chip label={statusLabels[result.status] || result.status} size="small" color={result.status === "completed" ? "success" : result.status === "failed" ? "error" : "default"} />
+                </Box>
                 {result.images && result.images.length > 0 && (
-                  <Box sx={{ mt: 2, display: "flex", gap: 2, flexWrap: "wrap" }}>
+                  <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
                     {result.images.map((img: ImageAsset) => (
                       <Box key={img.id} sx={{ maxWidth: 300 }}>
-                        <img src={`/${img.file_path}`} alt={img.filename} style={{ width: "100%", borderRadius: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }} />
-                        <Typography variant="caption" color="text.secondary">{img.filename}</Typography>
+                        <Box sx={{ borderRadius: 2, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
+                          <img src={`/${img.file_path}`} alt={img.filename} style={{ width: "100%", display: "block" }} />
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>{img.filename}</Typography>
                       </Box>
                     ))}
                   </Box>
@@ -185,14 +203,17 @@ export const GenerationPage = () => {
         </Box>
 
         <Box sx={{ flex: "1 1 35%", minWidth: 280 }}>
-          <Card>
+          <Card sx={{ position: "sticky", top: 80 }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                История
-                <Button size="small" sx={{ ml: 1 }} onClick={() => { loadHistory(); setHistoryLoaded(true); }}>
-                  {historyLoaded ? "Обновить" : "Загрузить"}
-                </Button>
-              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <HistoryIcon color="primary" />
+                  <Typography variant="h6" fontWeight={600}>История</Typography>
+                </Box>
+                <IconButton size="small" onClick={() => { loadHistory(); setHistoryLoaded(true); }} title="Обновить">
+                  <RefreshIcon fontSize="small" />
+                </IconButton>
+              </Box>
               {historyLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <Box key={i} sx={{ mb: 1.5 }}>
@@ -202,17 +223,20 @@ export const GenerationPage = () => {
                   </Box>
                 ))
               ) : !historyLoaded ? (
-                <Typography variant="body2" color="text.secondary">Нажмите "Загрузить"</Typography>
+                <Box sx={{ textAlign: "center", py: 4 }}>
+                  <Typography variant="body2" color="text.secondary" mb={1}>Нажмите для загрузки</Typography>
+                  <Button size="small" variant="outlined" onClick={() => { loadHistory(); setHistoryLoaded(true); }}>Загрузить</Button>
+                </Box>
               ) : history.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">Нет генераций</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 4 }}>Нет генераций</Typography>
               ) : (
                 history.map((g: any) => (
-                  <Box key={g.id} sx={{ mb: 1.5, p: 1, bgcolor: "action.hover", borderRadius: 1 }}>
-                    <Typography variant="body2" noWrap><strong>{g.workflow_type}</strong></Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap>{g.prompt}</Typography>
-                    <Box sx={{ display: "flex", gap: 1, mt: 0.5 }}>
-                      <Chip label={g.status} size="small" color={g.status === "completed" ? "success" : g.status === "failed" ? "error" : "default"} />
-                      <Typography variant="caption" color="text.secondary">{g.cost} кр.</Typography>
+                  <Box key={g.id} sx={{ mb: 1.5, p: 1.5, bgcolor: "action.hover", borderRadius: 2 }}>
+                    <Typography variant="body2" fontWeight={600} noWrap>{g.workflow_type}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{g.prompt}</Typography>
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                      <Chip label={statusLabels[g.status] || g.status} size="small" color={g.status === "completed" ? "success" : g.status === "failed" ? "error" : "default"} />
+                      <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>{g.cost} кр.</Typography>
                     </Box>
                   </Box>
                 ))

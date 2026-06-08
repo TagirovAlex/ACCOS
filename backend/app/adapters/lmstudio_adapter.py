@@ -9,9 +9,16 @@ logger = logging.getLogger(__name__)
 
 
 class LMStudioAdapter(BaseAdapter):
-    def __init__(self):
-        self.base_url = settings.lmstudio_base_url.rstrip("/")
-        self.model = settings.lmstudio_model or "default"
+    def __init__(self, api_key: str = "", model: str = "", base_url: str = ""):
+        self.base_url = (base_url or settings.lmstudio_base_url).rstrip("/")
+        self.model = model or settings.lmstudio_model or "default"
+        self.api_key = api_key or settings.lmstudio_api_key
+
+    async def _headers(self) -> dict:
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
     async def execute(self, **kwargs) -> dict:
         messages = kwargs.get("messages", [])
@@ -28,6 +35,7 @@ class LMStudioAdapter(BaseAdapter):
                 response = await client.post(
                     f"{self.base_url}/chat/completions",
                     json=payload,
+                    headers=await self._headers(),
                 )
                 response.raise_for_status()
                 data = response.json()

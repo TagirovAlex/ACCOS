@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
-from sqlalchemy import select, desc
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.comfyui_adapter import ComfyUIAdapter
@@ -15,6 +15,7 @@ from app.db.models.image_asset import ImageAsset
 from app.db.session import async_session_factory
 from app.repositories.generation_repository import GenerationRepository
 from app.services.economy_service import EconomyService
+from app.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,9 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
     uid = record.user_id
     repo = GenerationRepository(session)
     economy = EconomyService(session)
-    comfyui = ComfyUIAdapter()
+    settings_svc = SettingsService(session)
+    api_key = await settings_svc.get("comfyui_api_key")
+    comfyui = ComfyUIAdapter(api_key=api_key)
 
     record.status = "processing"
     record.updated_at = datetime.now(timezone.utc)
@@ -90,8 +93,8 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
         record.error_message = str(e)
         try:
             await economy.add_balance(str(uid), record.cost)
-        except Exception:
-            pass
+        except Exception as refund_err:
+            logger.error(f"Failed to refund {record.cost} to user {uid}: {refund_err}")
         await session.flush()
         logger.error(f"Generation {record.id} crashed: {e}")
 
@@ -105,7 +108,7 @@ async def queue_worker_loop() -> None:
                     result = await session.execute(
                         select(GenerationRecord)
                         .where(GenerationRecord.status == "queued")
-                        .order_by(desc(GenerationRecord.created_at))
+                        .order_by(GenerationRecord.created_at)
                         .limit(1)
                     )
                     record = result.scalar_one_or_none()

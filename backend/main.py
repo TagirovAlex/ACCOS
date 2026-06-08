@@ -19,6 +19,8 @@ from app.core.config import settings
 from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin
 from app.services.accrual_service import run_auto_accrual
 from app.services.queue_worker import queue_worker_loop
+from app.services.settings_service import SettingsService
+from app.db.session import async_session_factory
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.DEBUG),
@@ -28,7 +30,8 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-log_dir = Path("logs")
+PROJECT_ROOT = Path(__file__).parent.parent
+log_dir = PROJECT_ROOT / "logs"
 log_dir.mkdir(exist_ok=True)
 
 file_handler = logging.FileHandler(log_dir / "accos.log", encoding="utf-8")
@@ -42,12 +45,28 @@ _queue_worker_task = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _accrual_task, _queue_worker_task
+
+    logger.info("Seeding default settings...")
+    try:
+        async with async_session_factory() as session:
+            svc = SettingsService(session)
+            await svc.seed_defaults()
+            await session.commit()
+    except Exception as e:
+        logger.warning(f"Could not seed settings (DB not ready?): {e}")
+
     logger.info("Starting accrual scheduler...")
 
     async def accrual_loop():
         while True:
-            interval = await run_auto_accrual()
-            await asyncio.sleep(interval)
+            try:
+                interval = await run_auto_accrual()
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Accrual loop crashed, restarting: {e}")
+                await asyncio.sleep(60)
 
     _accrual_task = asyncio.create_task(accrual_loop())
     _queue_worker_task = asyncio.create_task(queue_worker_loop())
@@ -78,10 +97,11 @@ app.add_middleware(
 )
 
 
-app.mount("/static", StaticFiles(directory="../static"), name="static")
-
-generated_dir = Path("../static/generated")
-generated_dir.mkdir(parents=True, exist_ok=True)
+static_dir = PROJECT_ROOT / "static"
+static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+(static_dir / "generated").mkdir(parents=True, exist_ok=True)
+(static_dir / "uploads").mkdir(parents=True, exist_ok=True)
 
 
 def _error_detail(request: Request, exc: Exception, status: int, error_id: str) -> dict:

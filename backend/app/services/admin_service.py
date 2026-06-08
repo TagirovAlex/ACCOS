@@ -35,7 +35,9 @@ class AdminService:
             return {
                 "id": str(user.id), "username": user.username, "email": user.email,
                 "full_name": user.full_name, "balance": user.balance,
-                "permissions": user.permissions, "is_active": user.is_active,
+                "permissions": user.permissions,
+                "group_id": str(user.group_id) if user.group_id else None,
+                "is_active": user.is_active,
                 "is_admin": user.is_admin, "created_at": user.created_at,
             }
         except Exception:
@@ -46,8 +48,14 @@ class AdminService:
             user = await self.user_repo.get(UUID(user_id))
             if not user:
                 return {"success": False, "error": "User not found"}
-            allowed = {"balance", "permissions", "is_active", "is_admin", "full_name"}
-            update_data = {k: v for k, v in data.items() if k in allowed and v is not None}
+            allowed = {"balance", "permissions", "is_active", "is_admin", "full_name", "group_id"}
+            update_data = {}
+            for k, v in data.items():
+                if k in allowed and v is not None:
+                    if k == "group_id":
+                        update_data[k] = UUID(v) if v else None
+                    else:
+                        update_data[k] = v
             if "password" in data and data["password"]:
                 update_data["hashed_password"] = hash_password(data["password"])
             if update_data:
@@ -68,6 +76,7 @@ class AdminService:
                 hashed_password=hashed_pw,
                 balance=data.get("balance", 100.0),
                 permissions=data.get("permissions", "chat"),
+                group_id=UUID(data["group_id"]) if data.get("group_id") else None,
                 is_admin=data.get("is_admin", False),
                 is_active=data.get("is_active", True),
             )
@@ -100,7 +109,9 @@ class AdminService:
                 {
                     "id": str(u.id), "username": u.username, "email": u.email,
                     "full_name": u.full_name, "balance": u.balance,
-                    "permissions": u.permissions, "is_active": u.is_active,
+                    "permissions": u.permissions,
+                    "group_id": str(u.group_id) if u.group_id else None,
+                    "is_active": u.is_active,
                     "is_admin": u.is_admin, "created_at": u.created_at,
                 }
                 for u in users
@@ -155,6 +166,23 @@ class AdminService:
         if clean_kwargs:
             await self.group_repo.update(UUID(group_id), **clean_kwargs)
         return {"success": True}
+
+    async def get_group(self, group_id: str) -> dict | None:
+        try:
+            group = await self.group_repo.get(UUID(group_id))
+            if not group:
+                return None
+            return {
+                "id": str(group.id), "name": group.name,
+                "ad_group_dn": group.ad_group_dn,
+                "permissions": group.permissions,
+                "start_balance": group.start_balance,
+                "description": group.description,
+                "is_active": group.is_active,
+                "created_at": group.created_at,
+            }
+        except Exception:
+            return None
 
     async def get_chat_detail(self, chat_id: str) -> dict | None:
         try:

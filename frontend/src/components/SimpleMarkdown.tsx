@@ -1,9 +1,9 @@
 interface Props {
-  text: string;
+  text: string | null | undefined;
 }
 
 export const SimpleMarkdown = ({ text }: Props) => {
-  const html = text
+  const html = (text || "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')

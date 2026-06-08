@@ -183,8 +183,8 @@ server {
     }
 
     # Admin Panel
-    location /admin {
-        alias $PROJECT_ROOT/admin/dist;
+    location /admin/ {
+        alias $PROJECT_ROOT/admin/dist/;
         index index.html;
         try_files \$uri \$uri/ /admin/index.html;
     }

@@ -12,6 +12,9 @@ export const authProvider: AuthProvider = {
   async login({ username, password }) {
     const result = await apiRequest<AuthResult>("POST", "/auth/login", { username, password });
     if (result.success && result.access_token) {
+      if (!result.is_admin) {
+        throw new Error("Требуются права администратора");
+      }
       setToken(result.access_token);
       localStorage.setItem("token", result.access_token);
       localStorage.setItem("username", username);

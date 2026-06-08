@@ -1,3 +1,4 @@
+import math
 from abc import ABC, abstractmethod
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,62 +8,93 @@ from app.repositories.user_repository import UserRepository
 
 class PricingStrategy(ABC):
     @abstractmethod
-    def calculate_cost(self, **kwargs) -> float:
+    def calculate_cost(self, **kwargs) -> int:
         pass
 
 
 class LLMCostStrategy(PricingStrategy):
-    rate_input: float = 0.001
-    rate_output: float = 0.002
+    def __init__(self, cost_per_1000: int = 1, token_divisor: int = 1000):
+        self.cost_per_1000 = cost_per_1000
+        self.token_divisor = token_divisor
 
-    def calculate_cost(self, **kwargs) -> float:
+    def calculate_cost(self, **kwargs) -> int:
         tokens_input = kwargs.get("tokens_input", 0)
         tokens_output = kwargs.get("tokens_output", 0)
-        return (tokens_input * self.rate_input) + (tokens_output * self.rate_output)
+        return math.ceil(max(tokens_input, tokens_output) / self.token_divisor) * self.cost_per_1000
 
 
 class ImageGenCostStrategy(PricingStrategy):
-    base_cost: float = 1.0
-    rate_pixel: float = 0.0001
+    def __init__(self, cost_per_mp: int = 10, pixel_divisor: int = 1_000_000):
+        self.cost_per_mp = cost_per_mp
+        self.pixel_divisor = pixel_divisor
 
-    def calculate_cost(self, **kwargs) -> float:
+    def calculate_cost(self, **kwargs) -> int:
         width = kwargs.get("width", 512)
         height = kwargs.get("height", 512)
-        return self.base_cost + (width * height) * self.rate_pixel
+        mp = (width * height) / self.pixel_divisor
+        return max(math.ceil(mp), 1) * self.cost_per_mp
 
 
 class ImageEditCostStrategy(PricingStrategy):
-    base_cost: float = 0.5
-    rate_pixel: float = 0.00005
+    def __init__(self, cost_per_mp: int = 10, pixel_divisor: int = 1_000_000):
+        self.cost_per_mp = cost_per_mp
+        self.pixel_divisor = pixel_divisor
 
-    def calculate_cost(self, **kwargs) -> float:
+    def calculate_cost(self, **kwargs) -> int:
         width = kwargs.get("width", 512)
         height = kwargs.get("height", 512)
-        avg_ref_size = kwargs.get("avg_ref_size", width)
-        return self.base_cost + (avg_ref_size * height) * self.rate_pixel
+        mp = (width * height) / self.pixel_divisor
+        return max(math.ceil(mp), 1) * self.cost_per_mp
 
 
 class VideoGenCostStrategy(PricingStrategy):
-    base_cost: float = 5.0
-    rate_sec: float = 0.5
+    def __init__(self, base_cost: int = 10, cost_per_sec: int = 2):
+        self.base_cost = base_cost
+        self.cost_per_sec = cost_per_sec
 
-    def calculate_cost(self, **kwargs) -> float:
-        resolution = kwargs.get("resolution", 1024)
+    def calculate_cost(self, **kwargs) -> int:
         duration = kwargs.get("duration", 5)
-        return self.base_cost + (resolution * duration) * self.rate_sec
+        return self.base_cost + math.ceil(duration) * self.cost_per_sec
 
 
 class EconomyService:
-    strategies = {
-        "llm": LLMCostStrategy(),
-        "image_gen": ImageGenCostStrategy(),
-        "image_edit": ImageEditCostStrategy(),
-        "video_gen": VideoGenCostStrategy(),
-    }
+    CURRENCY = "MS"
+    CURRENCY_FULL = "Marins"
 
     def __init__(self, session: AsyncSession):
         self.session = session
         self.user_repo = UserRepository(session)
+        self._strategies: dict[str, PricingStrategy] = {}
+
+    async def _load_strategies(self):
+        from app.services.settings_service import SettingsService
+        ss = SettingsService(self.session)
+        self._strategies = {
+            "llm": LLMCostStrategy(
+                cost_per_1000=max(1, await ss.get_int("llm_rate_input", 1)),
+                token_divisor=max(1, await ss.get_int("llm_tokens_per_unit", 1000)),
+            ),
+            "image_gen": ImageGenCostStrategy(
+                cost_per_mp=max(1, await ss.get_int("image_gen_rate_pixel", 10)),
+                pixel_divisor=max(1, await ss.get_int("image_pixels_per_unit", 1_000_000)),
+            ),
+            "image_edit": ImageEditCostStrategy(
+                cost_per_mp=max(1, await ss.get_int("image_edit_rate_pixel", 10)),
+                pixel_divisor=max(1, await ss.get_int("image_pixels_per_unit", 1_000_000)),
+            ),
+            "video_gen": VideoGenCostStrategy(
+                base_cost=max(0, await ss.get_int("video_gen_base_cost", 10)),
+                cost_per_sec=max(1, await ss.get_int("video_gen_rate_sec", 2)),
+            ),
+        }
+
+    async def calculate_cost(self, operation_type: str, **params) -> int:
+        if not self._strategies:
+            await self._load_strategies()
+        strategy = self._strategies.get(operation_type)
+        if not strategy:
+            raise ValueError(f"Unknown operation type: {operation_type}")
+        return strategy.calculate_cost(**params)
 
     async def get_balance(self, user_id: str) -> dict:
         from uuid import UUID
@@ -71,14 +103,7 @@ class EconomyService:
             return {"success": False, "error": "User not found"}
         return {"success": True, "balance": balance}
 
-    @classmethod
-    def calculate_cost(cls, operation_type: str, **params) -> float:
-        strategy = cls.strategies.get(operation_type)
-        if not strategy:
-            raise ValueError(f"Unknown operation type: {operation_type}")
-        return strategy.calculate_cost(**params)
-
-    async def deduct_balance(self, user_id: str, amount: float) -> dict:
+    async def deduct_balance(self, user_id: str, amount: int) -> dict:
         from uuid import UUID
         uid = UUID(user_id)
         balance = await self.user_repo.get_balance(uid)

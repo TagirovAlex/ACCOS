@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import uuid
@@ -13,9 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 class ComfyUIAdapter(BaseAdapter):
-    def __init__(self):
+    def __init__(self, api_key: str = ""):
         self.base_url = settings.comfyui_base_url.rstrip("/")
+        self.api_key = api_key or settings.comfyui_api_key
         self.workflows_dir = Path(__file__).parent.parent.parent.parent / "workflows"
+
+    async def _headers(self) -> dict:
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["x-api-key"] = self.api_key
+        return headers
 
     async def execute(self, **kwargs) -> dict:
         workflow_type = kwargs.get("workflow_type", "")
@@ -26,7 +34,7 @@ class ComfyUIAdapter(BaseAdapter):
         duration = kwargs.get("duration", 5)
         return await self.run_workflow(workflow_type, prompt, images, width, height, duration)
 
-    def _load_workflow(self, workflow_type: str) -> dict | None:
+    async def _load_workflow(self, workflow_type: str) -> dict | None:
         mapping = {
             "z_image": "ZIT.json",
             "qwen_edit_1": "QWEN edit 1 pic.json",
@@ -43,7 +51,10 @@ class ComfyUIAdapter(BaseAdapter):
         if not filepath.exists():
             logger.error(f"Workflow file not found: {filepath}")
             return None
-        with open(filepath, encoding="utf-8") as f:
+        return await asyncio.to_thread(self._read_json, filepath)
+
+    def _read_json(self, path: Path) -> dict:
+        with path.open(encoding="utf-8") as f:
             return json.load(f)
 
     def _apply_prompt(self, workflow: dict, prompt: str, images: list[str] = None) -> dict:
@@ -71,23 +82,24 @@ class ComfyUIAdapter(BaseAdapter):
     async def upload_image(self, file_path: str) -> str | None:
         filename = os.path.basename(file_path)
         try:
+            file_bytes = await asyncio.to_thread(lambda: open(file_path, "rb").read())
             async with httpx.AsyncClient(timeout=60.0) as client:
-                with open(file_path, "rb") as f:
-                    files = {"image": (filename, f, "image/png")}
-                    response = await client.post(
-                        f"{self.base_url}/upload/image",
-                        files=files,
-                        data={"overwrite": "true"},
-                    )
-                    response.raise_for_status()
-                    data = response.json()
-                    return data.get("name", filename)
+                files = {"image": (filename, file_bytes, "image/png")}
+                response = await client.post(
+                    f"{self.base_url}/upload/image",
+                    files=files,
+                    data={"overwrite": "true"},
+                    headers={"x-api-key": self.api_key} if self.api_key else {},
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data.get("name", filename)
         except Exception as e:
             logger.error(f"Image upload failed: {e}")
             return None
 
     async def run_workflow(self, workflow_type: str, prompt: str, images: list[str] = None, width: int = 1024, height: int = 1024, duration: int = 5) -> dict:
-        workflow = self._load_workflow(workflow_type)
+        workflow = await self._load_workflow(workflow_type)
         if not workflow:
             return {"success": False, "error": f"Workflow {workflow_type} not found"}
 
@@ -109,6 +121,7 @@ class ComfyUIAdapter(BaseAdapter):
                 response = await client.post(
                     f"{self.base_url}/prompt",
                     json=payload,
+                    headers=await self._headers(),
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -128,15 +141,19 @@ class ComfyUIAdapter(BaseAdapter):
                 response = await client.get(
                     f"{self.base_url}/view",
                     params=params,
+                    headers={"x-api-key": self.api_key} if self.api_key else {},
                 )
                 response.raise_for_status()
-                os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                with open(save_path, "wb") as f:
-                    f.write(response.content)
+                await asyncio.to_thread(self._write_file, save_path, response.content)
                 return save_path
         except Exception as e:
             logger.error(f"Failed to download image {filename}: {e}")
             return None
+
+    def _write_file(self, path: str, content: bytes) -> None:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(content)
 
     async def _poll_result(self, client: httpx.AsyncClient, prompt_id: str, max_attempts: int = 60) -> dict:
         import asyncio
@@ -145,6 +162,7 @@ class ComfyUIAdapter(BaseAdapter):
                 response = await client.get(
                     f"{self.base_url}/history/{prompt_id}",
                     timeout=10.0,
+                    headers={"x-api-key": self.api_key} if self.api_key else {},
                 )
                 if response.status_code == 200:
                     data = response.json()
@@ -163,7 +181,7 @@ class ComfyUIAdapter(BaseAdapter):
                                             })
                         if images:
                             return {"success": True, "images": images, "prompt_id": prompt_id}
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Polling attempt {attempt + 1}/{max_attempts}: {e}")
             await asyncio.sleep(2)
         return {"success": False, "error": "Timeout waiting for result"}

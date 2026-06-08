@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
 from typing import List
 import json
@@ -21,12 +23,34 @@ class Settings(BaseSettings):
     cors_origins: str = '["http://localhost:3000","http://localhost:5173"]'
     log_level: str = "DEBUG"
     rate_limits_enabled: bool = True
+    ldap_enabled: bool = False
 
     @property
     def cors_origin_list(self) -> List[str]:
         return json.loads(self.cors_origins)
 
-    model_config = {"env_file": "config/.env", "env_file_encoding": "utf-8"}
+    @property
+    def DB_HOST(self) -> str:
+        return self.database_url.split("://")[1].split("@")[1].split(":")[0]
+
+    @property
+    def DB_PORT(self) -> str:
+        return self.database_url.split("://")[1].split("@")[1].split(":")[1].split("/")[0]
+
+    @property
+    def DB_NAME(self) -> str:
+        return self.database_url.split("://")[1].split("@")[1].split("/")[1]
+
+    @property
+    def DB_USER(self) -> str:
+        return self.database_url.split("://")[1].split(":")[0]
+
+    @property
+    def DB_PASSWORD(self) -> str:
+        user_pass = self.database_url.split("://")[1].split("@")[0]
+        return user_pass.split(":")[1] if ":" in user_pass else ""
+
+    model_config = {"env_file": str(Path(__file__).parent.parent.parent.parent / "config" / ".env"), "env_file_encoding": "utf-8"}
 
 
 settings = Settings()

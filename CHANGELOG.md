@@ -122,6 +122,33 @@
 - **Admin dataProvider** — исправлена передача параметров пагинации, сортировки и фильтрации
 - **main.py** — Queue Worker запускается в lifespan вместе с accrual scheduler
 
+## SettingsService + LDAP/Economy в админке + Chat fix
+- **SettingsService** (`backend/app/services/settings_service.py`) — читает настройки из DB (`admin_settings`) с fallback на `.env`
+- **Seed на старте**: 18 настроек автоматически заполняются при первом запуске (LDAP, LMStudio, ComfyUI, цены, экономика)
+- **Настройки LDAP** (`ldap_server`, `ldap_domain`, `ldap_base_dn`) — теперь в админ-панели, редактируются через Settings
+- **Настройки экономики** (цены LLM, Image Gen, Image Edit, Video Gen, автоаккреал) — читаются из DB, редактируются через Settings
+## API Token Auth — LMStudio + ComfyUI
+- **LMStudioAdapter**: добавлен параметр `api_key` — передаётся в HTTP-заголовок `Authorization: Bearer <token>`, fallback на `settings.lmstudio_api_key`
+- **ComfyUIAdapter**: добавлен параметр `api_key` — передаётся в HTTP-заголовок `x-api-key`, fallback на `settings.comfyui_api_key`
+- **ChatService**: при отправке сообщения читает `lmstudio_api_key` из БД (SettingsService) и передаёт в LMStudioAdapter
+- **QueueWorker**: при обработке генерации читает `comfyui_api_key` из БД и передаёт в ComfyUIAdapter
+- **Seed defaults**: добавлены `lmstudio_api_key` и `comfyui_api_key` (пустые строки по умолчанию, заполняются через админку)
+- Настройки `LMSTUDIO_API_KEY` и `COMFYUI_API_KEY` уже присутствуют в `config.py` и `.env.example`
+
+## UI/UX — Design Pass & User Management Fixes
+- **LDAPAdapter**: принимает параметры `server/domain/base_dn` (опционально, fallback на `.env`)
+- **AuthService**: LDAP настройки читаются из DB через `SettingsService` каждый раз при логине
+- **Chat validation error**: `ChatSendResponse.message/tokens_input/tokens_output/cost` — теперь опциональны с дефолтами
+- **Все `calculate_cost()` вызовы**: исправлены на `await` (метод стал instance async)
+- Тесты: 26/26 проходят
+- Nginx: `/admin` → `/admin/` (trailing slash) + `alias` с trailing slash для корректной SPA маршрутизации
+- Nginx: добавлен `location /openapi.json` (обратно-прокси на бэкенд), ранее уходил во frontend SPA
+- Admin Vite config: добавлен `base: '/admin/'`, пересобраны assets с путями `/admin/assets/...`
+- Frontend: удалены Google Fonts (`fonts.googleapis.com`) — все шрифты только системные (`Arial, Helvetica, sans-serif`)
+- Admin/Frontend themes: добавлен `typography.fontFamily: 'Arial, Helvetica, sans-serif'`
+- Fix: `backend/requirements.txt` — добавлены `passlib[bcrypt]==1.7.4` и `bcrypt==4.0.1` (отсутствовали)
+- `scripts/install_debian.sh`: обновлён шаблон nginx (trailing slash + /openapi.json)
+
 ## Fixes & Enhancements
 - Исправлены тесты: 26/26 проходят (было 9 pass, 2 fail, 16 error)
   - EconomyService.calculate_cost сделан classmethod
@@ -132,3 +159,41 @@
 - Добавлен автоаккреал баланса (asyncio background task, каждые 3600с)
   - Настройки: auto_accrual_interval_minutes, auto_accrual_amount (AdminSettings)
 - Добавлена опция pool_pre_ping в engine для продакшена
+
+## UI/UX — Design Pass & User Management Fixes
+### Backend
+- **User schema**: `AdminUserCreate`, `AdminUserUpdate`, `AdminUserResponse` — добавлено поле `group_id: str | None`
+- **AdminService**: `create_user`, `update_user`, `get_user`, `list_users` — теперь работают с `group_id`
+- **Group endpoint**: добавлен `GET /admin/groups/{group_id}` (требовался react-admin ReferenceInput)
+- **AdminGroupResponse** импортирован в admin endpoint
+
+### Admin Frontend (React-admin)
+- **Users.tsx**: добавлен `ReferenceInput source="group_id"` — выпадающий список групп AD для создания/редактирования пользователя
+- **Users.tsx/Groups.tsx**: улучшены helperText для поля `permissions` — "chat — чат, generate — генерация, chat,generate — оба"
+- **Users.tsx**: добавлено поле `full_name`
+
+### User Frontend (React MUI)
+- **SimpleMarkdown.tsx**: исправлен crash при `text === null/undefined` — добавлено `|| ""`
+- **ChatPage.tsx**: `reply.content` — fallback на `""` при null
+- **Themes (light/dark)**: добавлены `shape.borderRadius: 10`, компонент-оверрайды (`MuiCard` с тенью/hover, `MuiButton` скруглённый, `MuiPaper backgroundImage: none`)
+- **LoginPage**: новый дизайн — градиентный фон, крупный Avatar/иконка ACCOS, улучшенные отступы
+- **App.tsx**: улучшен AppBar — иконка ACCOS, баланс в Chip с иконкой кошелька, Avatar с инициалом пользователя, имя пользователя
+- **DashboardPage**: карточки с цветными Avatar-иконками (баланс/пользователь/права/чат), компактная история со статусными лейблами
+- **ChatPage**: аватары для user (зелёный) и assistant (синий), скруглённые "пузырьки", таймштампы, раздельный дизайн сообщений
+- **GenerationPage**: улучшенный layout — иконки в заголовках, статусные Chip'ы, sticky история с кнопкой обновления, улучшенная карточка референс-изображений
+
+## Session — Fixes & Domain Group Login Restriction
+- **Admin panel**: Theme toggle moved inside UserMenu dropdown — no more overlap with logout button
+- **Admin panel**: `TokenResponse` now includes `is_admin` field — login check for admin status works correctly
+- **Admin panel**: Chat messages cost label changed from "кр." to "MS"
+- **Admin panel**: Dark theme chat viewer — fixed white text on light background (grey.100→grey.800 in dark mode)
+- **Admin panel**: Added backup management page (list, create, delete backups via pg_dump)
+- **Auth**: New setting `require_ad_group_for_login` (default: false) — when enabled, only users belonging to a configured AD group can log in
+- **Auth**: Admin user always bypasses the AD group check
+- **User model**: Added `default_system_prompt` and `avatar_path` fields
+- **User API**: New endpoints `GET/PUT /api/v1/user/profile`, `POST /api/v1/user/avatar` with 256×256 auto-crop
+- **User frontend**: New ProfilePage (avatar upload, default system prompt, name/email editing)
+- **Admin groups**: Interactive AD group selector (AutocompleteInput) — выбирает DN из LDAP, не нужно вводить вручную
+- **LDAP**: Добавлены настройки `ldap_bind_dn`, `ldap_bind_password` для чтения групп из AD
+- **LDAP**: Добавлен метод `list_groups(search)` в LDAPAdapter (фильтр по cn)
+- **Admin API**: Новый эндпоинт `GET /api/v1/admin/ldap-groups?search=...`

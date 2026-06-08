@@ -7,6 +7,7 @@ from app.adapters.lmstudio_adapter import LMStudioAdapter
 from app.repositories.chat_repository import ChatRepository
 from app.repositories.user_repository import UserRepository
 from app.services.economy_service import EconomyService
+from app.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,6 @@ class ChatService:
         self.chat_repo = ChatRepository(session)
         self.user_repo = UserRepository(session)
         self.economy = EconomyService(session)
-        self.llm = LMStudioAdapter()
 
     async def create_chat(self, user_id: str, title: str = "New Chat", system_prompt: str | None = None) -> dict:
         uid = UUID(user_id)
@@ -31,6 +31,7 @@ class ChatService:
             "chat": {
                 "id": str(chat.id),
                 "title": chat.title,
+                "system_prompt": chat.system_prompt,
                 "created_at": chat.created_at,
                 "updated_at": chat.updated_at,
             },
@@ -45,6 +46,7 @@ class ChatService:
                 {
                     "id": str(c.id),
                     "title": c.title,
+                    "system_prompt": c.system_prompt,
                     "created_at": c.created_at,
                     "updated_at": c.updated_at,
                 }
@@ -52,17 +54,43 @@ class ChatService:
             ],
         }
 
-    async def get_history(self, session_id: str) -> dict:
+    async def update_chat(self, user_id: str, session_id: str, title: str | None = None, system_prompt: str | None = None) -> dict:
         sid = UUID(session_id)
         session = await self.chat_repo.get(sid)
         if not session:
             return {"success": False, "error": "Chat session not found"}
+        if str(session.user_id) != user_id:
+            return {"success": False, "error": "Access denied"}
+        if title is not None:
+            session.title = title
+        if system_prompt is not None:
+            session.system_prompt = system_prompt
+        await self.session.flush()
+        return {
+            "success": True,
+            "chat": {
+                "id": str(session.id),
+                "title": session.title,
+                "system_prompt": session.system_prompt,
+                "created_at": session.created_at,
+                "updated_at": session.updated_at,
+            },
+        }
+
+    async def get_history(self, session_id: str, user_id: str | None = None) -> dict:
+        sid = UUID(session_id)
+        session = await self.chat_repo.get(sid)
+        if not session:
+            return {"success": False, "error": "Chat session not found"}
+        if user_id and str(session.user_id) != user_id:
+            return {"success": False, "error": "Access denied"}
         messages = await self.chat_repo.get_messages(sid)
         return {
             "success": True,
             "session": {
                 "id": str(session.id),
                 "title": session.title,
+                "system_prompt": session.system_prompt,
                 "created_at": session.created_at,
                 "updated_at": session.updated_at,
             },
@@ -108,13 +136,19 @@ class ChatService:
             messages.append({"role": m.role, "content": m.content})
         messages.append({"role": "user", "content": message})
 
-        llm_result = await self.llm.chat_completion(messages)
+        settings_svc = SettingsService(self.session)
+        api_key = await settings_svc.get("lmstudio_api_key")
+        model = await settings_svc.get("lmstudio_model")
+        base_url = await settings_svc.get("lmstudio_base_url")
+        llm = LMStudioAdapter(api_key=api_key, model=model, base_url=base_url)
+
+        llm_result = await llm.chat_completion(messages)
         if not llm_result["success"]:
             return {"success": False, "error": llm_result.get("error", "LLM call failed")}
 
         tokens_input = llm_result.get("tokens_input", 0)
         tokens_output = llm_result.get("tokens_output", 0)
-        cost = self.economy.calculate_cost("llm", tokens_input=tokens_input, tokens_output=tokens_output)
+        cost = await self.economy.calculate_cost("llm", tokens_input=tokens_input, tokens_output=tokens_output)
 
         deduct = await self.economy.deduct_balance(user_id, cost)
         if not deduct["success"]:
