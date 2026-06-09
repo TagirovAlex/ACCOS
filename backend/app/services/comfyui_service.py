@@ -84,9 +84,9 @@ class ComfyUIService:
             "updated_at": record.updated_at,
         }
 
-    async def get_history(self, user_id: str) -> dict:
+    async def get_history(self, user_id: str, workflow_type: str | None = None) -> dict:
         uid = UUID(user_id)
-        records = await self.generation_repo.get_user_generations(uid)
+        records = await self.generation_repo.get_user_generations(uid, workflow_type=workflow_type)
         return {
             "success": True,
             "generations": [

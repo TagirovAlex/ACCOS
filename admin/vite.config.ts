@@ -5,6 +5,15 @@ export default defineConfig({
   plugins: [react()],
   build: {
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) return 'vendor';
+          if (id.includes('node_modules/@mui/') || id.includes('node_modules/@emotion/')) return 'mui';
+          if (id.includes('node_modules/react-admin') || id.includes('ra-data-simple-rest') || id.includes('ra-language-russian')) return 'ra';
+        },
+      },
+    },
   },
   base: "/admin/",
   server: {

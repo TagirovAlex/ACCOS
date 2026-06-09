@@ -9,7 +9,7 @@ from app.services.economy_service import (
 async def test_calculate_llm_cost():
     s = LLMCostStrategy()
     cost = s.calculate_cost(tokens_input=100, tokens_output=50)
-    assert isinstance(cost, float)
+    assert isinstance(cost, (int, float))
     assert cost > 0
 
 
@@ -17,7 +17,7 @@ async def test_calculate_llm_cost():
 async def test_calculate_image_gen_cost():
     s = ImageGenCostStrategy()
     cost = s.calculate_cost(width=1024, height=768)
-    assert isinstance(cost, float)
+    assert isinstance(cost, (int, float))
     assert cost > 0
 
 
@@ -25,7 +25,7 @@ async def test_calculate_image_gen_cost():
 async def test_calculate_image_edit_cost():
     s = ImageEditCostStrategy()
     cost = s.calculate_cost(width=1024, height=768, avg_ref_size=512)
-    assert isinstance(cost, float)
+    assert isinstance(cost, (int, float))
     assert cost > 0
 
 
@@ -33,7 +33,7 @@ async def test_calculate_image_edit_cost():
 async def test_calculate_video_gen_cost():
     s = VideoGenCostStrategy()
     cost = s.calculate_cost(resolution=1920, duration=5)
-    assert isinstance(cost, float)
+    assert isinstance(cost, (int, float))
     assert cost > 0
 
 

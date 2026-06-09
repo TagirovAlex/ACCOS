@@ -55,7 +55,7 @@ class AuthService:
         return result
 
     async def _resolve_group_and_permissions(self, ldap_result: dict) -> tuple[str | None, str, float]:
-        permissions = "chat"
+        permissions = "chat,generate,edit,video"
         start_balance = 100.0
         group_id = None
         ad_groups = ldap_result.get("groups", [])
