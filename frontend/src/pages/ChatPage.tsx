@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Box, TextField, Button, Typography, Paper, List, ListItem, ListItemText, Divider, IconButton, Alert, Snackbar, CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Avatar, Chip } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import AddIcon from "@mui/icons-material/Add";
@@ -37,6 +37,7 @@ export const ChatPage = ({ user }: ChatPageProps) => {
   const [typing, setTyping] = useState(false);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [createDialog, setCreateDialog] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -47,8 +48,8 @@ export const ChatPage = ({ user }: ChatPageProps) => {
   const [avatarError, setAvatarError] = useState(false);
   const avatarUrl = user?.avatar_path ? `/${user.avatar_path}` : null;
 
-  useEffect(() => { loadChats(); }, []);
-  useEffect(() => { if (activeChat) loadMessages(activeChat); }, [activeChat]);
+  useEffect(() => { loadChats(); return () => stopPolling(); }, []);
+  useEffect(() => { if (activeChat) loadMessages(activeChat); return () => stopPolling(); }, [activeChat]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, typing]);
 
   const loadChats = async () => {
@@ -60,10 +61,38 @@ export const ChatPage = ({ user }: ChatPageProps) => {
     }
   };
 
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
   const loadMessages = async (id: string) => {
+    stopPolling();
     try {
       const res: any = await api("GET", `/chat/${id}`);
       setMessages(res.messages || []);
+      if (res.has_pending) {
+        setTyping(true);
+        setLoading(true);
+        pollingRef.current = setInterval(async () => {
+          try {
+            const r: any = await api("GET", `/chat/${id}`);
+            setMessages(r.messages || []);
+            if (!r.has_pending) {
+              setTyping(false);
+              setLoading(false);
+              stopPolling();
+            }
+          } catch {
+            stopPolling();
+          }
+        }, 3000);
+      } else {
+        setTyping(false);
+        setLoading(false);
+      }
     } catch {
       setMessages([]);
       setError("Не удалось загрузить сообщения");
@@ -135,23 +164,15 @@ export const ChatPage = ({ user }: ChatPageProps) => {
     const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: msg, created_at: new Date().toISOString() };
     setMessages(prev => [...prev, userMsg]);
     try {
-      const res: any = await api("POST", `/chat/${activeChat}/send`, { message: msg });
-      const reply: Message = {
-        id: res.id || `resp-${Date.now()}`,
-        role: "assistant",
-        content: res.message || res.content || "",
-        created_at: new Date().toISOString(),
-        tokens_input: res.tokens_input,
-        tokens_output: res.tokens_output,
-        cost: res.cost,
-      };
-      setMessages(prev => [...prev, reply]);
+      await api("POST", `/chat/${activeChat}/send`, { message: msg });
+      // reload messages to get server-assigned IDs and start typing polling
+      loadMessages(activeChat);
     } catch (e: any) {
       setMessages(prev => prev.map(m => m.id === userMsg.id ? { ...m, content: `${m.content}\n\n⚠️ Ошибка отправки: ${e.message}` } : m));
       setError("Ошибка отправки сообщения");
+      setTyping(false);
+      setLoading(false);
     }
-    setTyping(false);
-    setLoading(false);
   };
 
   const activeChatData = chats.find(c => c.id === activeChat);
@@ -166,8 +187,8 @@ export const ChatPage = ({ user }: ChatPageProps) => {
           )}
           {chats.map(c => (
             <ListItem key={c.id} component="button" onClick={() => setActiveChat(c.id)}
-              sx={{ cursor: "pointer", bgcolor: activeChat === c.id ? "action.selected" : "transparent", borderRadius: 2, mb: 0.5, textAlign: "left", display: "flex", gap: 0.5 }}>
-              <ListItemText primary={c.title} primaryTypographyProps={{ noWrap: true }} sx={{ flex: 1 }} />
+              sx={{ cursor: "pointer", bgcolor: activeChat === c.id ? "action.selected" : "transparent", borderRadius: 2, mb: 0.5, textAlign: "left", display: "flex", gap: 0.5, color: "text.primary" }}>
+              <ListItemText primary={c.title} primaryTypographyProps={{ noWrap: true, color: "text.primary" }} sx={{ flex: 1 }} />
               <IconButton size="small" onClick={e => { e.stopPropagation(); setDeleteTarget(c.id); }} sx={{ opacity: 0.5, "&:hover": { opacity: 1 } }}>
                 <DeleteIcon fontSize="small" />
               </IconButton>
@@ -180,9 +201,9 @@ export const ChatPage = ({ user }: ChatPageProps) => {
           <>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2, py: 1, borderBottom: 1, borderColor: "divider" }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Typography variant="subtitle2">{activeChatData?.title}</Typography>
+                <Typography variant="subtitle2" color="text.primary">{activeChatData?.title}</Typography>
                 {activeChatData?.system_prompt && (
-                  <Chip label="System" size="small" color="info" variant="outlined" sx={{ height: 20, fontSize: 11 }} />
+                  <Chip label="System" size="small" color="info" variant="outlined" sx={{ height: 20, fontSize: 11, color: "info.light" }} />
                 )}
               </Box>
               <IconButton size="small" onClick={openSettings} title="Настройки чата">
@@ -215,7 +236,7 @@ export const ChatPage = ({ user }: ChatPageProps) => {
                           <> · ↑{m.tokens_input ?? 0} ↓{m.tokens_output ?? 0}</>
                         )}
                         {!isUser && m.cost != null && (
-                          <> · {m.cost} MS</>
+                          <> · {Number(m.cost.toFixed(2))} MS</>
                         )}
                       </Typography>
                     </Box>
@@ -254,7 +275,7 @@ export const ChatPage = ({ user }: ChatPageProps) => {
 
       {/* Create dialog */}
       <Dialog open={createDialog} onClose={() => setCreateDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Новый чат</DialogTitle>
+        <DialogTitle sx={{ color: "text.primary" }}>Новый чат</DialogTitle>
         <DialogContent>
           <TextField autoFocus label="Название" fullWidth value={newTitle} onChange={e => setNewTitle(e.target.value)} sx={{ mb: 2, mt: 1 }} />
           <TextField label="Системный промпт (необязательно)" fullWidth multiline minRows={3} value={newSystemPrompt} onChange={e => setNewSystemPrompt(e.target.value)} placeholder="Например: Ты — профессиональный помощник..." />
@@ -267,7 +288,7 @@ export const ChatPage = ({ user }: ChatPageProps) => {
 
       {/* Settings dialog */}
       <Dialog open={settingsDialog} onClose={() => setSettingsDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Настройки чата</DialogTitle>
+        <DialogTitle sx={{ color: "text.primary" }}>Настройки чата</DialogTitle>
         <DialogContent>
           <TextField autoFocus label="Название" fullWidth value={editTitle} onChange={e => setEditTitle(e.target.value)} sx={{ mb: 2, mt: 1 }} />
           <TextField label="Системный промпт" fullWidth multiline minRows={3} value={editSystemPrompt} onChange={e => setEditSystemPrompt(e.target.value)} placeholder="Оставьте пустым, чтобы убрать системный промпт" />

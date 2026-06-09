@@ -241,3 +241,17 @@
 - **Asset schema**: `AdminAssetResponse` — добавлено поле `username`
 - **Backend**: `list_all_assets` — eager load пользователя через `joinedload`, group create — расширенный возврат
 - **ComfyUI resolution**: Добавлен `_apply_resolution` — при генерации ширина/высота теперь передаются в ноды `*LatentImage` воркфлоу (например, `EmptySD3LatentImage`), ранее размер игнорировался
+- **File manager fix**: `FileEntry.modified` schema изменён с `str` на `float` (была Pydantic validation error, entries не отображались). Download теперь использует fetch с auth header вместо `<a href>`
+- **Admin generation show**: Добавлены кнопки "Скачать" для всех изображений (результат, source, reference_images)
+- **User frontend reference images**: Добавлен показ `reference_images` в диалоге истории и в начальном результате генерации
+- **FileManager — плитки, превью, фильтрация**: Добавлен режим плиток (list/tiles), клик по картинке открывает полноразмерный превью-диалог, скрыты системные папки (`css`, `js`, `templates`, `images`, `generated` — старый путь), оставлены только рабочие директории
+
+## Chat Queue Worker (Jun 09)
+- **Model**: `ChatQueue` — новая таблица `chat_queue` с полями `id, session_id, user_id, prompt_messages, status, error_message, tokens_input, tokens_output, cost, created_at, updated_at`
+- **Migration**: `87042875ea58_add_chat_queue_table` — создана и применена на сервере
+- **Chat worker**: `chat_worker.py` — отдельный фоновый воркер с циклом claim → process → update; не блокирует HTTP request
+- **send_message**: Теперь не вызывает LLM синхронно, а создаёт запись в `chat_queue` и возвращает `{success: true}` немедленно
+- **get_history**: `has_pending` проверяет наличие `queued/processing` записей в `chat_queue` (вместо проверки последнего сообщения)
+- **main.py**: Запуск `chat_worker_loop` в lifespan наравне с `queue_worker_loop`
+- **Frontend**: `sendMessage` больше не добавляет оптимистичный assistant-ответ, полагается на polling из `loadMessages`; при успешной отправке вызывает `loadMessages(activeChat)` для старта polling
+- **Tests**: Адаптирован `test_send_message` (проверка очереди вместо ответа LLM), добавлен `test_send_message_queue_processed` (проверка полного цикла: enqueue → worker → assistant message)

@@ -16,9 +16,11 @@ from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 
 from app.core.config import settings, PROJECT_ROOT
+from app.core.paths import UPLOADS_DIR, GENERATIONS_DIR, EDITS_DIR, VIDEOS_DIR, AVATARS_DIR
 from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin
 from app.services.accrual_service import run_auto_accrual
 from app.services.queue_worker import queue_worker_loop
+from app.services.chat_worker import chat_worker_loop
 from app.services.settings_service import SettingsService
 from app.db.session import async_session_factory
 
@@ -39,11 +41,12 @@ logging.getLogger().addHandler(file_handler)
 
 _accrual_task = None
 _queue_worker_task = None
+_chat_worker_task = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _accrual_task, _queue_worker_task
+    global _accrual_task, _queue_worker_task, _chat_worker_task
 
     logger.info("Seeding default settings...")
     try:
@@ -69,9 +72,10 @@ async def lifespan(app: FastAPI):
 
     _accrual_task = asyncio.create_task(accrual_loop())
     _queue_worker_task = asyncio.create_task(queue_worker_loop())
-    logger.info("Queue worker started")
+    _chat_worker_task = asyncio.create_task(chat_worker_loop())
+    logger.info("Queue worker / Chat worker started")
     yield
-    for task in (_accrual_task, _queue_worker_task):
+    for task in (_accrual_task, _queue_worker_task, _chat_worker_task):
         if task:
             task.cancel()
     logger.info("Background tasks stopped")
@@ -99,9 +103,11 @@ app.add_middleware(
 static_dir = PROJECT_ROOT / "static"
 static_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-(static_dir / "generated").mkdir(parents=True, exist_ok=True)
-(static_dir / "uploads").mkdir(parents=True, exist_ok=True)
-(static_dir / "avatars").mkdir(parents=True, exist_ok=True)
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+GENERATIONS_DIR.mkdir(parents=True, exist_ok=True)
+EDITS_DIR.mkdir(parents=True, exist_ok=True)
+VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
+AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _error_detail(request: Request, exc: Exception, status: int, error_id: str) -> dict:

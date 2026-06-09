@@ -1,9 +1,14 @@
+import json
 import logging
 from uuid import UUID
 
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.lmstudio_adapter import LMStudioAdapter
+from app.db.models.chat import ChatMessage
+from app.db.models.chat_queue import ChatQueue
+from app.db.session import async_session_factory
+from app.db.models.user import User
 from app.repositories.chat_repository import ChatRepository
 from app.repositories.user_repository import UserRepository
 from app.services.economy_service import EconomyService
@@ -85,8 +90,18 @@ class ChatService:
         if user_id and str(session.user_id) != user_id:
             return {"success": False, "error": "Access denied"}
         messages = await self.chat_repo.get_messages(sid)
+        has_pending = False
+        if messages and messages[-1].role == "user":
+            queue_count = await self.session.scalar(
+                select(func.count(ChatQueue.id)).where(
+                    ChatQueue.session_id == sid,
+                    ChatQueue.status.in_(["queued", "processing"]),
+                )
+            )
+            has_pending = (queue_count or 0) > 0
         return {
             "success": True,
+            "has_pending": has_pending,
             "session": {
                 "id": str(session.id),
                 "title": session.title,
@@ -122,46 +137,33 @@ class ChatService:
         uid = UUID(user_id)
         sid = UUID(session_id)
 
-        session = await self.chat_repo.get(sid)
-        if not session:
+        chat_session = await self.chat_repo.get(sid)
+        if not chat_session:
             return {"success": False, "error": "Chat session not found"}
-        if str(session.user_id) != user_id:
+        if str(chat_session.user_id) != user_id:
             return {"success": False, "error": "Access denied"}
 
+        async with async_session_factory() as persist_session:
+            persist_session.add(ChatMessage(session_id=sid, role="user", content=message))
+            await persist_session.commit()
+
         history = await self.chat_repo.get_messages(sid)
-        messages = []
-        if session.system_prompt:
-            messages.append({"role": "system", "content": session.system_prompt})
-        for m in history:
+        settings_svc = SettingsService(self.session)
+        ctx_count = int(await settings_svc.get("chat_context_messages") or "50")
+        messages: list[dict] = []
+        if chat_session.system_prompt:
+            messages.append({"role": "system", "content": chat_session.system_prompt})
+        for m in history[-ctx_count:]:
             messages.append({"role": m.role, "content": m.content})
         messages.append({"role": "user", "content": message})
 
-        settings_svc = SettingsService(self.session)
-        api_key = await settings_svc.get("lmstudio_api_key")
-        model = await settings_svc.get("lmstudio_model")
-        base_url = await settings_svc.get("lmstudio_base_url")
-        llm = LMStudioAdapter(api_key=api_key, model=model, base_url=base_url)
+        async with async_session_factory() as db:
+            db.add(ChatQueue(
+                session_id=sid,
+                user_id=uid,
+                prompt_messages=json.dumps(messages),
+                status="queued",
+            ))
+            await db.commit()
 
-        llm_result = await llm.chat_completion(messages)
-        if not llm_result["success"]:
-            return {"success": False, "error": llm_result.get("error", "LLM call failed")}
-
-        tokens_input = llm_result.get("tokens_input", 0)
-        tokens_output = llm_result.get("tokens_output", 0)
-        cost = await self.economy.calculate_cost("llm", tokens_input=tokens_input, tokens_output=tokens_output)
-
-        deduct = await self.economy.deduct_balance(user_id, cost)
-        if not deduct["success"]:
-            return {"success": False, "error": deduct.get("error", "Insufficient balance")}
-
-        content = llm_result["content"]
-        await self.chat_repo.add_message(sid, "user", message, tokens_input=tokens_input)
-        await self.chat_repo.add_message(sid, "assistant", content, tokens_input=tokens_input, tokens_output=tokens_output, cost=cost)
-
-        return {
-            "success": True,
-            "message": content,
-            "tokens_input": tokens_input,
-            "tokens_output": tokens_output,
-            "cost": cost,
-        }
+        return {"success": True, "message": "Queued"}

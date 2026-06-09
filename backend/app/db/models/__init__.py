@@ -4,6 +4,7 @@ from app.db.models.generation import GenerationRecord
 from app.db.models.image_asset import ImageAsset
 from app.db.models.admin_settings import AdminSettings
 from app.db.models.user_group import UserGroup
+from app.db.models.chat_queue import ChatQueue
 
 __all__ = [
     "User",
@@ -13,4 +14,5 @@ __all__ = [
     "ImageAsset",
     "AdminSettings",
     "UserGroup",
+    "ChatQueue",
 ]
