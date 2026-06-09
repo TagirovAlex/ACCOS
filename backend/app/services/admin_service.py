@@ -32,6 +32,7 @@ class AdminService:
             user = await self.user_repo.get(UUID(user_id))
             if not user:
                 return None
+            token_stats = await self.get_token_stats(user_id)
             return {
                 "id": str(user.id), "username": user.username, "email": user.email,
                 "full_name": user.full_name, "balance": user.balance,
@@ -44,6 +45,7 @@ class AdminService:
                 "admin_group_id": str(user.admin_group_id) if user.admin_group_id else None,
                 "created_at": user.created_at,
                 "avatar_path": user.avatar_path, "last_login": user.last_login,
+                "token_stats": token_stats,
             }
         except Exception:
             return None
@@ -129,10 +131,34 @@ class AdminService:
             return {"success": False, "error": str(e)}
 
     async def list_users(self, skip: int = 0, limit: int = 100) -> dict:
+        from sqlalchemy import func as sa_func
         result = await self.session.execute(
             select(User).order_by(User.created_at.desc()).offset(skip).limit(limit)
         )
         users = result.scalars().all()
+
+        user_ids = [u.id for u in users]
+        token_rows = {}
+        if user_ids:
+            token_result = await self.session.execute(
+                select(
+                    ChatSession.user_id,
+                    sa_func.coalesce(sa_func.sum(ChatMessage.tokens_input), 0),
+                    sa_func.coalesce(sa_func.sum(ChatMessage.tokens_output), 0),
+                    sa_func.coalesce(sa_func.sum(ChatMessage.cost), 0),
+                )
+                .select_from(ChatSession)
+                .join(ChatMessage, ChatMessage.session_id == ChatSession.id)
+                .where(ChatSession.user_id.in_(user_ids))
+                .group_by(ChatSession.user_id)
+            )
+            for uid, tin, tout, cost in token_result:
+                token_rows[str(uid)] = {
+                    "tokens_input": int(tin),
+                    "tokens_output": int(tout),
+                    "llm_cost": float(cost),
+                }
+
         return {
             "success": True,
             "users": [
@@ -148,6 +174,7 @@ class AdminService:
                     "admin_group_id": str(u.admin_group_id) if u.admin_group_id else None,
                     "created_at": u.created_at,
                     "avatar_path": u.avatar_path, "last_login": u.last_login,
+                    "token_stats": token_rows.get(str(u.id), {"tokens_input": 0, "tokens_output": 0, "llm_cost": 0}),
                 }
                 for u in users
             ],
@@ -191,7 +218,13 @@ class AdminService:
             permissions=permissions, start_balance=start_balance,
             description=description,
         )
-        return {"success": True, "group": {"id": str(group.id), "name": group.name}}
+        return {
+            "success": True,
+            "id": str(group.id), "name": group.name,
+            "ad_group_dn": group.ad_group_dn, "permissions": group.permissions,
+            "start_balance": group.start_balance, "description": group.description,
+            "is_active": group.is_active, "created_at": group.created_at,
+        }
 
     async def update_group(self, group_id: str, **kwargs) -> dict:
         group = await self.group_repo.get(UUID(group_id))
@@ -382,10 +415,11 @@ class AdminService:
     async def list_all_assets(self, skip: int = 0, limit: int = 100) -> dict:
         result = await self.session.execute(
             select(ImageAsset)
+            .options(joinedload(ImageAsset.user))
             .order_by(ImageAsset.created_at.desc())
             .offset(skip).limit(limit)
         )
-        assets = result.scalars().all()
+        assets = result.unique().scalars().all()
         return {
             "success": True,
             "assets": [
@@ -396,6 +430,7 @@ class AdminService:
                     "file_size": a.file_size, "width": a.width, "height": a.height,
                     "created_at": a.created_at,
                     "deleted_at": a.deleted_at,
+                    "username": a.user.username if a.user else None,
                 }
                 for a in assets
             ],
@@ -436,12 +471,23 @@ class AdminService:
             return {"success": False, "error": str(e)}
 
     async def get_dashboard_stats(self) -> dict:
-        from sqlalchemy import func
-        users_count = (await self.session.execute(select(func.count()).select_from(User))).scalar()
-        groups_count = (await self.session.execute(select(func.count()).select_from(UserGroup))).scalar()
-        chats_count = (await self.session.execute(select(func.count()).select_from(ChatSession))).scalar()
-        gens_count = (await self.session.execute(select(func.count()).select_from(GenerationRecord))).scalar()
-        assets_count = (await self.session.execute(select(func.count()).select_from(ImageAsset))).scalar()
+        from sqlalchemy import func as sa_func
+        users_count = (await self.session.execute(select(sa_func.count()).select_from(User))).scalar()
+        groups_count = (await self.session.execute(select(sa_func.count()).select_from(UserGroup))).scalar()
+        chats_count = (await self.session.execute(select(sa_func.count()).select_from(ChatSession))).scalar()
+        gens_count = (await self.session.execute(select(sa_func.count()).select_from(GenerationRecord))).scalar()
+        assets_count = (await self.session.execute(select(sa_func.count()).select_from(ImageAsset))).scalar()
+
+        token_row = (await self.session.execute(
+            select(
+                sa_func.coalesce(sa_func.sum(ChatMessage.tokens_input), 0),
+                sa_func.coalesce(sa_func.sum(ChatMessage.tokens_output), 0),
+                sa_func.coalesce(sa_func.sum(ChatMessage.cost), 0),
+            )
+        )).one()
+        total_tokens_input = int(token_row[0])
+        total_tokens_output = int(token_row[1])
+        total_llm_cost = float(token_row[2])
 
         recent_users = (await self.session.execute(
             select(User).order_by(User.created_at.desc()).limit(5)
@@ -466,6 +512,9 @@ class AdminService:
             "generations": gens_count or 0,
             "assets": assets_count or 0,
             "generations_today": gens_today,
+            "total_tokens_input": total_tokens_input,
+            "total_tokens_output": total_tokens_output,
+            "total_llm_cost": total_llm_cost,
             "recent_users": [
                 {"id": str(u.id), "username": u.username, "created_at": u.created_at}
                 for u in recent_users
@@ -503,6 +552,35 @@ class AdminService:
                 {"date": str(r[0]), "count": r[1]} for r in rows
             ],
         }
+
+    async def force_delete_asset(self, asset_id: str) -> dict:
+        return await self._force_delete(ImageAsset, asset_id)
+
+    async def get_token_stats(self, user_id: str) -> dict:
+        try:
+            from sqlalchemy import func as sa_func
+            from app.db.models.chat import ChatMessage, ChatSession
+            result = await self.session.execute(
+                select(
+                    sa_func.coalesce(sa_func.sum(ChatMessage.tokens_input), 0),
+                    sa_func.coalesce(sa_func.sum(ChatMessage.tokens_output), 0),
+                    sa_func.coalesce(sa_func.sum(ChatMessage.cost), 0),
+                    sa_func.count(ChatSession.id.distinct()),
+                )
+                .select_from(ChatSession)
+                .join(ChatMessage, ChatMessage.session_id == ChatSession.id)
+                .where(ChatSession.user_id == UUID(user_id))
+            )
+            row = result.one()
+            return {
+                "success": True,
+                "total_tokens_input": int(row[0]),
+                "total_tokens_output": int(row[1]),
+                "total_cost": float(row[2]),
+                "session_count": int(row[3]),
+            }
+        except Exception as e:
+            return {"success": True, "total_tokens_input": 0, "total_tokens_output": 0, "total_cost": 0, "session_count": 0}
 
     async def _force_delete(self, model_class, record_id: str) -> dict:
         try:

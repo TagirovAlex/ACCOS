@@ -1,5 +1,8 @@
-import { List, Datagrid, TextField, BooleanField, DateField, Show, SimpleShowLayout, ReferenceField } from "react-admin";
-import { Box, Typography, Paper } from "@mui/material";
+import { useState } from "react";
+import { List, Datagrid, TextField, BooleanField, DateField, Show, SimpleShowLayout, ReferenceField, FunctionField, WithListContext } from "react-admin";
+import { Box, Typography, Paper, Card, CardContent, ToggleButtonGroup, ToggleButton, Grid as MuiGrid } from "@mui/material";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import GridViewIcon from "@mui/icons-material/GridView";
 import { useRecordContext } from "react-admin";
 
 const MessagesList = () => {
@@ -16,6 +19,7 @@ const MessagesList = () => {
             <Typography variant="caption" fontWeight={600}>{m.role === "user" ? "Пользователь" : "Ассистент"}</Typography>
             <Typography variant="body2" sx={{ mt: 0.25, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</Typography>
             {m.cost != null && <Typography variant="caption" color="text.secondary">{m.cost} MS</Typography>}
+            {m.tokens_input != null && <Typography variant="caption" color="text.secondary">input: {m.tokens_input} · output: {m.tokens_output}</Typography>}
           </Paper>
         </Box>
       ))}
@@ -24,19 +28,52 @@ const MessagesList = () => {
   );
 };
 
-export const ChatList = () => (
-  <List>
-    <Datagrid rowClick="show">
-      <ReferenceField source="user_id" reference="users" label="Пользователь">
-        <TextField source="username" />
-      </ReferenceField>
-      <TextField source="title" label="Название" />
-      <BooleanField source="is_active" label="Статус" />
-      <DateField source="created_at" label="Создан" />
-      <DateField source="updated_at" label="Обновлён" />
-    </Datagrid>
-  </List>
+const ChatListView = () => (
+  <Datagrid rowClick="show">
+    <ReferenceField source="user_id" reference="users" label="Пользователь">
+      <TextField source="username" />
+    </ReferenceField>
+    <TextField source="title" label="Название" />
+    <BooleanField source="is_active" label="Статус" />
+    <DateField source="created_at" label="Создан" />
+    <DateField source="updated_at" label="Обновлён" />
+  </Datagrid>
 );
+
+const ChatTileView = () => (
+  <WithListContext render={({ data }) => (
+    <MuiGrid container spacing={2} sx={{ p: 2 }}>
+      {data?.map((record: any) => (
+        <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
+          <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+            <CardContent>
+              <Typography variant="body2" fontWeight={600} noWrap>{record.title || "(без названия)"}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>{record.username}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                {record.is_active ? "Активен" : "Неактивен"} · {new Date(record.created_at).toLocaleDateString()}
+              </Typography>
+            </CardContent>
+          </Card>
+        </MuiGrid>
+      ))}
+    </MuiGrid>
+  )} />
+);
+
+export const ChatList = () => {
+  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("chats_view") as "list" | "tiles") ?? "list");
+  return (
+    <List actions={false}>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+        <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("chats_view", v); } }}>
+          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+      {view === "list" ? <ChatListView /> : <ChatTileView />}
+    </List>
+  );
+};
 
 export const ChatShow = () => (
   <Show>

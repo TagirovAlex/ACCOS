@@ -87,6 +87,21 @@ class ComfyUIAdapter(BaseAdapter):
                     inputs["prompt"] = prompt
         return workflow
 
+    def _apply_resolution(self, workflow: dict, width: int, height: int) -> dict:
+        for node in workflow.values():
+            if not isinstance(node, dict):
+                continue
+            if not node.get("class_type", "").endswith("LatentImage"):
+                continue
+            inputs = node.get("inputs", {})
+            if not isinstance(inputs, dict):
+                continue
+            if isinstance(inputs.get("width"), (int, float)):
+                inputs["width"] = width
+            if isinstance(inputs.get("height"), (int, float)):
+                inputs["height"] = height
+        return workflow
+
     def _apply_seed(self, workflow: dict, seed: int) -> dict:
         if seed == -1:
             seed = random.randint(0, 2**32 - 1)
@@ -135,6 +150,7 @@ class ComfyUIAdapter(BaseAdapter):
                 uploaded_images.append(result)
 
         workflow = self._apply_prompt(workflow, prompt, uploaded_images)
+        workflow = self._apply_resolution(workflow, width, height)
         workflow = self._apply_seed(workflow, seed)
 
         prompt_id = str(uuid.uuid4())

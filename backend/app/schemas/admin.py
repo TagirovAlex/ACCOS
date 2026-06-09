@@ -8,6 +8,12 @@ class BaseResponse(BaseModel):
     error: str | None = None
 
 
+class TokenStatsSchema(BaseModel):
+    tokens_input: int = 0
+    tokens_output: int = 0
+    llm_cost: float = 0
+
+
 class AdminUserResponse(BaseModel):
     id: str
     username: str
@@ -24,6 +30,7 @@ class AdminUserResponse(BaseModel):
     created_at: datetime
     avatar_path: str | None = None
     last_login: datetime | None = None
+    token_stats: TokenStatsSchema | None = None
 
 
 class AdminUserListResponse(BaseResponse):
@@ -170,6 +177,10 @@ class AdminGenerationResponse(BaseModel):
     prompt: str
     status: str
     cost: float
+    width: int | None = None
+    height: int | None = None
+    seed: int | None = None
+    thumbnail: str | None = None
     created_at: datetime
 
 
@@ -206,6 +217,7 @@ class AdminAssetResponse(BaseModel):
     height: int | None = None
     created_at: datetime
     deleted_at: datetime | None = None
+    username: str | None = None
 
 
 class AdminAssetListResponse(BaseResponse):
@@ -240,3 +252,10 @@ class LdapGroupListResponse(BaseResponse):
 
 class LdapTestResponse(BaseResponse):
     message: str = ""
+
+
+class AdminTokenStatsResponse(BaseResponse):
+    total_tokens_input: int = 0
+    total_tokens_output: int = 0
+    total_cost: float = 0
+    session_count: int = 0

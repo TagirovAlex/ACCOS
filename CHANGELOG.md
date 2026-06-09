@@ -231,3 +231,13 @@
 - **Dashboard**: 3 отдельных `HistorySection` (generate/edit/video) с per-section viewMode localStorage
 - **Settings**: `isBoolean()` теперь key-whitelist, `isNumeric()` для числовых полей, `auto_accrual_time` (HH:MM серверное время)
 - **Frontend sidebar**: Динамические navItems по `canGenerate/canEdit/canVideo/canChat`
+
+## Bugfix batch (Jun 09)
+- **Group create**: Исправлен ответ API — теперь возвращается полный объект группы с `id` на корневом уровне (react-admin dataProvider)
+- **Asset delete**: Добавлена кнопка DeleteButton в AssetShow, uniform размер тайлов (aspectRatio 4/3), username в ответе API
+- **Chats admin**: Добавлен переключатель список/плитка с localStorage
+- **Token stats**: `token_stats` добавлены в AdminUserResponse, dashboard (total_tokens_input/output/llm_cost), list_users (агрегация через JOIN) и get_user
+- **User frontend**: Клик по изображению результата открывает модальное окно с полноразмерным превью; улучшена обработка ошибок при загрузке истории
+- **Asset schema**: `AdminAssetResponse` — добавлено поле `username`
+- **Backend**: `list_all_assets` — eager load пользователя через `joinedload`, group create — расширенный возврат
+- **ComfyUI resolution**: Добавлен `_apply_resolution` — при генерации ширина/высота теперь передаются в ноды `*LatentImage` воркфлоу (например, `EmptySD3LatentImage`), ранее размер игнорировался

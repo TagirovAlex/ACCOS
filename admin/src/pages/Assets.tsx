@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { List, Datagrid, TextField, DateField, Show, SimpleShowLayout, ReferenceField, FunctionField, WithListContext, useRedirect } from "react-admin";
+import { List, Datagrid, TextField, DateField, Show, SimpleShowLayout, ReferenceField, FunctionField, WithListContext, useRedirect, useRecordContext, DeleteButton } from "react-admin";
 import { Box, IconButton, Chip, Card, CardContent, Typography, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Button } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { useRecordContext } from "react-admin";
 import DeleteIcon from "@mui/icons-material/Delete";
 
 const ImagePreview = () => {
@@ -95,8 +94,8 @@ const AssetTileView = () => {
         {data?.map((record: any) => (
           <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
             <Card onClick={() => redirect("show", "assets", record.id)}
-              sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
-              <Box sx={{ width: "100%", height: 140, overflow: "hidden", bgcolor: "#1a1a1a" }}>
+              sx={{ cursor: "pointer", height: "100%", display: "flex", flexDirection: "column", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+              <Box sx={{ width: "100%", aspectRatio: "4/3", overflow: "hidden", bgcolor: "#1a1a1a" }}>
                 {record.file_path ? (
                   <img src={`/${record.file_path}`} alt=""
                     style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
@@ -107,7 +106,7 @@ const AssetTileView = () => {
                   </Box>
                 )}
               </Box>
-              <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
+              <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 }, flexGrow: 1 }}>
                 <Typography variant="body2" fontWeight={600} noWrap>{record.filename}</Typography>
                 <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 0.5 }}>
                   <StatusChip />
@@ -150,6 +149,7 @@ const ShowActions = ({ listLabel, listPath }: { listLabel: string; listPath: str
       <Button startIcon={<ArrowBackIcon />} size="small" onClick={() => redirect("list", listPath)}>
         {listLabel}
       </Button>
+      <DeleteButton mutationMode="pessimistic" />
     </Box>
   );
 };

@@ -83,6 +83,16 @@ const UserCard = ({ record }: { record?: any }) => {
   );
 };
 
+const TokenStatsField = ({ record }: { record?: any }) => {
+  if (!record?.token_stats) return <span style={{ color: "#999" }}>—</span>;
+  const s = record.token_stats;
+  return (
+    <span title={`input: ${s.tokens_input} · output: ${s.tokens_output} · стоимость: ${s.llm_cost || 0}`}>
+      {(s.tokens_input + s.tokens_output).toLocaleString()} токенов
+    </span>
+  );
+};
+
 const UserListView = () => (
   <Datagrid rowClick="edit" sx={{ "& .column-avatar": { width: 50 } }}>
     <FunctionField label=" " render={(r: any) => <UserAvatarField record={r} />} />
@@ -91,6 +101,7 @@ const UserListView = () => (
     <TextField source="full_name" label="Полное имя" />
     <NumberField source="balance" label="Баланс" />
     <FunctionField label="Тип" render={(r: any) => <AuthSourceField record={r} />} />
+    <FunctionField label="Токены (LLM)" render={(r: any) => <TokenStatsField record={r} />} />
     <FunctionField label="Последний вход" render={(r: any) => <LastLoginField record={r} />} />
     <BooleanField source="is_admin" label="Админ" />
     <BooleanField source="is_active" label="Активен" />

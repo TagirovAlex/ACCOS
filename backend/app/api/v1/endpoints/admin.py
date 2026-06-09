@@ -22,6 +22,7 @@ from app.schemas.admin import (
     AdminGenerationListResponse,
     AdminGenerationDetailResponse,
     AdminAssetListResponse,
+    AdminTokenStatsResponse,
     BackupListResponse,
     BackupCreateResponse,
     LdapGroupListResponse,
@@ -177,18 +178,21 @@ async def get_group(
     return group
 
 
-@router.post("/groups", response_model=BaseResponse)
+@router.post("/groups")
 async def create_group(
     request: AdminGroupCreate,
     user_id: str = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return BaseResponse(**await service.create_group(
+    result = await service.create_group(
         name=request.name, ad_group_dn=request.ad_group_dn,
         permissions=request.permissions, start_balance=request.start_balance,
         description=request.description,
-    ))
+    )
+    if not result["success"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("error", "Creation failed"))
+    return result
 
 
 @router.put("/groups/{group_id}", response_model=BaseResponse)
@@ -302,6 +306,29 @@ async def get_asset_detail(
     if not asset:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
     return asset
+
+
+@router.delete("/assets/{asset_id}", response_model=BaseResponse)
+async def delete_asset(
+    asset_id: str,
+    user_id: str = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    result = await service.force_delete_asset(asset_id)
+    if not result["success"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("error", "Delete failed"))
+    return BaseResponse(**result)
+
+
+@router.get("/token-stats/{target_user_id}", response_model=AdminTokenStatsResponse)
+async def get_user_token_stats(
+    target_user_id: str,
+    admin_id: str = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    return AdminTokenStatsResponse(**await service.get_token_stats(target_user_id))
 
 
 @router.get("/settings", response_model=AdminSettingListResponse)

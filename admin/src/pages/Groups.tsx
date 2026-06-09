@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
-import { List, Datagrid, TextField, NumberField, Edit, SimpleForm, TextInput, NumberInput, BooleanInput, Create, AutocompleteInput, useNotify } from "react-admin";
+import { List, Datagrid, TextField, NumberField, Edit, SimpleForm, TextInput, NumberInput, BooleanInput, Create, AutocompleteInput, useNotify, WithListContext } from "react-admin";
+import { ToggleButtonGroup, ToggleButton, Box, Card, CardContent, Typography, Grid as MuiGrid } from "@mui/material";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import GridViewIcon from "@mui/icons-material/GridView";
 import { getToken } from "../services/api";
 
 const API_BASE = "/api/v1/admin/ldap-groups";
@@ -30,17 +33,50 @@ const AdGroupInput = (props: any) => {
   return <AutocompleteInput choices={choices} isLoading={loading} {...props} />;
 };
 
-export const GroupList = () => (
-  <List>
-    <Datagrid rowClick="edit">
-      <TextField source="name" label="Название" />
-      <TextField source="ad_group_dn" label="AD группа" />
-      <TextField source="permissions" label="Права" />
-      <NumberField source="start_balance" label="Стартовый баланс" />
-      <TextField source="description" label="Описание" />
-    </Datagrid>
-  </List>
+const GroupListView = () => (
+  <Datagrid rowClick="edit">
+    <TextField source="name" label="Название" />
+    <TextField source="ad_group_dn" label="AD группа" />
+    <TextField source="permissions" label="Права" />
+    <NumberField source="start_balance" label="Стартовый баланс" />
+    <TextField source="description" label="Описание" />
+  </Datagrid>
 );
+
+const GroupTileView = () => {
+  return (
+    <WithListContext render={({ data }) => (
+      <MuiGrid container spacing={2} sx={{ p: 2 }}>
+        {data?.map((record: any) => (
+          <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
+            <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+              <CardContent>
+                <Typography variant="body2" fontWeight={600} noWrap>{record.name}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{record.ad_group_dn}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{record.permissions}</Typography>
+              </CardContent>
+            </Card>
+          </MuiGrid>
+        ))}
+      </MuiGrid>
+    )} />
+  );
+};
+
+export const GroupList = () => {
+  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("groups_view") as "list" | "tiles") ?? "list");
+  return (
+    <List actions={false}>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+        <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("groups_view", v); } }}>
+          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+      {view === "list" ? <GroupListView /> : <GroupTileView />}
+    </List>
+  );
+};
 
 export const GroupEdit = () => (
   <Edit>

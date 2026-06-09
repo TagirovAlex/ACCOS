@@ -96,6 +96,7 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
   const [editWorkflow, setEditWorkflow] = useState("qwen_edit_1");
   const [videoPrompt, setVideoPrompt] = useState("");
   const [videoDuration, setVideoDuration] = useState(5);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [actionDialog, setActionDialog] = useState<"" | "edit" | "video">("");
   const [actionLoading, setActionLoading] = useState(false);
   const [seed, setSeed] = useState("");
@@ -120,7 +121,10 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
     try {
       const res: any = await api("GET", "/generate/history");
       setHistory(res.generations || []);
-    } catch { /* ignore */ }
+      if (!res.success) setError(res.error || "Ошибка загрузки истории");
+    } catch (e: any) {
+      setError(e.message || "Ошибка загрузки истории");
+    }
     setHistoryLoading(false);
   }, []);
 
@@ -409,7 +413,7 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
                 {result.images && result.images.length > 0 && (
                   <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", maxHeight: 600, overflowY: "auto", p: 1 }}>
                     {result.images.map((img: ImageAsset) => (
-                      <Box key={img.id} sx={{ maxWidth: 300 }}>
+                      <Box key={img.id} sx={{ maxWidth: 300, cursor: "pointer" }} onClick={() => setPreviewImage(img.file_path)}>
                         <Box sx={{ borderRadius: 2, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
                           <img src={`/${img.file_path}`} alt={img.filename} style={{ width: "100%", display: "block" }} />
                         </Box>
@@ -511,6 +515,19 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
           </Card>
         </Box>
       </Box>
+
+      <Dialog open={!!previewImage} onClose={() => setPreviewImage(null)} maxWidth="lg" fullWidth>
+        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Typography variant="h6">Просмотр изображения</Typography>
+          <IconButton onClick={() => setPreviewImage(null)}><CloseIcon /></IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ display: "flex", justifyContent: "center", bgcolor: "#0d0d0d", p: 0 }}>
+          {previewImage && (
+            <img src={`/${previewImage}`} alt=""
+              style={{ maxWidth: "100%", maxHeight: "90vh", objectFit: "contain", display: "block" }} />
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!selectedHistory} onClose={() => setSelectedHistory(null)} maxWidth="md" fullWidth>
         {selectedHistory && (
