@@ -1,17 +1,17 @@
 import logging
-import uuid
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException, status
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, get_current_user_id
+from app.core.paths import UPLOADS_DIR
 from app.core.rate_limit import rate_limit
 from app.schemas.generation import (
     GenerateRequest, GenerateResponse, HistoryResponse,
-    GenerationStatusResponse, UploadResponse, BaseResponse,
+    GenerationStatusResponse, QueueResponse, UploadResponse, BaseResponse,
 )
 from app.services.comfyui_service import ComfyUIService
 from app.repositories.user_repository import UserRepository
@@ -26,9 +26,6 @@ WORKFLOW_PERMISSION = {
     "text_to_video": "video",
     "image_to_video": "video",
 }
-
-UPLOAD_DIR = Path(__file__).parent.parent.parent.parent.parent / "static" / "uploads"
-
 
 MAX_IMAGE_DIM = 2048
 
@@ -57,16 +54,17 @@ def _resize_if_needed(file_path: Path) -> Path:
 async def upload_reference(
     request: Request,
     file: UploadFile = File(...),
-    _user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
-    session_id = str(uuid.uuid4())
-    abs_save_dir = UPLOAD_DIR / session_id
+    ext = Path(file.filename or "image.png").suffix or ".png"
+    unique_name = f"{uuid4().hex}{ext}"
+    abs_save_dir = UPLOADS_DIR / user_id
     abs_save_dir.mkdir(parents=True, exist_ok=True)
-    abs_path = abs_save_dir / file.filename
+    abs_path = abs_save_dir / unique_name
     content = await file.read()
     abs_path.write_bytes(content)
     _resize_if_needed(abs_path)
-    return UploadResponse(success=True, file_path=str(abs_path), session_id=session_id)
+    return UploadResponse(success=True, file_path=str(abs_path), session_id="")
 
 
 @router.post("/", response_model=GenerateResponse)
@@ -120,6 +118,29 @@ async def get_history(
     service = ComfyUIService(db)
     result = await service.get_history(user_id, workflow_type)
     return HistoryResponse(**result)
+
+
+@router.get("/queue", response_model=QueueResponse)
+@rate_limit("30/minute")
+async def get_queue(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ComfyUIService(db)
+    result = await service.get_queue(user_id)
+    return QueueResponse(**result)
+
+
+@router.delete("/queue/{generation_id}", response_model=BaseResponse)
+async def cancel_queue_item(
+    generation_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ComfyUIService(db)
+    result = await service.cancel_queue_item(generation_id, user_id)
+    return BaseResponse(**result)
 
 
 @router.delete("/{generation_id}", response_model=BaseResponse)

@@ -1,0 +1,537 @@
+import { useEffect, useState } from "react";
+import { useRedirect } from "react-admin";
+import {
+  Box, Typography, List, ListItem, ListItemText,
+  Breadcrumbs, Link, LinearProgress, IconButton, Chip, Button, Card, CardContent,
+  Dialog, DialogContent, DialogTitle, DialogActions,
+  Grid as MuiGrid, Select, MenuItem, FormControl, InputLabel, Alert,
+  ToggleButtonGroup, ToggleButton,
+  Tooltip,
+} from "@mui/material";
+import DescriptionIcon from "@mui/icons-material/Description";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import DownloadIcon from "@mui/icons-material/Download";
+import DeleteIcon from "@mui/icons-material/Delete";
+import UploadIcon from "@mui/icons-material/Upload";
+import AutorenewIcon from "@mui/icons-material/Autorenew";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import ErrorIcon from "@mui/icons-material/Error";
+import PreviewIcon from "@mui/icons-material/Preview";
+import SegmentIcon from "@mui/icons-material/Segment";
+import HomeIcon from "@mui/icons-material/Home";
+import BusinessIcon from "@mui/icons-material/Business";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import GridViewIcon from "@mui/icons-material/GridView";
+
+interface Department {
+  dn: string;
+  ou: string;
+  description: string;
+}
+
+interface KnowledgeDoc {
+  id: string;
+  title: string;
+  filename: string;
+  content_type: string;
+  status: string;
+  error_message?: string;
+  ad_group_dn?: string | null;
+  file_path: string;
+  folder: string;
+  doc_number?: string | null;
+  doc_date?: string | null;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function adminToken(): string | null {
+  return localStorage.getItem("admin_token") || localStorage.getItem("token") || null;
+}
+
+function formatDate(mtime: string): string {
+  if (!mtime) return "\u2014";
+  return new Date(mtime).toLocaleString();
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  pending: "#f57c00",
+  indexing: "#1976d2",
+  ready: "#2e7d32",
+  error: "#d32f2f",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Ожидает",
+  indexing: "Индексация",
+  ready: "Готов",
+  error: "Ошибка",
+};
+
+const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
+
+const ext = (name: string) => (name.includes(".") ? "." + name.split(".").pop()?.toLowerCase() : "");
+
+const TYPE_LABELS: Record<string, string> = {
+  pdf: "PDF", docx: "DOCX", txt: "TXT", md: "MD",
+  png: "PNG", jpg: "JPEG", jpeg: "JPEG",
+};
+
+export const Documents = () => {
+  const redirect = useRedirect();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [currentFolder, setCurrentFolder] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<KnowledgeDoc[]>([]);
+  const [viewMode, setViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("docs_view") as "list" | "tiles") ?? "list");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFolder, setUploadFolder] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [reindexing, setReindexing] = useState<string | null>(null);
+  const [batchReindexing, setBatchReindexing] = useState<string | null>(null);
+  const [batchResult, setBatchResult] = useState<string | null>(null);
+  const [chunksOpen, setChunksOpen] = useState(false);
+  const [chunksDoc, setChunksDoc] = useState<KnowledgeDoc | null>(null);
+  const [chunks, setChunks] = useState<any[]>([]);
+  const [chunksLoading, setChunksLoading] = useState(false);
+
+  const loadDepartments = async () => {
+    try {
+      const token = adminToken();
+      const res = await fetch("/api/v1/knowledge/departments", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setDepartments(data.departments || []);
+    } catch {}
+  };
+
+  const loadDocuments = async (folder: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const token = adminToken();
+      const q = folder ? `?folder=${encodeURIComponent(folder)}` : "";
+      const res = await fetch(`/api/v1/knowledge/documents${q}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setDocuments(Array.isArray(data) ? data : []);
+    } catch {
+      setError("Ошибка загрузки документов");
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadDepartments(); }, []);
+
+  const navigateFolder = (folder: string | null) => {
+    setCurrentFolder(folder);
+    if (folder !== null) loadDocuments(folder);
+  };
+
+  const handleBack = () => { setCurrentFolder(null); setDocuments([]); };
+
+  const handleDelete = async (doc: KnowledgeDoc) => {
+    if (!window.confirm(`Удалить "${doc.filename}"? Файл и эмбеддинги будут удалены.`)) return;
+    try {
+      const token = adminToken();
+      const res = await fetch(`/api/v1/knowledge/documents/${doc.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) loadDocuments(currentFolder!);
+    } catch {}
+  };
+
+  const handleBatchReindex = async (action: string) => {
+    setBatchReindexing(action);
+    setBatchResult(null);
+    try {
+      const token = adminToken();
+      const res = await fetch(`/api/v1/knowledge/${action}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setBatchResult(
+        data.success
+          ? `Готово: ${data.succeeded || 0} успешно, ${data.failed || 0} с ошибками`
+          : data.error || "Ошибка"
+      );
+      if (data.success) loadDocuments(currentFolder!);
+    } catch (e: any) {
+      setBatchResult(e.message || "Ошибка");
+    }
+    setBatchReindexing(null);
+  };
+
+  const handleShowChunks = async (doc: KnowledgeDoc) => {
+    setChunksDoc(doc);
+    setChunks([]);
+    setChunksLoading(true);
+    setChunksOpen(true);
+    try {
+      const token = adminToken();
+      const res = await fetch(`/api/v1/knowledge/${doc.id}/chunks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setChunks(data.chunks || []);
+    } catch {}
+    setChunksLoading(false);
+  };
+
+  const handleReindex = async (doc: KnowledgeDoc) => {
+    setReindexing(doc.id);
+    try {
+      const token = adminToken();
+      await fetch(`/api/v1/knowledge/documents/${doc.id}/reindex`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      loadDocuments(currentFolder!);
+    } catch {}
+    setReindexing(null);
+  };
+
+  const handleUpload = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const token = adminToken();
+      const form = new FormData();
+      form.append("file", uploadFile);
+      form.append("title", uploadFile.name);
+      form.append("folder", uploadFolder);
+      const res = await fetch("/api/v1/knowledge/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUploadOpen(false);
+        setUploadFile(null);
+        setUploadFolder("");
+        if (currentFolder !== null) loadDocuments(currentFolder);
+      } else {
+        setUploadError(data.error || data.detail || "Ошибка загрузки");
+      }
+    } catch (e) {
+      setUploadError("Ошибка сети: " + (e instanceof Error ? e.message : String(e)));
+    }
+    setUploading(false);
+  };
+
+  const handleDownload = async (doc: KnowledgeDoc) => {
+    try {
+      const token = adminToken();
+      const path = doc.file_path.replace(/^static\//, "");
+      const res = await fetch(`/api/v1/admin/files/download?path=${encodeURIComponent(path)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = doc.filename;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {}
+  };
+
+  const folderLabel = currentFolder === "" ? "Общий доступ" : (currentFolder || "");
+
+  const listView = (
+    <List disablePadding>
+      <ListItem sx={{ bgcolor: "action.hover", borderRadius: 1, mb: 1 }}>
+        <ListItemText primary={<Typography variant="caption" fontWeight={700}>Название</Typography>} sx={{ flex: "0 0 40%" }} />
+        <ListItemText primary={<Typography variant="caption" fontWeight={700}>Тип</Typography>} sx={{ flex: "0 0 60px" }} />
+        <ListItemText primary={<Typography variant="caption" fontWeight={700}>Статус</Typography>} sx={{ flex: "0 0 100px" }} />
+        <ListItemText primary={<Typography variant="caption" fontWeight={700}>Дата</Typography>} sx={{ flex: "0 0 150px" }} />
+        <Box sx={{ flex: "0 0 140px" }} />
+      </ListItem>
+      {documents.map((doc) => (
+        <ListItem key={doc.id} disablePadding sx={{ "&:hover": { bgcolor: "action.hover" }, borderRadius: 1 }}>
+          <ListItemText primary={
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              {IMAGE_EXTS.has(ext(doc.filename)) ? (
+                <img src={`/static/${doc.file_path.replace(/^static\//, "")}`} alt=""
+                  style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 2 }} />
+              ) : (
+                <DescriptionIcon />
+              )}
+              <Typography variant="body2" noWrap>{doc.title}</Typography>
+            </Box>
+          } sx={{ flex: "0 0 40%", pl: 1 }} />
+          <ListItemText primary={
+            <Chip label={TYPE_LABELS[doc.content_type] || doc.content_type.toUpperCase()} size="small" variant="outlined" />
+          } sx={{ flex: "0 0 60px" }} />
+          <ListItemText primary={
+            <Chip label={STATUS_LABELS[doc.status] || doc.status} size="small"
+              sx={{ bgcolor: STATUS_COLORS[doc.status] || "#888", color: "white" }} />
+          } sx={{ flex: "0 0 100px" }} />
+          <ListItemText primary={
+            <Typography variant="caption" color="text.secondary">{formatDate(doc.created_at)}</Typography>
+          } sx={{ flex: "0 0 150px" }} />
+          <Box sx={{ flex: "0 0 200px", display: "flex", gap: 0.5 }}>
+            <Tooltip title="Просмотр">
+              <IconButton size="small" onClick={() => window.open(`/api/v1/knowledge/${doc.id}/preview`, "_blank", "width=800,height=600,scrollbars=1")}>
+                <PreviewIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Чанки">
+              <IconButton size="small" onClick={() => handleShowChunks(doc)}><SegmentIcon fontSize="small" /></IconButton>
+            </Tooltip>
+            <Tooltip title="Скачать">
+              <IconButton size="small" onClick={() => handleDownload(doc)}><DownloadIcon fontSize="small" /></IconButton>
+            </Tooltip>
+            <Tooltip title="Переиндексировать">
+              <IconButton size="small" onClick={() => handleReindex(doc)}
+                disabled={reindexing === doc.id || doc.status === "indexing"}>
+                <AutorenewIcon fontSize="small" className={reindexing === doc.id ? "spin" : ""} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Удалить">
+              <IconButton size="small" color="error" onClick={() => handleDelete(doc)}><DeleteIcon fontSize="small" /></IconButton>
+            </Tooltip>
+          </Box>
+        </ListItem>
+      ))}
+    </List>
+  );
+
+  const imgUrl = (doc: KnowledgeDoc) => `/static/${doc.file_path.replace(/^static\//, "")}`;
+
+  const tilesView = (
+    <MuiGrid container spacing={2}>
+      {documents.map((doc) => {
+        const isImg = IMAGE_EXTS.has(ext(doc.filename));
+        return (
+          <MuiGrid key={doc.id} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+            <Card sx={{ "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+              <Box
+                sx={{ height: 140, overflow: "hidden", bgcolor: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                onClick={() => handleDownload(doc)}
+              >
+                {isImg ? (
+                  <img src={imgUrl(doc)} alt={doc.filename}
+                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }}
+                    onError={(e: any) => { e.target.style.display = "none"; }} />
+                ) : (
+                  <DescriptionIcon sx={{ fontSize: 48, color: "text.disabled" }} />
+                )}
+              </Box>
+              <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
+                <Typography variant="body2" noWrap>{doc.title}</Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                  <Chip label={TYPE_LABELS[doc.content_type] || doc.content_type.toUpperCase()} size="small" variant="outlined" sx={{ height: 20 }} />
+                  <Chip label={STATUS_LABELS[doc.status] || doc.status} size="small"
+                    sx={{ height: 20, bgcolor: STATUS_COLORS[doc.status] || "#888", color: "white" }} />
+                </Box>
+                <Box sx={{ display: "flex", gap: 0.5, mt: 1 }}>
+                  <Tooltip title="Просмотр">
+                    <IconButton size="small" onClick={() => window.open(`/api/v1/knowledge/${doc.id}/preview`, "_blank", "width=800,height=600,scrollbars=1")}>
+                      <PreviewIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Чанки">
+                    <IconButton size="small" onClick={() => handleShowChunks(doc)}><SegmentIcon fontSize="small" /></IconButton>
+                  </Tooltip>
+                  <Tooltip title="Скачать">
+                    <IconButton size="small" onClick={() => handleDownload(doc)}><DownloadIcon fontSize="small" /></IconButton>
+                  </Tooltip>
+                  <Tooltip title="Переиндексировать">
+                    <IconButton size="small" onClick={() => handleReindex(doc)}
+                      disabled={reindexing === doc.id || doc.status === "indexing"}>
+                      <AutorenewIcon fontSize="small" className={reindexing === doc.id ? "spin" : ""} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Удалить">
+                    <IconButton size="small" color="error" onClick={() => handleDelete(doc)}><DeleteIcon fontSize="small" /></IconButton>
+                  </Tooltip>
+                </Box>
+              </CardContent>
+            </Card>
+          </MuiGrid>
+        );
+      })}
+    </MuiGrid>
+  );
+
+  const rootView = (
+    <Box>
+      <Typography variant="h6" sx={{ mb: 2 }}>Папки документов</Typography>
+      <MuiGrid container spacing={2}>
+        <MuiGrid size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+          <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
+            onClick={() => navigateFolder("")}>
+            <Box sx={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
+              <HomeIcon sx={{ fontSize: 48, color: "primary.main" }} />
+            </Box>
+            <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
+              <Typography variant="body2" noWrap textAlign="center">Общий доступ</Typography>
+            </CardContent>
+          </Card>
+        </MuiGrid>
+        {departments.map((dep) => (
+          <MuiGrid key={dep.dn} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+            <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
+              onClick={() => navigateFolder(dep.ou)}>
+              <Box sx={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
+                <BusinessIcon sx={{ fontSize: 48, color: "secondary.main" }} />
+              </Box>
+              <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
+                <Typography variant="body2" noWrap textAlign="center">{dep.ou}</Typography>
+              </CardContent>
+            </Card>
+          </MuiGrid>
+        ))}
+      </MuiGrid>
+    </Box>
+  );
+
+  return (
+    <Box>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+        <Button startIcon={<ArrowBackIcon />} size="small" onClick={() => redirect("/")}>Дашборд</Button>
+        <Typography variant="h5" fontWeight={700} sx={{ flex: 1 }}>
+          {currentFolder !== null ? `Документы — ${folderLabel}` : "Документы"}
+        </Typography>
+        {currentFolder !== null && (
+          <>
+            <ToggleButtonGroup value={viewMode} exclusive size="small"
+              onChange={(_, v) => { if (v) { setViewMode(v); localStorage.setItem("docs_view", v); } }}>
+              <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+              <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
+            </ToggleButtonGroup>
+            <Button startIcon={<UploadIcon />} variant="contained" size="small"
+              onClick={() => { setUploadFile(null); setUploadFolder(currentFolder === "" ? "" : currentFolder!); setUploadError(null); setUploadOpen(true); }}>
+              Загрузить
+            </Button>
+            <Tooltip title="Переиндексировать все документы">
+              <Button startIcon={<AutorenewIcon />} variant="outlined" size="small"
+                disabled={batchReindexing !== null}
+                onClick={() => handleBatchReindex("reindex-all")}>
+                {batchReindexing === "reindex-all" ? "..." : "Всё"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="Индексировать новые документы">
+              <Button startIcon={<PlayArrowIcon />} variant="outlined" size="small"
+                disabled={batchReindexing !== null}
+                onClick={() => handleBatchReindex("reindex-new")}>
+                {batchReindexing === "reindex-new" ? "..." : "Новые"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="Переиндексировать упавшие">
+              <Button startIcon={<ErrorIcon />} variant="outlined" size="small" color="warning"
+                disabled={batchReindexing !== null}
+                onClick={() => handleBatchReindex("reindex-new?only_failed=true")}>
+                {batchReindexing === "reindex-new?only_failed=true" ? "..." : "Упавшие"}
+              </Button>
+            </Tooltip>
+            <IconButton onClick={() => loadDocuments(currentFolder!)} title="Обновить">
+              <RefreshIcon />
+            </IconButton>
+          </>
+        )}
+      </Box>
+
+      {currentFolder !== null && (
+        <Breadcrumbs sx={{ mb: 2 }}>
+          <Link underline="hover" color="inherit" sx={{ cursor: "pointer" }} onClick={handleBack}>Документы</Link>
+          <Typography color="text.primary">{folderLabel}</Typography>
+        </Breadcrumbs>
+      )}
+
+      {batchResult && (
+        <Alert severity={batchResult.includes("Ошибка") ? "error" : "success"} sx={{ mb: 2 }} onClose={() => setBatchResult(null)}>
+          {batchResult}
+        </Alert>
+      )}
+
+      {currentFolder === null ? rootView : (
+        loading ? <LinearProgress /> : error ? (
+          <Typography variant="body2" color="error" sx={{ textAlign: "center", py: 4 }}>{error}</Typography>
+        ) : documents.length === 0 ? (
+          <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 4 }}>
+            В этой папке нет документов
+          </Typography>
+        ) : viewMode === "list" ? listView : tilesView
+      )}
+
+      <Dialog open={chunksOpen} onClose={() => setChunksOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          Чанки: {chunksDoc?.title || chunksDoc?.filename || ""}
+        </DialogTitle>
+        <DialogContent>
+          {chunksLoading ? <LinearProgress /> : chunks.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: "center" }}>
+              Чанки не найдены. Документ ещё не проиндексирован.
+            </Typography>
+          ) : (
+            <List disablePadding>
+              {chunks.map((chunk: any, idx: number) => (
+                <ListItem key={chunk.id || idx} divider sx={{ flexDirection: "column", alignItems: "flex-start", py: 1.5 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                    <Chip label={`#${chunk.chunk_index + 1}`} size="small" color="primary" />
+                    {chunk.meta?.total_chunks && (
+                      <Typography variant="caption" color="text.secondary">
+                        из {chunk.meta.total_chunks}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 13 }}>
+                    {chunk.content.length > 500 ? chunk.content.slice(0, 500) + "..." : chunk.content}
+                  </Typography>
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setChunksOpen(false)}>Закрыть</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={uploadOpen} onClose={() => !uploading && setUploadOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Загрузка документа {currentFolder !== null ? `в ${folderLabel}` : ""}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+            <Button variant="outlined" component="label">
+              {uploadFile ? uploadFile.name : "Выберите файл"}
+              <input type="file" hidden accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+            </Button>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Отдел</InputLabel>
+              <Select value={uploadFolder} label="Отдел" onChange={(e) => setUploadFolder(e.target.value)}>
+                <MenuItem value=""><em>Общий доступ</em></MenuItem>
+                {departments.map((dep) => (
+                  <MenuItem key={dep.dn} value={dep.ou}>{dep.ou}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {uploadError && <Typography variant="caption" color="error">{uploadError}</Typography>}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUploadOpen(false)} disabled={uploading}>Отмена</Button>
+          <Button variant="contained" onClick={handleUpload} disabled={!uploadFile || uploading}>
+            {uploading ? "Загрузка..." : "Загрузить"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+};

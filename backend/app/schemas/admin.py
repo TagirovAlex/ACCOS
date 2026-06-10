@@ -204,6 +204,23 @@ class AdminGenerationDetailResponse(BaseResponse):
     updated_at: datetime
     images: list[AdminGenerationAssetResponse] = []
     source_generation: AdminGenerationSourceResponse | None = None
+    reference_images: list[str] = []
+
+
+class AdminQueueItemResponse(BaseModel):
+    id: str
+    user_id: str
+    username: str
+    workflow_type: str
+    prompt: str
+    status: str
+    created_at: datetime
+
+
+class AdminGenerationQueueResponse(BaseResponse):
+    items: list[AdminQueueItemResponse] = []
+    processing_count: int = 0
+    queued_count: int = 0
 
 
 class AdminAssetResponse(BaseModel):
@@ -259,3 +276,16 @@ class AdminTokenStatsResponse(BaseResponse):
     total_tokens_output: int = 0
     total_cost: float = 0
     session_count: int = 0
+
+
+class FileEntry(BaseModel):
+    name: str
+    path: str
+    is_dir: bool
+    size: int = 0
+    modified: float = 0.0
+
+
+class FileListResponse(BaseResponse):
+    entries: list[FileEntry] = []
+    current_path: str = ""

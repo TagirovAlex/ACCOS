@@ -45,6 +45,13 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   );
 }
 
+function parseDocLinks(text: string): string {
+  return text.replace(
+    /\[doc:\s*([a-f0-9\-]+)\]/gi,
+    '<a href="/api/v1/knowledge/$1/preview" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;font-weight:600" onclick="event.preventDefault();window.open(\'/api/v1/knowledge/$1/preview\',\'_blank\',\'width=800,height=600,scrollbars=1\')">📄 [документ]</a>'
+  );
+}
+
 export const SimpleMarkdown = ({ text }: Props) => {
   const content = text || "";
   const parts: { type: "code" | "text"; content: string; language?: string }[] = [];
@@ -69,7 +76,7 @@ export const SimpleMarkdown = ({ text }: Props) => {
         if (part.type === "code") {
           return <CodeBlock key={i} code={part.content} language={part.language || ""} />;
         }
-        const html = part.content
+        const html = parseDocLinks(part.content)
           .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
           .replace(/`([^`]+)`/g, "<code>$1</code>")
           .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")

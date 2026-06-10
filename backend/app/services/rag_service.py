@@ -20,7 +20,24 @@ def extract_text_from_pdf(file_path: str) -> str:
         for page in pdf.pages:
             page_text = page.extract_text() or ""
             text_parts.append(page_text)
-    return "\n".join(text_parts)
+    result = "\n".join(text_parts)
+    if result.strip():
+        return result
+    import fitz
+    import pytesseract
+    from PIL import Image
+    import io
+    doc = fitz.open(file_path)
+    ocr_parts = []
+    for page_num in range(len(doc)):
+        page = doc.load_page(page_num)
+        pix = page.get_pixmap()
+        img_data = pix.tobytes("png")
+        img = Image.open(io.BytesIO(img_data))
+        text = pytesseract.image_to_string(img, lang="rus+eng")
+        ocr_parts.append(text)
+    doc.close()
+    return "\n".join(ocr_parts)
 
 
 def extract_text_from_docx(file_path: str) -> str:
@@ -200,10 +217,10 @@ class RAGService:
 
         blocks = []
         for doc in result["results"]:
+            doc_id = doc["document_id"]
+            title = doc["document_title"]
             for chunk in doc["chunks"]:
-                title = doc["document_title"]
-                doc_number = ""
-                blocks.append(f"[{title}]:\n{chunk['content']}")
+                blocks.append(f"[doc: {doc_id}] {title}:\n{chunk['content']}")
 
         context = "\n\n".join(blocks)
         return context

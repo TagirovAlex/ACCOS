@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { List, Datagrid, TextField, DateField, Show, SimpleShowLayout, ReferenceField, FunctionField, WithListContext, useRedirect, useRecordContext, DeleteButton } from "react-admin";
-import { Box, IconButton, Chip, Card, CardContent, Typography, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Button } from "@mui/material";
+import { List, Datagrid, TextField, DateField, Show, SimpleShowLayout, ReferenceField, FunctionField, WithListContext, useRedirect, useRecordContext, DeleteButton, useDelete } from "react-admin";
+import { Box, IconButton, Chip, Card, CardContent, Typography, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
@@ -88,14 +88,22 @@ const AssetListView = () => (
 
 const AssetTileView = () => {
   const redirect = useRedirect();
+  const [deleteOne] = useDelete();
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
   return (
+  <>
     <WithListContext render={({ data }) => (
       <MuiGrid container spacing={2} sx={{ p: 2 }}>
         {data?.map((record: any) => (
           <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
-            <Card onClick={() => redirect("show", "assets", record.id)}
-              sx={{ cursor: "pointer", height: "100%", display: "flex", flexDirection: "column", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
-              <Box sx={{ width: "100%", aspectRatio: "4/3", overflow: "hidden", bgcolor: "#1a1a1a" }}>
+            <Card sx={{ position: "relative", cursor: "pointer", height: "100%", display: "flex", flexDirection: "column", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+              <IconButton size="small"
+                sx={{ position: "absolute", top: 4, right: 4, zIndex: 1, color: "error.light" }}
+                onClick={(e) => { e.stopPropagation(); setDeleteTarget(record); }}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+              <Box onClick={() => redirect("show", "assets", record.id)}
+                sx={{ width: "100%", aspectRatio: "4/3", overflow: "hidden", bgcolor: "#1a1a1a" }}>
                 {record.file_path ? (
                   <img src={`/${record.file_path}`} alt=""
                     style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
@@ -124,6 +132,17 @@ const AssetTileView = () => {
         ))}
       </MuiGrid>
     )} />
+    <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
+      <DialogTitle>Удалить ресурс?</DialogTitle>
+      <DialogContent>
+        <DialogContentText>Ресурс «{deleteTarget?.filename}» будет удалён без возможности восстановления.</DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setDeleteTarget(null)}>Отмена</Button>
+        <Button onClick={() => { deleteOne("assets", { id: deleteTarget?.id }); setDeleteTarget(null); }} color="error">Удалить</Button>
+      </DialogActions>
+    </Dialog>
+  </>
   );
 };
 

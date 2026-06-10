@@ -29,8 +29,10 @@ export const authProvider: AuthProvider = {
   async login({ username, password }) {
     const result = await apiRequest<AuthResult>("POST", "/auth/login", { username, password });
     if (result.success && result.access_token) {
-      const role = (result.admin_role && result.admin_role !== "none") ? result.admin_role : (result.is_admin ? "super_admin" : "none");
-      if (role === "none") {
+      const role = result.admin_role === "super_admin" ? "super_admin" : result.is_admin ? "admin" : "none";
+      const perms = (result.permissions || "chat").split(",").filter(Boolean);
+      const hasNonChatPerms = perms.some(p => p !== "chat");
+      if (role === "none" && !hasNonChatPerms) {
         throw new Error("Требуются права администратора");
       }
       setToken(result.access_token);
@@ -67,10 +69,14 @@ export const authProvider: AuthProvider = {
     setToken(token);
     try {
       const result = await apiRequest<AuthResult>("GET", "/auth/me");
-      const role = (result.admin_role && result.admin_role !== "none") ? result.admin_role : (result.is_admin ? "super_admin" : "user");
+      const role = result.admin_role === "super_admin" ? "super_admin" : result.is_admin ? "admin" : "none";
+      const perms_str = result.permissions || "chat";
+      const perms = perms_str.split(",").filter(Boolean);
+      const hasNonChatPerms = perms.some(p => p !== "chat");
+      const effectiveRole = role === "super_admin" ? "super_admin" : role === "admin" ? "admin" : (hasNonChatPerms ? perms_str : "none");
       localStorage.setItem("admin_role", role);
-      localStorage.setItem("user_permissions", result.permissions || "chat");
-      return role;
+      localStorage.setItem("user_permissions", perms_str);
+      return effectiveRole;
     } catch {
       return undefined;
     }

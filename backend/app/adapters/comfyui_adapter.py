@@ -9,15 +9,14 @@ from pathlib import Path
 import httpx
 
 from app.adapters.base import BaseAdapter
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class ComfyUIAdapter(BaseAdapter):
-    def __init__(self, api_key: str = ""):
-        self.base_url = settings.comfyui_base_url.rstrip("/")
-        self.api_key = api_key or settings.comfyui_api_key
+    def __init__(self, base_url: str = "", api_key: str = ""):
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
         self.workflows_dir = Path(__file__).parent.parent.parent.parent / "workflows"
 
     async def _headers(self) -> dict:

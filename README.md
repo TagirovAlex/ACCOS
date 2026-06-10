@@ -13,14 +13,16 @@
 | Область | Статус |
 |---------|--------|
 | Бэкенд (FastAPI) | ✅ Завершён (Phases 0–4) |
-| Admin API | ✅ Завершён (Phase 5) |
-| Admin Panel (React) | ✅ Завершён (Phase 5) |
+| Admin API | ✅ Завершён (Phase 5) — 30+ эндпоинтов |
+| Admin Panel (React) | ✅ Завершён (Phase 5) — 12 страниц |
 | User Frontend (React) | ✅ Завершён (Phase 6) |
 | Тесты бэкенда (26/26) | ✅ Все проходят |
 | Тесты фронтенда (16/16) | ✅ Все проходят |
 | Rate limiting | ✅ slowapi (login 5/min, gen 10/min, chat 30/min) |
-| Коммитов | 7 |
-| Ветка | `master` |
+| Очередь генераций | ✅ Фоновая очередь через queue_worker |
+| Файловый менеджер | ✅ Просмотр/скачивание/удаление файлов в `static/` |
+| Бэкапы БД | ✅ pg_dump через Admin API |
+| LDAP управление | ✅ Просмотр групп AD, тест соединения, синхронизация |
 
 ---
 
@@ -37,15 +39,17 @@ C:\Github\ACCOS\
 │   │   │   ├── auth.py             # POST /login, GET /me
 │   │   │   ├── user.py             # GET /balance
 │   │   │   ├── chat.py             # CRUD чатов + отправка сообщений
-│   │   │   ├── generation.py       # Запуск генерации + история
-│   │   │   ├── orchestration.py    # Image→Edit, Image→Video
-│   │   │   └── admin.py            # 16 админских эндпоинтов
+│   │   │   ├── generation.py       # Запуск генерации + история + очередь
+│   │   │   ├── orchestration.py    # Image→Edit, Image→Video + upload
+│   │   │   └── admin.py            # 30+ админских эндпоинтов
 │   │   │
 │   │   ├── core/                   # Ядро приложения
 │   │   │   ├── config.py           # Pydantic Settings (читает config/.env)
 │   │   │   ├── security.py         # JWT create/verify + bcrypt
 │   │   │   ├── dependencies.py     # get_db, get_current_user_id
-│   │   │   └── exceptions.py       # Кастомные исключения
+│   │   │   ├── exceptions.py       # Кастомные исключения
+│   │   │   ├── paths.py            # Централизованные пути static/ поддиректорий
+│   │   │   └── rate_limit.py       # slowapi limiter
 │   │   │
 │   │   ├── db/                     # База данных
 │   │   │   ├── base.py             # DeclarativeBase
@@ -70,9 +74,12 @@ C:\Github\ACCOS\
 │   │   │   ├── auth_service.py     # LDAP → JWT, auto-create user
 │   │   │   ├── economy_service.py  # Strategy Pattern: LLM/Image/Video Cost
 │   │   │   ├── chat_service.py     # Чат: история, LLM вызов, списание
-│   │   │   ├── comfyui_service.py  # ComfyUI: генерация, история
+│   │   │   ├── comfyui_service.py  # ComfyUI: генерация, история, очередь
 │   │   │   ├── orchestration_service.py  # Image→Edit, Image→Video
-│   │   │   ├── admin_service.py    # Все админские CRUD
+│   │   │   ├── admin_service.py    # Все админские CRUD + дашборд
+│   │   │   ├── queue_worker.py     # Фоновый обработчик очереди ComfyUI
+│   │   │   ├── backup_service.py   # pg_dump / восстановление
+│   │   │   ├── settings_service.py  # Настройки из БД с кешированием
 │   │   │   └── accrual_service.py  # Автоначисление баланса каждые 3600с
 │   │   │
 │   │   ├── adapters/               # Внешние интеграции
@@ -85,12 +92,12 @@ C:\Github\ACCOS\
 │   │   │   ├── auth.py             # LoginRequest, TokenResponse, UserInfoResponse
 │   │   │   ├── chat.py             # ChatCreateRequest, ChatSendRequest, ...
 │   │   │   ├── generation.py       # GenerateRequest, GenerateResponse, ...
-│   │   │   └── admin.py            # 20+ Admin схем
+│   │   │   └── admin.py            # 30+ Admin схем (FileEntry, QueueItem, ...)
 │   │   │
 │   │   └── modules/                # Подключаемые модули (BaseModule)
 │   │       ├── base.py             # BaseModule (ABC)
 │   │       ├── chat_module.py      # ChatModule
-│   │       └── comfyui_module.py   # ComfyUIModule
+│   │       └── comfyui_module.py   # ComfUIModule
 │   │
 │   ├── alembic/                    # Миграции
 │   │   ├── env.py, script.py.mako
@@ -112,19 +119,22 @@ C:\Github\ACCOS\
 │
 ├── admin/                          # React Admin Panel
 │   ├── src/
-│   │   ├── App.tsx                 # react-admin + theme toggle
+│   │   ├── App.tsx                 # react-admin + theme toggle + permission routing
 │   │   ├── services/
 │   │   │   ├── api.ts              # HTTP helper (Bearer token)
 │   │   │   ├── authProvider.ts     # react-admin AuthProvider
 │   │   │   └── dataProvider.ts     # react-admin DataProvider
 │   │   ├── pages/
-│   │   │   ├── Dashboard.tsx       # Статистика (количество)
+│   │   │   ├── Dashboard.tsx       # Статистика (пользователи, генерации, очередь)
 │   │   │   ├── Users.tsx           # CRUD пользователей
-│   │   │   ├── Groups.tsx          # CRUD групп
+│   │   │   ├── Groups.tsx          # CRUD групп доступа
 │   │   │   ├── Chats.tsx           # Просмотр чатов (read-only)
-│   │   │   ├── Generations.tsx     # Просмотр генераций (read-only)
+│   │   │   ├── Generations.tsx     # Просмотр генераций (read-only) + плитки/список
 │   │   │   ├── Assets.tsx          # Просмотр ресурсов (read-only)
-│   │   │   └── Settings.tsx        # Редактирование настроек
+│   │   │   ├── GenerationQueue.tsx # Очередь генераций (админ-просмотр + отмена)
+│   │   │   ├── FileManager.tsx     # Файловый менеджер (обзор static/, скачивание, удаление)
+│   │   │   ├── Settings.tsx        # Редактирование настроек БД
+│   │   │   └── Backups.tsx         # Создание/скачивание/удаление бэкапов БД
 │   │   └── assets/themes/
 │   │       ├── light.ts            # Светлая тема MUI
 │   │       └── dark.ts             # Тёмная тема MUI
@@ -151,10 +161,16 @@ C:\Github\ACCOS\
 │   ├── .env.example                # Шаблон с дефолтами
 │   └── alembic.ini                 # Alembic (script_location → backend/alembic)
 │
-├── static/                         # Статические файлы
+├── scripts/                        # Вспомогательные скрипты
+│   └── migrate_files.py            # Миграция файлов из static/generated/ → static/generations/
+│
+├── static/                         # Статические файлы (nginx)
+│   ├── uploads/<user_id>/          # Загруженные пользователями reference-изображения
+│   ├── generations/<user_id>/      # Результаты генераций (сгруппированы по user/gen_id)
+│   ├── edits/<user_id>/            # Результаты редактирования
+│   ├── videos/<user_id>/           # Результаты видео-генерации
+│   ├── avatars/                    # Аватарки пользователей
 │   ├── css/global.css              # CSS-переменные (светлая/тёмная тема)
-│   ├── js/                         # (пусто)
-│   ├── images/                     # (пусто)
 │   └── templates/
 │       └── admin_preview.html      # HTML-превью админки (демо)
 │
@@ -288,35 +304,58 @@ C:\Github\ACCOS\
 | POST | `/api/v1/generate/upload` | Загрузить reference-изображение (resize 2048px) | Bearer | multipart → `UploadResponse` |
 | POST | `/api/v1/generate/` | Запустить workflow (ставит в очередь) | Bearer | `GenerateRequest` → `GenerateResponse` |
 | GET | `/api/v1/generate/history` | История генераций | Bearer | `HistoryResponse` |
+| GET | `/api/v1/generate/queue` | Очередь пользователя (позиция, ожидание) | Bearer | `QueueResponse` |
 | GET | `/api/v1/generate/{generation_id}/status` | Статус генерации + изображения | Bearer | `GenerationStatusResponse` |
+| DELETE | `/api/v1/generate/{generation_id}` | Удалить генерацию | Bearer | `BaseResponse` |
+| DELETE | `/api/v1/generate/queue/{generation_id}` | Отменить задачу из очереди (возврат средств) | Bearer | `BaseResponse` |
 
 ### Orchestration
 
 | Метод | Path | Описание | Request | Response |
 |-------|------|----------|---------|----------|
+| POST | `/api/v1/orchestrate/upload` | Загрузить reference для редактирования | Bearer | multipart → `UploadResponse` |
 | POST | `/api/v1/orchestrate/image-to-edit/{generation_id}` | Редактировать изображение | multipart (files + params) | `GenerateResponse` |
 | POST | `/api/v1/orchestrate/image-to-video/{generation_id}` | Создать видео из изображения | query params | `GenerateResponse` |
 
-### Admin (все требуют JWT + is_admin=True)
+### Admin (все требуют JWT + admin_role = super_admin/group_admin)
 
-| Метод | Path | Описание |
-|-------|------|----------|
-| GET | `/api/v1/admin/users` | Список пользователей |
-| GET | `/api/v1/admin/users/{user_id}` | Пользователь по ID |
-| PUT | `/api/v1/admin/users/{user_id}` | Обновить пользователя |
-| DELETE | `/api/v1/admin/users/{user_id}` | Удалить пользователя |
-| POST | `/api/v1/admin/balance/adjust` | Коррекция баланса |
-| GET | `/api/v1/admin/groups` | Список групп |
-| POST | `/api/v1/admin/groups` | Создать группу |
-| PUT | `/api/v1/admin/groups/{group_id}` | Обновить группу |
-| DELETE | `/api/v1/admin/groups/{group_id}` | Удалить группу |
-| GET | `/api/v1/admin/chats` | Все чаты |
-| DELETE | `/api/v1/admin/chats/{chat_id}` | Удалить чат |
-| GET | `/api/v1/admin/generations` | Все генерации |
-| DELETE | `/api/v1/admin/generations/{gen_id}` | Удалить генерацию |
-| GET | `/api/v1/admin/assets` | Все assets |
-| GET | `/api/v1/admin/settings` | Все настройки |
-| PUT | `/api/v1/admin/settings/{key}` | Обновить настройку |
+| Метод | Path | Роль | Описание |
+|-------|------|------|----------|
+| GET | `/api/v1/admin/dashboard` | super_admin | Статистика дашборда |
+| GET | `/api/v1/admin/dashboard/activity` | super_admin | Активность (новые пользователи, генерации) |
+| GET | `/api/v1/admin/users` | admin | Список пользователей |
+| POST | `/api/v1/admin/users` | admin | Создать пользователя |
+| GET | `/api/v1/admin/users/{user_id}` | admin | Пользователь по ID |
+| PUT | `/api/v1/admin/users/{user_id}` | admin | Обновить пользователя |
+| DELETE | `/api/v1/admin/users/{user_id}` | admin | Удалить пользователя |
+| POST | `/api/v1/admin/balance/adjust` | admin | Коррекция баланса |
+| GET | `/api/v1/admin/groups` | super_admin | Список групп доступа |
+| POST | `/api/v1/admin/groups` | super_admin | Создать группу |
+| PUT | `/api/v1/admin/groups/{group_id}` | super_admin | Обновить группу |
+| DELETE | `/api/v1/admin/groups/{group_id}` | super_admin | Удалить группу |
+| GET | `/api/v1/admin/chats` | super_admin | Все чаты |
+| DELETE | `/api/v1/admin/chats/{chat_id}` | super_admin | Удалить чат |
+| GET | `/api/v1/admin/generations` | super_admin | Все генерации |
+| GET | `/api/v1/admin/generations/{gen_id}` | super_admin | Детали генерации + изображения |
+| DELETE | `/api/v1/admin/generations/{gen_id}` | super_admin | Удалить генерацию |
+| GET | `/api/v1/admin/generation-queue` | super_admin | Очередь генераций (все пользователи) |
+| DELETE | `/api/v1/admin/generation-queue/{gen_id}` | super_admin | Отменить из очереди |
+| GET | `/api/v1/admin/assets` | super_admin | Все image assets |
+| GET | `/api/v1/admin/assets/{asset_id}` | super_admin | Детали asset |
+| DELETE | `/api/v1/admin/assets/{asset_id}` | super_admin | Удалить asset |
+| GET | `/api/v1/admin/token-stats/{user_id}` | super_admin | Статистика токенов пользователя |
+| GET | `/api/v1/admin/settings` | super_admin | Все настройки БД |
+| POST | `/api/v1/admin/settings` | super_admin | Создать настройку |
+| PUT | `/api/v1/admin/settings/{key}` | super_admin | Обновить настройку |
+| DELETE | `/api/v1/admin/settings/{key}` | super_admin | Удалить настройку |
+| GET | `/api/v1/admin/backups` | super_admin | Список бэкапов |
+| POST | `/api/v1/admin/backups` | super_admin | Создать бэкап (pg_dump) |
+| DELETE | `/api/v1/admin/backups/{filename}` | super_admin | Удалить бэкап |
+| GET | `/api/v1/admin/ldap-groups` | super_admin | Список групп из AD |
+| GET | `/api/v1/admin/ldap-test` | super_admin | Тест соединения с LDAP |
+| GET | `/api/v1/admin/files` | super_admin | Список файлов в static/ |
+| GET | `/api/v1/admin/files/download` | super_admin | Скачать файл |
+| DELETE | `/api/v1/admin/files` | super_admin | Удалить файл/папку |
 
 ---
 

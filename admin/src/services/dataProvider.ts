@@ -10,8 +10,12 @@ async function httpClient(url: string, options: RequestInit = {}) {
     ...options,
     headers: { ...headers, "Content-Type": "application/json", ...(options.headers as Record<string, string>) },
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err: any = new Error(data?.error || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
@@ -32,6 +36,8 @@ export const dataProvider: any = {
     const url = `${API_BASE}/${resource}?skip=${skip}&limit=${perPage}`;
     const json: any = await httpClient(url);
     let data = json[resource] || [];
+    if (resource === "files") data = [];
+    if (resource === "generation-queue") data = json.items || [];
     if (resource === "settings") data = mapSettings(data);
     data = data.map((item: any) => ({ ...item, id: item.id ?? item.key }));
     return { data, total: data.length };

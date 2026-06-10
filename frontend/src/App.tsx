@@ -10,16 +10,36 @@ import HistoryIcon from "@mui/icons-material/History";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import SettingsIcon from "@mui/icons-material/Settings";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 import { lightTheme, darkTheme } from "./assets/themes";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ChatPage } from "./pages/ChatPage";
 import { GenerationPage } from "./pages/GenerationPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { KnowledgePage } from "./pages/KnowledgePage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { getMe, logout, type User } from "./services/auth";
+import { GenerationProvider, useGenerationStatus } from "./services/generationContext";
 
 const DRAWER_WIDTH = 220;
+
+function GlobalGenBar() {
+  const { runningGen } = useGenerationStatus();
+  if (!runningGen) return null;
+  return (
+    <Box sx={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 1300, bgcolor: runningGen.status === "failed" ? "error.main" : "info.main", color: "white", px: 3, py: 0.75, display: "flex", alignItems: "center", gap: 2 }}>
+      <Typography variant="caption" fontWeight={600}>
+        Генерация {runningGen.status === "queued" ? "в очереди" : runningGen.status === "processing" ? "выполняется" : runningGen.status === "completed" ? "завершена" : "ошибка"}
+      </Typography>
+      <Typography variant="caption">ID: {runningGen.generation_id.slice(0, 8)}</Typography>
+      {runningGen.status === "completed" && runningGen.cost > 0 && (
+        <Typography variant="caption">{runningGen.cost} кр.</Typography>
+      )}
+      {runningGen.status === "processing" && <Box sx={{ width: 12, height: 12, border: "2px solid white", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
+    </Box>
+  );
+}
 
 function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
   const location = useLocation();
@@ -31,6 +51,7 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
   const canEdit = user.permissions?.includes("edit");
   const canVideo = user.permissions?.includes("video");
   const canChat = user.permissions?.includes("chat");
+  const canManageDocs = user.permissions?.includes("documents_manage");
 
   const navItems = [
     { path: "/", label: "Дашборд", icon: <HomeIcon /> },
@@ -39,6 +60,7 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
     ...(canEdit ? [{ path: "/edit", label: "Редактирование", icon: <EditIcon /> }] : []),
     ...(canVideo ? [{ path: "/video", label: "Видео", icon: <MovieIcon /> }] : []),
     ...(canGenerate || canEdit || canVideo ? [{ path: "/history", label: "История", icon: <HistoryIcon /> }] : []),
+    ...(canManageDocs ? [{ path: "/knowledge", label: "Документы", icon: <MenuBookIcon /> }] : []),
     { path: "/profile", label: "Профиль", icon: <SettingsIcon /> },
   ];
 
@@ -53,12 +75,13 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <Box sx={{ display: "flex", height: "100vh" }}>
         <AppBar position="fixed" sx={{ zIndex: 1201 }} elevation={0}>
           <Toolbar>
             <AutoAwesomeIcon sx={{ mr: 1.5 }} />
             <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 700 }}>ACCOS</Typography>
-            <Chip icon={<AccountBalanceWalletIcon />} label={`${user.balance} MS`} size="small" sx={{ mr: 2, bgcolor: "rgba(255,255,255,0.15)", color: "inherit", fontWeight: 600 }} />
+            <Chip icon={<AccountBalanceWalletIcon />} label={`${(user.balance ?? 0).toFixed(2)} MS`} size="small" sx={{ mr: 2, bgcolor: "rgba(255,255,255,0.15)", color: "inherit", fontWeight: 600 }} />
             <FormControlLabel control={<Switch checked={darkMode} onChange={handleTheme} size="small" />} label="" sx={{ mr: 1 }} />
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: 2 }}>
               <Avatar
@@ -85,15 +108,19 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
           </List>
         </Drawer>
         <Box component="main" sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", overflowY: "auto", pt: "64px", px: 3, pb: 3, minHeight: 0 }}>
-          <Routes>
-            <Route path="/" element={<ErrorBoundary><DashboardPage user={user} /></ErrorBoundary>} />
-            <Route path="/chat" element={<ErrorBoundary><ChatPage user={user} /></ErrorBoundary>} />
-            <Route path="/generate" element={<ErrorBoundary><GenerationPage mode="generate" /></ErrorBoundary>} />
-            <Route path="/edit" element={<ErrorBoundary><GenerationPage mode="edit" /></ErrorBoundary>} />
-            <Route path="/video" element={<ErrorBoundary><GenerationPage mode="video" /></ErrorBoundary>} />
-            <Route path="/history" element={<ErrorBoundary><GenerationPage mode="all" viewHistory /></ErrorBoundary>} />
-            <Route path="/profile" element={<ErrorBoundary><ProfilePage user={user} /></ErrorBoundary>} />
-          </Routes>
+          <GenerationProvider>
+            <Routes>
+              <Route path="/" element={<ErrorBoundary><DashboardPage user={user} /></ErrorBoundary>} />
+              <Route path="/chat" element={<ErrorBoundary><ChatPage user={user} /></ErrorBoundary>} />
+              <Route path="/generate" element={<ErrorBoundary key="generate"><GenerationPage key="generate" mode="generate" /></ErrorBoundary>} />
+              <Route path="/edit" element={<ErrorBoundary key="edit"><GenerationPage key="edit" mode="edit" /></ErrorBoundary>} />
+              <Route path="/video" element={<ErrorBoundary key="video"><GenerationPage key="video" mode="video" /></ErrorBoundary>} />
+              <Route path="/history" element={<ErrorBoundary key="history"><GenerationPage key="history" mode="all" viewHistory /></ErrorBoundary>} />
+              <Route path="/profile" element={<ErrorBoundary><ProfilePage user={user} /></ErrorBoundary>} />
+              {canManageDocs && <Route path="/knowledge" element={<ErrorBoundary><KnowledgePage /></ErrorBoundary>} />}
+            </Routes>
+            <GlobalGenBar />
+          </GenerationProvider>
         </Box>
       </Box>
     </ThemeProvider>

@@ -134,6 +134,24 @@ class KnowledgeRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_chunks_by_document(self, document_id: uuid.UUID) -> list[dict]:
+        result = await self.session.execute(
+            select(KnowledgeChunk)
+            .where(KnowledgeChunk.document_id == document_id)
+            .order_by(KnowledgeChunk.chunk_index)
+        )
+        chunks = result.scalars().all()
+        return [
+            {
+                "id": str(c.id),
+                "content": c.content,
+                "chunk_index": c.chunk_index,
+                "meta": c.meta,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in chunks
+        ]
+
     async def count_documents(self) -> int:
         result = await self.session.execute(
             select(KnowledgeDocument).where(KnowledgeDocument.deleted_at.is_(None))

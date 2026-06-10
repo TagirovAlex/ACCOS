@@ -87,6 +87,61 @@ class KnowledgeService:
     async def reindex_document(self, doc_id: uuid.UUID) -> dict:
         return await self.rag.index_document(doc_id)
 
+    async def reindex_all(self) -> dict:
+        docs = await self.repo.list_documents(include_inactive=False)
+        total = len(docs)
+        succeeded = 0
+        failed = 0
+        for doc in docs:
+            try:
+                result = await self.rag.index_document(doc.id)
+                if result.get("success"):
+                    succeeded += 1
+                else:
+                    failed += 1
+            except Exception as e:
+                logger.error(f"Reindex failed for document {doc.id}: {e}")
+                failed += 1
+        return {"success": True, "total": total, "succeeded": succeeded, "failed": failed}
+
+    async def reindex_new(self) -> dict:
+        docs = await self.repo.list_documents(include_inactive=False)
+        total = 0
+        succeeded = 0
+        failed = 0
+        for doc in docs:
+            if doc.status == "pending":
+                total += 1
+                try:
+                    result = await self.rag.index_document(doc.id)
+                    if result.get("success"):
+                        succeeded += 1
+                    else:
+                        failed += 1
+                except Exception as e:
+                    logger.error(f"Reindex failed for document {doc.id}: {e}")
+                    failed += 1
+        return {"success": True, "total": total, "succeeded": succeeded, "failed": failed}
+
+    async def reindex_failed(self) -> dict:
+        docs = await self.repo.list_documents(include_inactive=False)
+        total = 0
+        succeeded = 0
+        failed = 0
+        for doc in docs:
+            if doc.status == "failed":
+                total += 1
+                try:
+                    result = await self.rag.index_document(doc.id)
+                    if result.get("success"):
+                        succeeded += 1
+                    else:
+                        failed += 1
+                except Exception as e:
+                    logger.error(f"Reindex failed for document {doc.id}: {e}")
+                    failed += 1
+        return {"success": True, "total": total, "succeeded": succeeded, "failed": failed}
+
     async def replace_document(
         self,
         old_id: uuid.UUID,

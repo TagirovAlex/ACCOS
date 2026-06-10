@@ -21,6 +21,7 @@ class TokenResponse(BaseResponse):
     token_type: str = "bearer"
     is_admin: bool = False
     admin_role: str = "none"
+    permissions: str = "chat"
 
 
 class UserInfoResponse(BaseResponse):

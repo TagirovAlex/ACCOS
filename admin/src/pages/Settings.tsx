@@ -12,6 +12,10 @@ import EditIcon from "@mui/icons-material/Edit";
 import MovieIcon from "@mui/icons-material/Movie";
 import PeopleIcon from "@mui/icons-material/People";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import DescriptionIcon from "@mui/icons-material/Description";
+import AutorenewIcon from "@mui/icons-material/Autorenew";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import ErrorIcon from "@mui/icons-material/Error";
 import { getToken } from "../services/api";
 
 const API = "/api/v1/admin/settings";
@@ -38,6 +42,7 @@ const CATEGORIES: CategoryDef[] = [
   { key: "Цены: Видео", label: "Цены: видео", icon: <MovieIcon /> },
   { key: "Пользователи", label: "Пользователи", icon: <PeopleIcon /> },
   { key: "Экономика", label: "Экономика", icon: <AccountBalanceIcon /> },
+  { key: "База знаний", label: "База знаний", icon: <DescriptionIcon /> },
 ];
 
 const CATEGORY_ORDER = CATEGORIES.map((c) => c.key);
@@ -59,6 +64,8 @@ function isBoolean(key: string, v: string): boolean {
 }
 
 function isNumeric(key: string): boolean {
+  if (key === "auto_accrual_time") return false;
+  if (key === "chat_context_messages") return true;
   return /^(cost_|auto_accrual|default_start_balance|comfyui_poll_interval)/.test(key);
 }
 
@@ -76,7 +83,10 @@ const FIELD_DISPLAY_NAMES: Record<string, string> = {
   llm_api_key: "API-ключ LLM",
   llm_model: "Модель LLM",
   llm_system_prompt: "Системный промпт",
-  comfy_api: "API-адрес ComfyUI",
+  comfyui_base_url: "API-адрес ComfyUI (общий)",
+  comfyui_generate_base_url: "URL для генерации (z_image, опционально)",
+  comfyui_edit_base_url: "URL для редактирования (Qwen, опционально)",
+  comfyui_video_base_url: "URL для видео (text_to_video/image_to_video, опционально)",
   comfy_workflow_zit: "Workflow ZIT",
   comfy_workflow_qwen_edit_1: "Workflow Qwen edit 1 pic",
   comfy_workflow_qwen_edit_2: "Workflow Qwen edit 2 pic",
@@ -92,6 +102,7 @@ const FIELD_DISPLAY_NAMES: Record<string, string> = {
   auto_accrual_amount: "Сумма начисления (MS)",
   auto_accrual_interval_minutes: "Интервал начисления (минуты)",
   auto_accrual_time: "Время начисления (HH:MM, по серверу)",
+  chat_context_messages: "Сообщений в контексте чата",
 };
 
 const MASKED_KEYS = new Set(["ldap_bind_password", "llm_api_key"]);
@@ -116,6 +127,21 @@ function SettingField({
         control={<Switch checked={checked} onChange={(e) => onChange(setting.key, e.target.checked ? "true" : "false")} />}
         label={<><strong>{label}</strong><br /><Typography variant="caption" color="text.secondary">{helper}</Typography></>}
         sx={{ mb: 1 }}
+      />
+    );
+  }
+
+  if (setting.key === "auto_accrual_time") {
+    return (
+      <MuiTextField
+        label={label}
+        helperText={helper}
+        value={value}
+        onChange={(e) => onChange(setting.key, e.target.value)}
+        fullWidth
+        type="time"
+        slotProps={{ htmlInput: { step: 60 } }}
+        sx={{ mb: 2 }}
       />
     );
   }
@@ -354,6 +380,65 @@ function LdapForm({ settings, onSaved }: { settings: Setting[]; onSaved: () => v
   );
 }
 
+function KnowledgeActions() {
+  const [running, setRunning] = useState<string | null>(null);
+  const [result, setResult] = useState<{ msg: string; success: boolean } | null>(null);
+
+  const runAction = async (action: string) => {
+    setRunning(action);
+    setResult(null);
+    try {
+      const token = getToken();
+      const res = await fetch(`/api/v1/knowledge/${action}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setResult({
+        success: data.success,
+        msg: data.success
+          ? `Готово: ${data.succeeded || 0} успешно, ${data.failed || 0} с ошибками (всего: ${data.total || 0})`
+          : data.error || "Ошибка",
+      });
+    } catch (e: any) {
+      setResult({ success: false, msg: e.message || "Ошибка" });
+    }
+    setRunning(null);
+  };
+
+  return (
+    <Box sx={{ mt: 4, pt: 3, borderTop: "1px solid", borderColor: "divider" }}>
+      <Typography variant="subtitle1" fontWeight={600} mb={2}>Управление индексацией</Typography>
+      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
+        <Button variant="contained" startIcon={<AutorenewIcon />}
+          disabled={running !== null}
+          onClick={() => runAction("reindex-all")}>
+          {running === "reindex-all" ? <CircularProgress size={18} /> : "Переиндексировать всё"}
+        </Button>
+        <Button variant="outlined" startIcon={<PlayArrowIcon />}
+          disabled={running !== null}
+          onClick={() => runAction("reindex-new")}>
+          {running === "reindex-new" ? <CircularProgress size={18} /> : "Индексировать новые"}
+        </Button>
+        <Button variant="outlined" color="warning" startIcon={<ErrorIcon />}
+          disabled={running !== null}
+          onClick={() => runAction("reindex-new?only_failed=true")}>
+          {running === "reindex-new?only_failed=true" ? <CircularProgress size={18} /> : "Переиндексировать упавшие"}
+        </Button>
+      </Box>
+      {result && (
+        <Alert severity={result.success ? "success" : "error"} sx={{ maxWidth: 600 }}>
+          {result.msg}
+        </Alert>
+      )}
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
+        Настройки расписания автопереиндексации находятся выше в этой категории.
+      </Typography>
+    </Box>
+  );
+}
+
+
 export const SettingsList = () => {
   const [settings, setSettings] = useState<Setting[]>([]);
   const [tab, setTab] = useState(0);
@@ -388,6 +473,7 @@ export const SettingsList = () => {
   const currentTab = tab < CATEGORIES.length ? CATEGORIES[tab] : CATEGORIES[0];
   const currentSettings = grouped[currentTab.key] || [];
   const isLdapTab = currentTab.key === "Домен";
+  const isKnowledgeTab = currentTab.key === "База знаний";
   const isEmpty = currentSettings.length === 0 && !isLdapTab;
 
   return (
@@ -437,6 +523,7 @@ export const SettingsList = () => {
         ) : (
           <CategoryForm settings={currentSettings} onSaved={fetchData} />
         )}
+        {isKnowledgeTab && <KnowledgeActions />}
       </Box>
     </Box>
   );

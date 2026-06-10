@@ -8,7 +8,7 @@ from app.repositories.user_repository import UserRepository
 
 class PricingStrategy(ABC):
     @abstractmethod
-    def calculate_cost(self, **kwargs) -> int:
+    def calculate_cost(self, **kwargs) -> float:
         pass
 
 
@@ -17,10 +17,11 @@ class LLMCostStrategy(PricingStrategy):
         self.cost_per_1000 = cost_per_1000
         self.token_divisor = token_divisor
 
-    def calculate_cost(self, **kwargs) -> int:
+    def calculate_cost(self, **kwargs) -> float:
         tokens_input = kwargs.get("tokens_input", 0)
         tokens_output = kwargs.get("tokens_output", 0)
-        return math.ceil(max(tokens_input, tokens_output) / self.token_divisor) * self.cost_per_1000
+        total = max(tokens_input, tokens_output) / self.token_divisor * self.cost_per_1000
+        return max(total, self.cost_per_1000 / self.token_divisor)
 
 
 class ImageGenCostStrategy(PricingStrategy):
@@ -28,7 +29,7 @@ class ImageGenCostStrategy(PricingStrategy):
         self.cost_per_mp = cost_per_mp
         self.pixel_divisor = pixel_divisor
 
-    def calculate_cost(self, **kwargs) -> int:
+    def calculate_cost(self, **kwargs) -> float:
         width = kwargs.get("width", 512)
         height = kwargs.get("height", 512)
         mp = (width * height) / self.pixel_divisor
@@ -40,7 +41,7 @@ class ImageEditCostStrategy(PricingStrategy):
         self.cost_per_mp = cost_per_mp
         self.pixel_divisor = pixel_divisor
 
-    def calculate_cost(self, **kwargs) -> int:
+    def calculate_cost(self, **kwargs) -> float:
         width = kwargs.get("width", 512)
         height = kwargs.get("height", 512)
         mp = (width * height) / self.pixel_divisor
@@ -52,7 +53,7 @@ class VideoGenCostStrategy(PricingStrategy):
         self.base_cost = base_cost
         self.cost_per_sec = cost_per_sec
 
-    def calculate_cost(self, **kwargs) -> int:
+    def calculate_cost(self, **kwargs) -> float:
         duration = kwargs.get("duration", 5)
         return self.base_cost + math.ceil(duration) * self.cost_per_sec
 
@@ -88,7 +89,7 @@ class EconomyService:
             ),
         }
 
-    async def calculate_cost(self, operation_type: str, **params) -> int:
+    async def calculate_cost(self, operation_type: str, **params) -> float:
         if not self._strategies:
             await self._load_strategies()
         strategy = self._strategies.get(operation_type)
@@ -103,7 +104,7 @@ class EconomyService:
             return {"success": False, "error": "User not found"}
         return {"success": True, "balance": balance}
 
-    async def deduct_balance(self, user_id: str, amount: int) -> dict:
+    async def deduct_balance(self, user_id: str, amount: float) -> dict:
         from uuid import UUID
         uid = UUID(user_id)
         balance = await self.user_repo.get_balance(uid)

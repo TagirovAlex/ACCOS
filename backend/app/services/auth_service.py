@@ -52,7 +52,7 @@ class AuthService:
         local = await self._authenticate_local(username, password)
         if local.get("authenticated"):
             return local
-        return result
+        return {"authenticated": False, "error": "Invalid username or password"}
 
     async def _resolve_group_and_permissions(self, ldap_result: dict) -> tuple[str | None, str, float]:
         permissions = "chat,generate,edit,video"
@@ -100,13 +100,14 @@ class AuthService:
         if not ldap_result.get("authenticated"):
             return {"success": False, "error": ldap_result.get("error", "Authentication failed")}
         if not await self._require_ad_group(username, ldap_result):
-            return {"success": False, "error": "Доступ запрещён: пользователь не состоит ни в одной разрешённой доменной группе"}
+            return {"success": False, "error": "Access denied: user is not a member of any allowed domain group"}
         is_ldap = ldap_result.get("from_ldap", False)
         user = await self.user_repo.get_by_username(username)
         avatar_path = await self._save_ad_avatar(str(user.id) if user else username, ldap_result.get("avatar_base64"))
         if not user:
             group_id, permissions, start_balance = await self._resolve_group_and_permissions(ldap_result)
             is_admin = (username == settings.admin_username)
+            ad_groups = ldap_result.get("groups", [])
             user = await self.user_repo.create(
                 username=username,
                 email=ldap_result.get("email"),
@@ -118,6 +119,7 @@ class AuthService:
                 auth_source="ldap" if is_ldap else "local",
                 avatar_path=avatar_path,
                 group_id=UUID(group_id) if group_id else None,
+                ad_group_dns=ad_groups if ad_groups else None,
             )
         else:
             expected_auth = "ldap" if is_ldap else "local"
@@ -134,6 +136,10 @@ class AuthService:
                 if user.admin_role != "super_admin":
                     await self.user_repo.update(user.id, admin_role="super_admin")
                     user.admin_role = "super_admin"
+            ad_groups = ldap_result.get("groups", [])
+            if ad_groups:
+                await self.user_repo.update(user.id, ad_group_dns=ad_groups)
+                user.ad_group_dns = ad_groups
         from datetime import datetime, timezone
         await self.user_repo.update(user.id, last_login=datetime.now(timezone.utc))
         access = create_access_token(subject=str(user.id))

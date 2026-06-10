@@ -163,7 +163,10 @@ class ChatService:
             kg = KnowledgeService(self.session)
             context = await kg.build_context(message, ad_group_dns)
             if context:
-                rag_header = "\n\n=== Справочная информация из базы знаний ===\n"
+                rag_header = (
+                    "\n\n=== Справочная информация из базы знаний ===\n"
+                    "При использовании информации из документов указывай источник в формате [doc: id] в конце предложения.\n\n"
+                )
                 system_content += rag_header + context
         except Exception as e:
             logger.warning(f"RAG context injection failed: {e}")

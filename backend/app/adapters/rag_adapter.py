@@ -21,7 +21,7 @@ class RAGAdapter(BaseAdapter):
             headers["Authorization"] = f"Bearer {self.api_key}"
         payload = {
             "model": self.model,
-            "input": texts if len(texts) > 1 else texts[0],
+            "input": texts,
         }
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:

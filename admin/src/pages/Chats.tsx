@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { List, Datagrid, TextField, BooleanField, DateField, Show, SimpleShowLayout, ReferenceField, WithListContext } from "react-admin";
-import { Box, Typography, Paper, Card, CardContent, ToggleButtonGroup, ToggleButton, Grid as MuiGrid } from "@mui/material";
+import { List, Datagrid, TextField, BooleanField, DateField, Show, SimpleShowLayout, ReferenceField, WithListContext, useRedirect, useDelete, DeleteButton } from "react-admin";
+import { Box, Typography, Paper, Card, CardContent, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button, IconButton } from "@mui/material";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
+import DeleteIcon from "@mui/icons-material/Delete";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useRecordContext } from "react-admin";
 
 const MessagesList = () => {
@@ -40,13 +42,23 @@ const ChatListView = () => (
   </Datagrid>
 );
 
-const ChatTileView = () => (
+const ChatTileView = () => {
+  const redirect = useRedirect();
+  const [deleteOne] = useDelete();
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  return (
+  <>
   <WithListContext render={({ data }) => (
     <MuiGrid container spacing={2} sx={{ p: 2 }}>
       {data?.map((record: any) => (
         <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
-          <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
-            <CardContent>
+          <Card sx={{ position: "relative", cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+            <IconButton size="small"
+              sx={{ position: "absolute", top: 4, right: 4, zIndex: 1, color: "error.light" }}
+              onClick={(e) => { e.stopPropagation(); setDeleteTarget(record); }}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+            <CardContent onClick={() => redirect("show", "chats", record.id)}>
               <Typography variant="body2" fontWeight={600} noWrap>{record.title || "(без названия)"}</Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>{record.username}</Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
@@ -58,7 +70,19 @@ const ChatTileView = () => (
       ))}
     </MuiGrid>
   )} />
-);
+  <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
+    <DialogTitle>Удалить чат?</DialogTitle>
+    <DialogContent>
+      <DialogContentText>Чат «{deleteTarget?.title || "(без названия)"}» будет удалён без возможности восстановления.</DialogContentText>
+    </DialogContent>
+    <DialogActions>
+      <Button onClick={() => setDeleteTarget(null)}>Отмена</Button>
+      <Button onClick={() => { deleteOne("chats", { id: deleteTarget?.id }); setDeleteTarget(null); }} color="error">Удалить</Button>
+    </DialogActions>
+  </Dialog>
+  </>
+  );
+};
 
 export const ChatList = () => {
   const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("chats_view") as "list" | "tiles") ?? "list");
@@ -75,8 +99,20 @@ export const ChatList = () => {
   );
 };
 
+const ChatShowActions = () => {
+  const redirect = useRedirect();
+  return (
+    <Box sx={{ display: "flex", gap: 1, p: 1 }}>
+      <Button startIcon={<ArrowBackIcon />} size="small" onClick={() => redirect("list", "chats")}>
+        ← Чаты
+      </Button>
+      <DeleteButton mutationMode="pessimistic" />
+    </Box>
+  );
+};
+
 export const ChatShow = () => (
-  <Show>
+  <Show actions={<ChatShowActions />}>
     <SimpleShowLayout>
       <TextField source="title" label="Название" />
       <ReferenceField source="user_id" reference="users" label="Пользователь">

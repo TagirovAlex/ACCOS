@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import PROJECT_ROOT
 from app.core.dependencies import get_db, get_current_user_id
 from app.repositories.user_repository import UserRepository
+from app.repositories.settings_repository import SettingsRepository
 from app.services.knowledge_service import KnowledgeService
+from app.services.settings_service import SettingsService
+from app.adapters.ldap_adapter import LDAPAdapter
+from fastapi.responses import HTMLResponse
+
 from app.schemas.knowledge import (
     KnowledgeUploadResponse,
     KnowledgeSearchQuery,
@@ -56,12 +61,17 @@ async def upload_document(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, "File too large (max 50 MB)")
 
-    doc_id = uuid.uuid4()
-    knowledge_dir = PROJECT_ROOT / "static" / "knowledge" / str(doc_id)
+    folder_dir = folder.strip("/") if folder else ""
+    knowledge_dir = PROJECT_ROOT / "static" / "knowledge"
+    if folder_dir:
+        knowledge_dir = knowledge_dir / folder_dir
     knowledge_dir.mkdir(parents=True, exist_ok=True)
     file_path = knowledge_dir / file.filename
     file_path.write_bytes(content)
-    storage_path = f"static/knowledge/{doc_id}/{file.filename}"
+    if folder_dir:
+        storage_path = f"static/knowledge/{folder_dir}/{file.filename}"
+    else:
+        storage_path = f"static/knowledge/{file.filename}"
 
     parsed_date = None
     if doc_date:
@@ -135,6 +145,32 @@ async def delete_document(
     return {"success": True}
 
 
+@router.post("/reindex-all")
+async def reindex_all_documents(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    await _require_documents_manage(db, user_id)
+    svc = KnowledgeService(db)
+    result = await svc.reindex_all()
+    return result
+
+
+@router.post("/reindex-new")
+async def reindex_new_documents(
+    only_failed: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    await _require_documents_manage(db, user_id)
+    svc = KnowledgeService(db)
+    if only_failed:
+        result = await svc.reindex_failed()
+    else:
+        result = await svc.reindex_new()
+    return result
+
+
 @router.post("/documents/{doc_id}/reindex")
 async def reindex_document(
     doc_id: uuid.UUID,
@@ -166,14 +202,22 @@ async def replace_document(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, "File too large (max 50 MB)")
 
-    new_id = uuid.uuid4()
-    knowledge_dir = PROJECT_ROOT / "static" / "knowledge" / str(new_id)
+    svc = KnowledgeService(db)
+    old_doc = await svc.get_document(doc_id)
+    if not old_doc:
+        raise HTTPException(404, "Original document not found")
+    folder_dir = (old_doc.get("folder") or "").strip("/")
+    knowledge_dir = PROJECT_ROOT / "static" / "knowledge"
+    if folder_dir:
+        knowledge_dir = knowledge_dir / folder_dir
     knowledge_dir.mkdir(parents=True, exist_ok=True)
     file_path = knowledge_dir / file.filename
     file_path.write_bytes(content)
-    storage_path = f"static/knowledge/{new_id}/{file.filename}"
+    if folder_dir:
+        storage_path = f"static/knowledge/{folder_dir}/{file.filename}"
+    else:
+        storage_path = f"static/knowledge/{file.filename}"
 
-    svc = KnowledgeService(db)
     result = await svc.replace_document(
         old_id=doc_id,
         title=title or file.filename,
@@ -210,6 +254,32 @@ async def search_knowledge(
     return result
 
 
+@router.get("/departments")
+async def list_departments(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    ss = SettingsService(db)
+    ldap_enabled = await ss.get_bool("ldap_enabled", False)
+    if not ldap_enabled:
+        return {"departments": []}
+    server = await ss.get("ldap_server", "")
+    domain = await ss.get("ldap_domain", "")
+    base_dn = await ss.get("ldap_base_dn", "")
+    clients_ou = await ss.get("ad_clients_ou", "")
+    if not server or not clients_ou:
+        return {"departments": []}
+    bind_username = await ss.get("ldap_bind_username", "")
+    bind_password = await ss.get("ldap_bind_password", "")
+    bind_dn = await ss.get("ldap_bind_dn", "")
+    adapter = LDAPAdapter(server=server, domain=domain, base_dn=base_dn,
+                          bind_username=bind_username or None,
+                          bind_password=bind_password or None,
+                          bind_dn=bind_dn or None)
+    ous = await adapter.list_ous(search_base=clients_ou)
+    return {"departments": ous}
+
+
 @router.get("/search-docs")
 async def search_documents_for_replace(
     q: str = Query("", min_length=1),
@@ -221,3 +291,88 @@ async def search_documents_for_replace(
     svc = KnowledgeService(db)
     docs = await svc.search_documents(q, limit)
     return docs
+
+
+@router.get("/{doc_id}/chunks")
+async def get_document_chunks(
+    doc_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    await _require_documents_manage(db, user_id)
+    svc = KnowledgeService(db)
+    chunks = await svc.get_document_chunks(doc_id)
+    return {"chunks": chunks}
+
+
+@router.get("/{doc_id}/preview", response_class=HTMLResponse)
+async def preview_document(
+    doc_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    svc = KnowledgeService(db)
+    doc = await svc.get_document(doc_id)
+    if not doc:
+        raise HTTPException(404, "Document not found")
+
+    file_abs = PROJECT_ROOT / doc["file_path"]
+    if not file_abs.exists():
+        doc_title = doc["title"] or doc["filename"]
+        return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>{doc_title}</title>
+<style>
+body {{ font-family: Arial, sans-serif; margin: 20px; }}
+@media print {{ body {{ display: none; }} }}
+</style></head><body>
+<h2>{doc_title}</h2>
+<p>Файл не найден на сервере.</p>
+</body></html>"""
+
+    doc_title = doc["title"] or doc["filename"]
+    ext = doc["content_type"]
+    file_url = f"/{doc['file_path']}"
+
+    body_html = ""
+    if ext in ("txt", "md"):
+        content = file_abs.read_text("utf-8", errors="replace")
+        import html
+        body_html = f"<pre style=\"white-space:pre-wrap;word-break:break-word\">{html.escape(content)}</pre>"
+    elif ext in ("png", "jpg", "jpeg"):
+        import base64
+        b64 = base64.b64encode(file_abs.read_bytes()).decode()
+        body_html = f"<img src=\"data:image/{ext};base64,{b64}\" style=\"max-width:100%;height:auto\" />"
+    elif ext == "pdf":
+        body_html = f"""<iframe src="{file_url}#toolbar=0&navpanes=0&scrollbar=1"
+style="width:100%;height:90vh;border:none"></iframe>"""
+    elif ext == "docx":
+        from app.services.rag_service import extract_text_from_docx
+        content = extract_text_from_docx(str(file_abs))
+        import html as hlib
+        body_html = f"<pre style=\"white-space:pre-wrap;word-break:break-word\">{hlib.escape(content)}</pre>"
+    else:
+        body_html = f"<p>Формат {ext} не поддерживается для просмотра.</p>"
+
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>{doc_title}</title>
+<style>
+* {{ user-select: none; -webkit-user-select: none; }}
+body {{ font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 16px; background: #f5f5f5; color: #222; }}
+.container {{ max-width: 1000px; margin: 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }}
+h2 {{ margin-top: 0; color: #1a1a2e; }}
+.meta {{ color: #666; font-size: 13px; margin-bottom: 16px; }}
+pre {{ font-size: 14px; line-height: 1.6; }}
+img {{ border-radius: 4px; }}
+@media print {{ body {{ display: none; }} }}
+</style></head><body>
+<div class="container">
+<h2>{doc_title}</h2>
+<div class="meta">{doc["folder"] or "Общий доступ"} &middot; {ext.upper()}</div>
+{body_html}
+</div>
+<script>
+document.addEventListener("contextmenu", e => e.preventDefault());
+document.addEventListener("keydown", e => {{
+  if (e.ctrlKey && (e.key === "s" || e.key === "p")) e.preventDefault();
+}});
+</script>
+</body></html>"""

@@ -1,4 +1,6 @@
+import json
 import logging
+from pathlib import Path
 from uuid import UUID
 from datetime import datetime, timezone
 
@@ -18,6 +20,40 @@ from app.repositories.settings_repository import SettingsRepository
 from app.core.security import get_password_hash as hash_password
 
 logger = logging.getLogger(__name__)
+
+STATIC_DIR = Path(__file__).parent.parent.parent.parent / "static"
+
+
+def _abs_path_to_url(abs_path: str) -> str:
+    if not abs_path:
+        return ""
+    try:
+        p = Path(abs_path)
+        rel = p.relative_to(STATIC_DIR)
+        return f"/static/{rel.as_posix()}"
+    except (ValueError, TypeError):
+        pass
+    norm = abs_path.replace("\\", "/")
+    for marker in ("/static/", "static/"):
+        idx = norm.find(marker)
+        if idx != -1:
+            result = norm[idx:]
+            if not result.startswith("/"):
+                result = "/" + result
+            return result
+    return abs_path
+
+
+def _parse_reference_images(result_path: str | None) -> list[str]:
+    if not result_path:
+        return []
+    try:
+        paths = json.loads(result_path)
+        if not isinstance(paths, list):
+            return []
+        return [_abs_path_to_url(p) for p in paths if isinstance(p, str)]
+    except (json.JSONDecodeError, TypeError):
+        return []
 
 
 class AdminService:
@@ -347,6 +383,7 @@ class AdminService:
                 "created_at": record.created_at, "updated_at": record.updated_at,
                 "images": [_asset_json(a) for a in (record.assets or [])],
                 "source_generation": source_data,
+                "reference_images": _parse_reference_images(record.result_path),
             }
         except Exception as e:
             logger.exception("get_generation_detail failed")
@@ -356,6 +393,7 @@ class AdminService:
         result = await self.session.execute(
             select(GenerationRecord)
             .options(joinedload(GenerationRecord.user))
+            .where(GenerationRecord.deleted_at.is_(None))
             .order_by(GenerationRecord.created_at.desc())
             .offset(skip).limit(limit)
         )
@@ -390,7 +428,23 @@ class AdminService:
         }
 
     async def force_delete_generation(self, gen_id: str) -> dict:
-        return await self._force_delete(GenerationRecord, gen_id)
+        try:
+            obj = await self.session.get(GenerationRecord, UUID(gen_id))
+            if obj is None:
+                return {"success": False, "error": "Generation not found"}
+            if obj.assets:
+                for asset in obj.assets:
+                    if asset.file_path:
+                        try:
+                            p = Path(asset.file_path)
+                            if p.exists():
+                                p.unlink()
+                        except Exception as e:
+                            logger.warning(f"Could not delete file {asset.file_path}: {e}")
+            await self.session.delete(obj)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     async def get_asset_detail(self, asset_id: str) -> dict | None:
         try:
@@ -475,8 +529,14 @@ class AdminService:
         users_count = (await self.session.execute(select(sa_func.count()).select_from(User))).scalar()
         groups_count = (await self.session.execute(select(sa_func.count()).select_from(UserGroup))).scalar()
         chats_count = (await self.session.execute(select(sa_func.count()).select_from(ChatSession))).scalar()
-        gens_count = (await self.session.execute(select(sa_func.count()).select_from(GenerationRecord))).scalar()
-        assets_count = (await self.session.execute(select(sa_func.count()).select_from(ImageAsset))).scalar()
+        gens_count = (await self.session.execute(
+            select(sa_func.count()).select_from(GenerationRecord)
+            .where(GenerationRecord.deleted_at.is_(None))
+        )).scalar()
+        assets_count = (await self.session.execute(
+            select(sa_func.count()).select_from(ImageAsset)
+            .where(ImageAsset.deleted_at.is_(None))
+        )).scalar()
 
         token_row = (await self.session.execute(
             select(
@@ -500,8 +560,11 @@ class AdminService:
         )).scalars().all()
 
         gens_today = (await self.session.execute(
-            select(func.count()).select_from(GenerationRecord)
-            .where(GenerationRecord.created_at >= func.now() - text("INTERVAL '24 hours'"))
+            select(sa_func.count()).select_from(GenerationRecord)
+            .where(
+                GenerationRecord.created_at >= sa_func.now() - text("INTERVAL '24 hours'"),
+                GenerationRecord.deleted_at.is_(None),
+            )
         )).scalar() or 0
 
         return {
@@ -554,7 +617,24 @@ class AdminService:
         }
 
     async def force_delete_asset(self, asset_id: str) -> dict:
-        return await self._force_delete(ImageAsset, asset_id)
+        try:
+            obj = await self.session.get(ImageAsset, UUID(asset_id))
+            if obj is None:
+                return {"success": False, "error": "Asset not found"}
+            if obj.file_path:
+                try:
+                    p = Path(obj.file_path)
+                    if p.exists():
+                        p.unlink()
+                        parent = p.parent
+                        if parent.exists() and not any(parent.iterdir()):
+                            parent.rmdir()
+                except Exception as e:
+                    logger.warning(f"Could not delete file {obj.file_path}: {e}")
+            await self.session.delete(obj)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     async def get_token_stats(self, user_id: str) -> dict:
         try:
@@ -581,6 +661,50 @@ class AdminService:
             }
         except Exception as e:
             return {"success": True, "total_tokens_input": 0, "total_tokens_output": 0, "total_cost": 0, "session_count": 0}
+
+    async def list_generation_queue(self) -> dict:
+        try:
+            result = await self.session.execute(
+                select(GenerationRecord)
+                .options(joinedload(GenerationRecord.user))
+                .where(GenerationRecord.status.in_(["queued", "processing"]))
+                .order_by(GenerationRecord.created_at)
+            )
+            records = result.unique().scalars().all()
+            queued_count = sum(1 for r in records if r.status == "queued")
+            processing_count = sum(1 for r in records if r.status == "processing")
+            return {
+                "success": True,
+                "items": [
+                    {
+                        "id": str(r.id), "user_id": str(r.user_id),
+                        "username": r.user.username if r.user else "unknown",
+                        "workflow_type": r.workflow_type, "prompt": r.prompt,
+                        "status": r.status, "created_at": r.created_at,
+                    }
+                    for r in records
+                ],
+                "queued_count": queued_count,
+                "processing_count": processing_count,
+            }
+        except Exception as e:
+            logger.exception("list_generation_queue failed")
+            return {"success": False, "error": str(e)}
+
+    async def cancel_generation_queue(self, gen_id: str) -> dict:
+        try:
+            record = await self.session.get(GenerationRecord, UUID(gen_id))
+            if not record:
+                return {"success": False, "error": "Generation not found"}
+            if record.status not in ("queued", "processing"):
+                return {"success": False, "error": "Можно отменить только задания в очереди или обработке"}
+            record.status = "cancelled"
+            from app.services.economy_service import EconomyService
+            await EconomyService(self.session).add_balance(str(record.user_id), record.cost)
+            await self.session.flush()
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     async def _force_delete(self, model_class, record_id: str) -> dict:
         try:

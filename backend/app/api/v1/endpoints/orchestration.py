@@ -7,13 +7,11 @@ from fastapi import APIRouter, Depends, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, get_current_user_id
+from app.core.paths import UPLOADS_DIR
 from app.schemas.generation import GenerateResponse
 from app.services.orchestration_service import OrchestrationService
 
 router = APIRouter(prefix="/orchestrate", tags=["orchestration"])
-
-UPLOAD_DIR = Path(__file__).parent.parent.parent.parent.parent / "static" / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @router.post("/image-to-edit/{generation_id}", response_model=GenerateResponse)
@@ -30,7 +28,9 @@ async def image_to_edit(
         for f in files:
             ext = os.path.splitext(f.filename or "image.png")[1] or ".png"
             file_id = str(uuid.uuid4())
-            save_path = UPLOAD_DIR / f"{file_id}{ext}"
+            save_dir = UPLOADS_DIR / user_id
+            save_dir.mkdir(parents=True, exist_ok=True)
+            save_path = save_dir / f"{file_id}{ext}"
             content = await f.read()
             await asyncio.to_thread(save_path.write_bytes, content)
             saved_paths.append(str(save_path))

@@ -1,5 +1,8 @@
+import logging
 import os, shutil
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+
+logger = logging.getLogger(__name__)
 from fastapi.responses import FileResponse, JSONResponse
 from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -404,7 +407,14 @@ async def update_setting(
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
-    return BaseResponse(**await service.update_setting(key, request.value, request.description))
+    result = await service.update_setting(key, request.value, request.description)
+    if key in ("reindex_schedule_enabled", "reindex_cron", "reindex_mode"):
+        try:
+            from app.services.scheduler_service import update_schedule
+            await update_schedule()
+        except Exception as e:
+            logger.warning(f"Scheduler update failed after settings change: {e}")
+    return BaseResponse(**result)
 
 
 @router.delete("/settings/{key}", response_model=BaseResponse)
@@ -595,18 +605,29 @@ async def upload_file(
     content = await file.read()
     abs_path.write_bytes(content)
 
-    if ad_group_dn:
-        storage_path = f"static/{upload_path}/{file.filename}".replace("//", "/")
-        ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-        svc = KnowledgeService(db)
-        await svc.create_document(
-            title=file.filename,
-            filename=file.filename,
-            content_type=ext,
-            file_path=storage_path,
-            folder=folder or "",
-            ad_group_dn=ad_group_dn,
-            created_by=uuid.UUID(admin_id.id) if hasattr(admin_id, "id") else uuid.UUID(str(admin_id)),
-        )
+    storage_path = f"static/{upload_path}/{file.filename}".replace("//", "/")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    svc = KnowledgeService(db)
 
-    return {"success": True, "filename": file.filename, "path": upload_path}
+    created_by = admin_id.id if hasattr(admin_id, "id") else uuid.UUID(str(admin_id))
+
+    # check for existing document with same folder+filename for versioning
+    prev_docs = await svc.list_documents(folder=folder or "", include_inactive=False, limit=10)
+    supersedes_doc_id = None
+    for pd in prev_docs:
+        if pd.get("filename") == file.filename:
+            supersedes_doc_id = pd["id"]
+            break
+
+    result = await svc.create_document(
+        title=file.filename,
+        filename=file.filename,
+        content_type=ext,
+        file_path=storage_path,
+        folder=folder or "",
+        ad_group_dn=ad_group_dn,
+        supersedes_doc_id=supersedes_doc_id,
+        created_by=created_by,
+    )
+
+    return {"success": True, "filename": file.filename, "path": upload_path, "document_id": result["document_id"]}

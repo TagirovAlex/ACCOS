@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from ldap3 import Server, Connection, ALL, NTLM
+from ldap3 import Server, Connection, ALL
 from ldap3.utils.conv import escape_filter_chars
 
 from app.adapters.base import BaseAdapter
@@ -31,14 +31,10 @@ class LDAPAdapter(BaseAdapter):
     def _sync_authenticate(self, username: str, password: str) -> dict:
         try:
             safe_username = escape_filter_chars(username)
-            user_dn = f"{self.domain}\\{username}"
             server = Server(self.server, get_info=ALL)
             conn = None
-            try:
-                upn = f"{username}@{self.domain.lower()}"
-                conn = Connection(server, user=upn, password=password, authentication="SIMPLE", auto_bind=True)
-            except Exception:
-                conn = Connection(server, user=user_dn, password=password, authentication=NTLM, auto_bind=True)
+            upn = f"{username}@{self.domain.lower()}"
+            conn = Connection(server, user=upn, password=password, authentication="SIMPLE", auto_bind=True)
             conn.search(
                 search_base=self.base_dn,
                 search_filter=f"(sAMAccountName={safe_username})",
@@ -74,28 +70,23 @@ class LDAPAdapter(BaseAdapter):
             return {"authenticated": False, "error": "LDAP connection timed out"}
 
     def _bind_connection(self) -> Connection:
-        """Create an LDAP connection using available bind credentials.
-        Tries: 1) UPN format with SIMPLE, 2) NTLM with bind_username, 3) bind_dn with SIMPLE, 4) anonymous."""
         server = Server(self.server, get_info=ALL)
         if self.bind_username:
             upn = f"{self.bind_username}@{self.domain.lower()}"
-            try:
-                return Connection(server, user=upn, password=self.bind_password, authentication="SIMPLE", auto_bind=True)
-            except Exception:
-                user = f"{self.domain}\\{self.bind_username}"
-                return Connection(server, user=user, password=self.bind_password, authentication=NTLM, auto_bind=True)
+            return Connection(server, user=upn, password=self.bind_password, authentication="SIMPLE", auto_bind=True)
         if self.bind_dn and self.bind_password:
             return Connection(server, user=self.bind_dn, password=self.bind_password, authentication="SIMPLE", auto_bind=True)
         return Connection(server, auto_bind=True)
 
-    def _sync_list_groups(self, search: str = "") -> list[dict]:
+    def _sync_list_groups(self, search: str = "", search_base: str | None = None) -> list[dict]:
         conn = self._bind_connection()
         search_filter = "(&(objectClass=group)(cn=*))"
         if search and search != "*":
             safe = escape_filter_chars(search)
             search_filter = f"(&(objectClass=group)(cn=*{safe}*))"
+        base = search_base or self.base_dn
         conn.search(
-            search_base=self.base_dn,
+            search_base=base,
             search_filter=search_filter,
             attributes=["cn", "distinguishedName", "description"],
             size_limit=200,
@@ -110,10 +101,10 @@ class LDAPAdapter(BaseAdapter):
         logger.info(f"LDAP list_groups found {len(groups)} groups")
         return groups
 
-    async def list_groups(self, search: str = "") -> list[dict]:
+    async def list_groups(self, search: str = "", search_base: str | None = None) -> list[dict]:
         try:
             return await asyncio.wait_for(
-                asyncio.to_thread(self._sync_list_groups, search),
+                asyncio.to_thread(self._sync_list_groups, search, search_base),
                 timeout=10.0,
             )
         except asyncio.TimeoutError:
@@ -123,15 +114,47 @@ class LDAPAdapter(BaseAdapter):
             logger.error(f"LDAP list_groups failed: {e}")
             return []
 
+    def _sync_list_ous(self, search_base: str | None = None) -> list[dict]:
+        conn = self._bind_connection()
+        base = search_base or self.base_dn
+        conn.search(
+            search_base=base,
+            search_filter="(objectClass=organizationalUnit)",
+            attributes=["ou", "distinguishedName", "description"],
+            size_limit=200,
+        )
+        ous = []
+        for entry in conn.entries:
+            dn = str(entry.distinguishedName.value) if hasattr(entry, "distinguishedName") and entry.distinguishedName.value else ""
+            ou = str(entry.ou.value) if hasattr(entry, "ou") and entry.ou.value else ""
+            desc = str(entry.description.value) if hasattr(entry, "description") and entry.description.value else ""
+            if ou:
+                ous.append({"dn": dn, "ou": ou, "description": desc})
+        conn.unbind()
+        logger.info(f"LDAP list_ous found {len(ous)} OUs under {base}")
+        return ous
+
+    async def list_ous(self, search_base: str | None = None) -> list[dict]:
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(self._sync_list_ous, search_base),
+                timeout=10.0,
+            )
+        except asyncio.TimeoutError:
+            logger.error("LDAP list_ous timed out")
+            return []
+        except Exception as e:
+            logger.error(f"LDAP list_ous failed: {e}")
+            return []
+
     async def test_connection(self) -> dict:
-        """Проверка подключения к LDAP. Возвращает success и детали ошибки."""
         try:
             conn = await asyncio.wait_for(
                 asyncio.to_thread(self._bind_connection),
                 timeout=10.0,
             )
             conn.unbind()
-            return {"success": True, "message": "Подключение успешно"}
+            return {"success": True, "message": "Connection successful"}
         except Exception as e:
             logger.error(f"LDAP test_connection failed: {e}")
             return {"success": False, "error": str(e)}
@@ -157,7 +180,7 @@ class MockLDAPAdapter(BaseAdapter):
             }
         return {"authenticated": False, "error": "Invalid credentials"}
 
-    async def list_groups(self, search: str = "") -> list[dict]:
+    async def list_groups(self, search: str = "", search_base: str | None = None) -> list[dict]:
         mock = [
             {"dn": "CN=Domain Admins,CN=Users,DC=fidelio,DC=local", "cn": "Domain Admins", "description": "Domain administrators"},
             {"dn": "CN=Domain Users,CN=Users,DC=fidelio,DC=local", "cn": "Domain Users", "description": "All domain users"},
@@ -171,3 +194,10 @@ class MockLDAPAdapter(BaseAdapter):
             s = search.lower()
             mock = [g for g in mock if s in g["cn"].lower() or s in g["dn"].lower()]
         return mock
+
+    async def list_ous(self, search_base: str | None = None) -> list[dict]:
+        return [
+            {"dn": "OU=ACCOS,DC=fidelio,DC=local", "ou": "ACCOS", "description": "ACCOS department"},
+            {"dn": "OU=Clients,DC=fidelio,DC=local", "ou": "Clients", "description": "All clients"},
+            {"dn": "OU=IT,OU=Clients,DC=fidelio,DC=local", "ou": "IT", "description": "IT department"},
+        ]

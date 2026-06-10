@@ -20,6 +20,7 @@ from app.core.paths import UPLOADS_DIR, GENERATIONS_DIR, EDITS_DIR, VIDEOS_DIR, 
 from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin, knowledge
 from app.services.accrual_service import run_auto_accrual
 from app.services.queue_worker import queue_worker_loop
+from app.services.scheduler_service import start_scheduler, stop_scheduler, update_schedule
 
 from app.services.settings_service import SettingsService
 from app.db.session import async_session_factory
@@ -72,7 +73,15 @@ async def lifespan(app: FastAPI):
     _accrual_task = asyncio.create_task(accrual_loop())
     _queue_worker_task = asyncio.create_task(queue_worker_loop())
     logger.info("Queue worker started")
+    try:
+        await start_scheduler()
+    except Exception as e:
+        logger.error(f"Failed to start reindex scheduler: {e}")
     yield
+    try:
+        await stop_scheduler()
+    except Exception as e:
+        logger.error(f"Failed to stop reindex scheduler: {e}")
     for task in (_accrual_task, _queue_worker_task):
         if task:
             task.cancel()

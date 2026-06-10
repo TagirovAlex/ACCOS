@@ -4,7 +4,7 @@ import {
   Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText,
   Breadcrumbs, Link, LinearProgress, IconButton, Chip, Button, Card, CardContent,
   Dialog, DialogContent, DialogTitle, DialogActions, ToggleButtonGroup, ToggleButton,
-  Grid as MuiGrid, TextField,
+  Grid as MuiGrid, TextField, Select, MenuItem, FormControl, InputLabel,
 } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
@@ -40,7 +40,6 @@ const CHIP_DIRS = [
   { label: "edits/", path: "edits" },
   { label: "videos/", path: "videos" },
   { label: "avatars/", path: "avatars" },
-  { label: "knowledge/", path: "knowledge" },
 ];
 
 function formatSize(bytes: number): string {
@@ -68,8 +67,17 @@ export const FileManager = () => {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadFolder, setUploadFolder] = useState("");
+  const [uploadNewFolder, setUploadNewFolder] = useState(false);
+  const [uploadFolderOptions, setUploadFolderOptions] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const adminRole = localStorage.getItem("admin_role") || "none";
+  const isSuperAdmin = adminRole === "super_admin";
+
+  const VISIBLE_CHIPS = CHIP_DIRS.filter(c => isSuperAdmin || c.path === "avatars");
+
+  const GENERATION_DIRS = new Set(["generations", "uploads", "edits", "videos"]);
 
   const load = async (dirPath: string) => {
     setLoading(true);
@@ -85,6 +93,9 @@ export const FileManager = () => {
         let filtered = data.entries || [];
         if (!dirPath) {
           filtered = filtered.filter((e: FileEntry) => e.is_dir && !SYSTEM_DIRS.has(e.name));
+          if (!isSuperAdmin) {
+            filtered = filtered.filter((e: FileEntry) => !GENERATION_DIRS.has(e.name));
+          }
         }
         setEntries(filtered);
         setCurrentPath(data.current_path || "");
@@ -239,6 +250,21 @@ export const FileManager = () => {
 
   const canUpload = currentPath === "knowledge" || currentPath.startsWith("knowledge/");
 
+  const fetchExistingFolders = async () => {
+    try {
+      const token = adminToken();
+      const res = await fetch("/api/v1/admin/files?path=knowledge", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUploadFolderOptions(
+          (data.entries || []).filter((e: FileEntry) => e.is_dir).map((e: FileEntry) => e.name)
+        );
+      }
+    } catch {}
+  };
+
   const handleUpload = async () => {
     if (!uploadFile) return;
     setUploading(true);
@@ -259,6 +285,7 @@ export const FileManager = () => {
         setUploadOpen(false);
         setUploadFile(null);
         setUploadFolder("");
+        setUploadNewFolder(false);
         load("knowledge");
       } else {
         setUploadError(data.error || data.detail || "Ошибка загрузки");
@@ -278,7 +305,7 @@ export const FileManager = () => {
   return (
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-        <Button startIcon={<ArrowBackIcon />} size="small" onClick={() => redirect("dashboard")}>
+        <Button startIcon={<ArrowBackIcon />} size="small" onClick={() => redirect("/")}>
           Дашборд
         </Button>
         <Typography variant="h5" fontWeight={700} sx={{ flex: 1 }}>
@@ -291,7 +318,8 @@ export const FileManager = () => {
         </ToggleButtonGroup>
         {canUpload && (
           <Button startIcon={<UploadIcon />} variant="contained" size="small"
-            onClick={() => { setUploadFile(null); setUploadFolder(""); setUploadOpen(true); }}>
+            onClick={() => { setUploadFile(null); setUploadFolder(""); setUploadNewFolder(false);
+              fetchExistingFolders(); setUploadOpen(true); }}>
             Загрузить
           </Button>
         )}
@@ -318,7 +346,7 @@ export const FileManager = () => {
       </Breadcrumbs>
 
       <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap" }}>
-        {CHIP_DIRS.map(d => (
+        {VISIBLE_CHIPS.map(d => (
           <Chip key={d.path} label={d.label} size="small" variant="outlined" onClick={() => load(d.path)} />
         ))}
       </Box>
@@ -357,9 +385,30 @@ export const FileManager = () => {
               <input type="file" hidden accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
                 onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
             </Button>
-            <TextField label="Отдел (папка)" size="small" value={uploadFolder}
-              onChange={(e) => setUploadFolder(e.target.value)}
-              helperText="Оставьте пустым для общего доступа" />
+            <FormControl size="small" fullWidth>
+              <InputLabel>Отдел</InputLabel>
+              <Select value={uploadNewFolder ? "__new__" : uploadFolder}
+                label="Отдел"
+                onChange={(e) => {
+                  if (e.target.value === "__new__") {
+                    setUploadNewFolder(true);
+                    setUploadFolder("");
+                  } else {
+                    setUploadNewFolder(false);
+                    setUploadFolder(e.target.value);
+                  }
+                }}>
+                <MenuItem value=""><em>Общий доступ</em></MenuItem>
+                {uploadFolderOptions.map((f) => (
+                  <MenuItem key={f} value={f}>{f}</MenuItem>
+                ))}
+                <MenuItem value="__new__">+ Новый отдел</MenuItem>
+              </Select>
+            </FormControl>
+            {uploadNewFolder && (
+              <TextField label="Название нового отдела" size="small" value={uploadFolder}
+                onChange={(e) => setUploadFolder(e.target.value)} />
+            )}
             {uploadError && (
               <Typography variant="caption" color="error">{uploadError}</Typography>
             )}

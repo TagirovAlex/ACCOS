@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Box, Card, CardContent, Typography, TextField, Button, MenuItem, Alert, LinearProgress, Chip, Skeleton, IconButton, ToggleButtonGroup, ToggleButton, Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
@@ -16,6 +16,7 @@ import PortraitIcon from "@mui/icons-material/Portrait";
 import CropSquareIcon from "@mui/icons-material/CropSquare";
 import TuneIcon from "@mui/icons-material/Tune";
 import { api } from "../services/api";
+import { useGenerationStatus } from "../services/generationContext";
 
 const ALL_WORKFLOWS = [
   { value: "z_image", label: "Z-Image (текст → изображение)", needsRefs: false, mode: "generate" },
@@ -45,11 +46,19 @@ interface ImageAsset {
   file_path: string;
 }
 
+interface SourceGen {
+  id: string;
+  workflow_type: string;
+  images: ImageAsset[];
+}
+
 interface GenResult {
   generation_id: string;
   cost: number;
   status: string;
   images?: ImageAsset[];
+  source_generation?: SourceGen | null;
+  reference_images?: string[];
 }
 
 interface HistoryItem {
@@ -60,6 +69,8 @@ interface HistoryItem {
   cost: number;
   created_at: string;
   images: ImageAsset[];
+  source_generation?: SourceGen | null;
+  reference_images?: string[];
 }
 
 const MODE_TITLES: Record<string, string> = {
@@ -75,8 +86,8 @@ const MODE_DEFAULT_WORKFLOW: Record<string, string> = {
 };
 
 export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }: { mode?: string; viewHistory?: boolean }) => {
-  const [searchParams] = useSearchParams();
-  const [viewHistory, setViewHistory] = useState(forceHistory || searchParams.get("view") === "history");
+  const navigate = useNavigate();
+  const { startTracking } = useGenerationStatus();
   const WORKFLOWS = ALL_WORKFLOWS.filter(w => w.mode === mode || mode === "all");
   const [workflow, setWorkflow] = useState(MODE_DEFAULT_WORKFLOW[mode] || "z_image");
   const [prompt, setPrompt] = useState("");
@@ -90,6 +101,7 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
   const [customWidth, setCustomWidth] = useState(1024);
   const [customHeight, setCustomHeight] = useState(1024);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [imageSizes, setImageSizes] = useState<{ w: number; h: number }[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<HistoryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editPrompt, setEditPrompt] = useState("");
@@ -100,6 +112,8 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
   const [actionDialog, setActionDialog] = useState<"" | "edit" | "video">("");
   const [actionLoading, setActionLoading] = useState(false);
   const [seed, setSeed] = useState("");
+  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "tiles">(() => {
     const stored = localStorage.getItem("historyViewMode");
     return stored === "list" || stored === "tiles" ? stored : "tiles";
@@ -112,16 +126,22 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
 
   const selectedWorkflow = WORKFLOWS.find(w => w.value === workflow);
 
-  const currentResolution = selectedPreset === CUSTOM
-    ? { w: customWidth, h: customHeight }
-    : RESOLUTION_PRESETS.find(p => p.label === selectedPreset) || { w: 1024, h: 1024 };
+  const currentResolution = workflow.startsWith("qwen_edit") && imageSizes.length > 0 && imageSizes[0].w > 0
+    ? { w: imageSizes[0].w, h: imageSizes[0].h }
+    : selectedPreset === CUSTOM
+      ? { w: customWidth, h: customHeight }
+      : RESOLUTION_PRESETS.find(p => p.label === selectedPreset) || { w: 1024, h: 1024 };
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const res: any = await api("GET", "/generate/history");
-      setHistory(res.generations || []);
-      if (!res.success) setError(res.error || "Ошибка загрузки истории");
+      const [histRes, queueRes]: [any, any] = await Promise.all([
+        api("GET", "/generate/history"),
+        api("GET", "/generate/queue"),
+      ]);
+      setHistory(histRes.generations || []);
+      if (queueRes.success) setQueueItems(queueRes.items || []);
+      if (!histRes.success) setError(histRes.error || "Ошибка загрузки истории");
     } catch (e: any) {
       setError(e.message || "Ошибка загрузки истории");
     }
@@ -134,6 +154,24 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
       previewUrls.forEach(u => URL.revokeObjectURL(u));
     };
   }, [loadHistory]);
+
+  const loadQueue = useCallback(async () => {
+    try {
+      const res: any = await api("GET", "/generate/queue");
+      if (res.success) setQueueItems(res.items || []);
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleCancelQueue = async (id: string) => {
+    setCancellingId(id);
+    try {
+      const res: any = await api("DELETE", `/generate/queue/${id}`);
+      if (res.success) loadQueue();
+    } catch { /* ignore */ }
+    setCancellingId(null);
+  };
+
+  useEffect(() => { loadQueue(); }, [loadQueue]);
 
   const pollStatus = useCallback(async (genId: string) => {
     let attempts = 0;
@@ -187,6 +225,7 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
         return;
       }
 
+      startTracking(genRes.generation_id);
       const statusRes = await pollStatus(genRes.generation_id);
       setResult({
         generation_id: genRes.generation_id,
@@ -206,7 +245,16 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
     setLoading(false);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const readImageSize = (file: File): Promise<{ w: number; h: number }> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => { URL.revokeObjectURL(url); resolve({ w: img.width, h: img.height }); };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve({ w: 0, h: 0 }); };
+      img.src = url;
+    });
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const max = selectedWorkflow?.maxRefs || 3;
       const selected = Array.from(e.target.files).slice(0, max);
@@ -216,6 +264,8 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
         prev.forEach(u => URL.revokeObjectURL(u));
         return urls;
       });
+      const sizes = await Promise.all(selected.map(readImageSize));
+      setImageSizes(sizes);
     }
   };
 
@@ -225,6 +275,7 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
       URL.revokeObjectURL(prev[index]);
       return prev.filter((_, i) => i !== index);
     });
+    setImageSizes(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleDelete = async (item: HistoryItem) => {
@@ -261,6 +312,7 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
         setActionDialog("");
         setEditPrompt("");
         setSelectedHistory(null);
+        startTracking(data.generation_id);
         pollStatus(data.generation_id).then(() => loadHistory());
       } else {
         setError(data.error || "Ошибка запуска редактирования");
@@ -286,6 +338,7 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
         setActionDialog("");
         setVideoPrompt("");
         setSelectedHistory(null);
+        startTracking(data.generation_id);
         pollStatus(data.generation_id).then(() => loadHistory());
       } else {
         setError(data.error || "Ошибка запуска видео");
@@ -296,27 +349,39 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
     setActionLoading(false);
   };
 
-  const statusLabels: Record<string, string> = {
+  interface QueueItem {
+  id: string;
+  workflow_type: string;
+  prompt: string;
+  status: string;
+  position: number;
+  estimated_seconds: number;
+  created_at: string;
+}
+
+const statusLabels: Record<string, string> = {
     completed: "Готово",
     processing: "Обработка",
     queued: "В очереди",
     failed: "Ошибка",
+    cancelled: "Отменено",
   };
 
   return (
     <Box>
+      <style>{`@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }`}</style>
       <Typography variant="h5" fontWeight={700} mb={3}>{MODE_TITLES[mode] || "Генерация"}</Typography>
 
-      {viewHistory && (
+      {forceHistory && (
         <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-          <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={() => setViewHistory(false)}>
-            {MODE_TITLES[mode] || "Новая генерация"}
+          <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={() => navigate("/generate")}>
+            Новая генерация
           </Button>
         </Box>
       )}
 
       <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-        {!viewHistory && (
+        {!forceHistory && (
         <Box sx={{ flex: "1 1 60%", minWidth: 300 }}>
           <Card sx={{ mb: 3 }}>
             <CardContent>
@@ -366,6 +431,14 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
               {selectedWorkflow?.needsRefs && (
                 <Box sx={{ mt: 2, p: 2, bgcolor: "action.hover", borderRadius: 2 }}>
                   <Typography variant="body2" fontWeight={600} mb={1}>Референс-изображения ({files.length}/{selectedWorkflow.maxRefs})</Typography>
+                  {files.length > 0 && imageSizes[0]?.w > 0 && (
+                    <Typography variant="caption" color="warning.main" sx={{ display: "block", mb: 1 }}>
+                      {imageSizes[0].w}×{imageSizes[0].h}
+                      {Math.max(imageSizes[0].w, imageSizes[0].h) > 2048 && (
+                        <> → {Math.round(imageSizes[0].w * 2048 / Math.max(imageSizes[0].w, imageSizes[0].h))}×{Math.round(imageSizes[0].h * 2048 / Math.max(imageSizes[0].w, imageSizes[0].h))}</>
+                      )}
+                    </Typography>
+                  )}
                   <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mb: 1 }}>
                     {files.map((f, i) => (
                       <Box key={i} sx={{ position: "relative", borderRadius: 2, overflow: "hidden", border: "1px solid", borderColor: "divider", maxWidth: "100%", flex: "1 1 auto" }}>
@@ -378,6 +451,14 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
                         <Typography variant="caption" sx={{ position: "absolute", bottom: 0, left: 0, right: 0, bgcolor: "rgba(0,0,0,0.6)", color: "white", px: 1, py: 0.5, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                           {f.name}
                         </Typography>
+                        {imageSizes[i] && imageSizes[i].w > 0 && (
+                          <Typography variant="caption" sx={{ position: "absolute", bottom: 24, left: 0, right: 0, bgcolor: "rgba(0,0,0,0.6)", color: "warning.light", px: 1, py: 0.25, textAlign: "center", fontSize: "0.7rem" }}>
+                            {imageSizes[i].w}×{imageSizes[i].h}
+                            {Math.max(imageSizes[i].w, imageSizes[i].h) > 2048 && (
+                              <> → {Math.round(imageSizes[i].w * 2048 / Math.max(imageSizes[i].w, imageSizes[i].h))}×{Math.round(imageSizes[i].h * 2048 / Math.max(imageSizes[i].w, imageSizes[i].h))}</>
+                            )}
+                          </Typography>
+                        )}
                       </Box>
                     ))}
                   </Box>
@@ -394,6 +475,9 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
                 </Button>
                 <Typography variant="caption" color="text.secondary">
                   {currentResolution.w}×{currentResolution.h}
+                  {workflow.startsWith("qwen_edit") && imageSizes[0]?.w > 0 && Math.max(imageSizes[0].w, imageSizes[0].h) > 2048 && (
+                    <> → {Math.round(imageSizes[0].w * 2048 / Math.max(imageSizes[0].w, imageSizes[0].h))}×{Math.round(imageSizes[0].h * 2048 / Math.max(imageSizes[0].w, imageSizes[0].h))}</>
+                  )}
                 </Typography>
               </Box>
               {loading && <LinearProgress sx={{ mt: 2, borderRadius: 1 }} />}
@@ -407,19 +491,59 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
                 <Typography variant="h6" gutterBottom fontWeight={600}>Результат</Typography>
                 <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mb: 2 }}>
                   <Chip label={`ID: ${result.generation_id.slice(0, 8)}...`} size="small" variant="outlined" />
-                  <Chip label={`${result.cost} кредитов`} size="small" variant="outlined" />
+                  <Chip label={`${result.cost.toFixed(2)} кредитов`} size="small" variant="outlined" />
                   <Chip label={statusLabels[result.status] || result.status} size="small" color={result.status === "completed" ? "success" : result.status === "failed" ? "error" : "default"} />
                 </Box>
-                {result.images && result.images.length > 0 && (
-                  <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", maxHeight: 600, overflowY: "auto", p: 1 }}>
-                    {result.images.map((img: ImageAsset) => (
-                      <Box key={img.id} sx={{ maxWidth: 300, cursor: "pointer" }} onClick={() => setPreviewImage(img.file_path)}>
-                        <Box sx={{ borderRadius: 2, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
-                          <img src={`/${img.file_path}`} alt={img.filename} style={{ width: "100%", display: "block" }} />
+                {(result.reference_images?.length ?? 0) > 0 && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: "text.secondary", fontSize: "0.8rem" }}>
+                      Загруженные референсы:
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                      {result.reference_images!.map((fp: string, i: number) => (
+                        <Box key={i} sx={{ maxWidth: 150, opacity: 0.85 }}>
+                          <Box sx={{ borderRadius: 2, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
+                            <img src={fp} alt={`ref-${i}`} style={{ width: "100%", display: "block" }} />
+                          </Box>
                         </Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>{img.filename}</Typography>
-                      </Box>
-                    ))}
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+                {(result.source_generation?.images?.length ?? 0) > 0 && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: "text.secondary", fontSize: "0.8rem" }}>
+                      Исходные изображения:
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                      {result.source_generation!.images!.map((img: ImageAsset) => (
+                        <Box key={img.id} sx={{ maxWidth: 150, opacity: 0.85 }}>
+                          <Box sx={{ borderRadius: 2, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
+                            <img src={`/${img.file_path}`} alt={img.filename} style={{ width: "100%", display: "block" }} />
+                          </Box>
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>{img.filename}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+                {(result.images?.length ?? 0) > 0 && (
+                  <Box>
+                    {(result.source_generation?.images?.length ?? 0) > 0 && (
+                      <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: "text.secondary", fontSize: "0.8rem" }}>
+                        Результат:
+                      </Typography>
+                    )}
+                    <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", maxHeight: 600, overflowY: "auto", p: 1 }}>
+                      {result.images!.map((img: ImageAsset) => (
+                        <Box key={img.id} sx={{ maxWidth: 300, cursor: "pointer" }} onClick={() => setPreviewImage(img.file_path)}>
+                          <Box sx={{ borderRadius: 2, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
+                            <img src={`/${img.file_path}`} alt={img.filename} style={{ width: "100%", display: "block" }} />
+                          </Box>
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>{img.filename}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
                   </Box>
                 )}
               </CardContent>
@@ -428,8 +552,47 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
         </Box>
         )}
 
-        <Box sx={{ flex: viewHistory ? "1 1 100%" : "1 1 35%", minWidth: 280 }}>
-          <Card sx={{ position: viewHistory ? "static" : "sticky", top: 80 }}>
+        <Box sx={{ flex: forceHistory ? "1 1 100%" : "1 1 35%", minWidth: 280, display: "flex", flexDirection: "column", gap: 2 }}>
+          {queueItems.length > 0 && (
+            <Card>
+              <CardContent>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
+                  <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "warning.main", flexShrink: 0, animation: queueItems.some(i => i.status === "processing") ? "pulse 1.5s infinite" : "none" }} />
+                  <Typography variant="subtitle1" fontWeight={600}>Очередь</Typography>
+                  <Typography variant="caption" color="text.secondary">{queueItems.filter(i => i.status === "queued").length} в ожидании</Typography>
+                </Box>
+                {queueItems.map(item => (
+                  <Box key={item.id} sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, p: 1, bgcolor: "action.hover", borderRadius: 1.5 }}>
+                    <Box sx={{ minWidth: 28, textAlign: "center" }}>
+                      <Typography variant="h6" fontWeight={700} color={item.status === "processing" ? "success.main" : "text.secondary"}>
+                        #{item.position}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+                        <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1 }}>{item.workflow_type}</Typography>
+                        <Chip label={statusLabels[item.status] || item.status} size="small"
+                          color={item.status === "processing" ? "success" : item.status === "queued" ? "warning" : "default"}
+                          sx={{ height: 20, fontSize: 10 }} />
+                      </Box>
+                      <Typography variant="caption" color="text.secondary" noWrap>{item.prompt}</Typography>
+                      {item.status === "queued" && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          ~{Math.round(item.estimated_seconds / 60)} мин ожидания
+                        </Typography>
+                      )}
+                    </Box>
+                    {item.status === "queued" && (
+                      <IconButton size="small" color="error" onClick={() => handleCancelQueue(item.id)} disabled={cancellingId === item.id}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          <Card sx={{ position: forceHistory ? "static" : "sticky", top: 80 }}>
             <CardContent>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -481,7 +644,7 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{g.prompt}</Typography>
                         <Box sx={{ display: "flex", gap: 1 }}>
                           <Chip label={statusLabels[g.status] || g.status} size="small" color={g.status === "completed" ? "success" : g.status === "failed" ? "error" : "default"} />
-                          <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>{g.cost} кр.</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>{g.cost.toFixed(2)} кр.</Typography>
                         </Box>
                       </Box>
                     </Box>
@@ -504,7 +667,7 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }} noWrap>{g.prompt}</Typography>
                         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
                           <Chip label={statusLabels[g.status] || g.status} size="small" color={g.status === "completed" ? "success" : g.status === "failed" ? "error" : "default"} />
-                          <Typography variant="caption" color="text.secondary">{g.cost} кр.</Typography>
+                          <Typography variant="caption" color="text.secondary">{g.cost.toFixed(2)} кр.</Typography>
                         </Box>
                       </CardContent>
                     </Card>
@@ -542,8 +705,43 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
               </Box>
             </DialogTitle>
             <DialogContent dividers>
+              {(selectedHistory.reference_images?.length ?? 0) > 0 && (
+                <Box sx={{ mb: 2, p: 1.5, bgcolor: "action.hover", borderRadius: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: "text.secondary", fontSize: "0.8rem" }}>
+                    Загруженные референсы:
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
+                    {selectedHistory.reference_images!.map((fp: string, i: number) => (
+                      <Box key={i} sx={{ maxWidth: 200 }}>
+                        <img src={fp} alt={`ref-${i}`}
+                          style={{ width: "100%", height: "auto", objectFit: "contain", display: "block", borderRadius: 8, maxHeight: "40vh" }} />
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+              {(selectedHistory.source_generation?.images?.length ?? 0) > 0 && (
+                <Box sx={{ mb: 2, p: 1.5, bgcolor: "action.hover", borderRadius: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: "text.secondary", fontSize: "0.8rem" }}>
+                    Исходные изображения:
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
+                    {selectedHistory.source_generation!.images!.map(img => (
+                      <Box key={img.id} sx={{ maxWidth: 200 }}>
+                        <img src={`/${img.file_path}`} alt={img.filename}
+                          style={{ width: "100%", height: "auto", objectFit: "contain", display: "block", borderRadius: 8, maxHeight: "40vh" }} />
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
               {selectedHistory.images.length > 0 && (
                 <Box sx={{ mb: 2 }}>
+                  {(selectedHistory.source_generation?.images?.length ?? 0) > 0 && (
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: "text.secondary", fontSize: "0.8rem" }}>
+                      Результат:
+                    </Typography>
+                  )}
                   {selectedHistory.images.map(img => (
                     <Box key={img.id} sx={{ mb: 1 }}>
                       <img src={`/${img.file_path}`} alt={img.filename}
@@ -554,7 +752,7 @@ export const GenerationPage = ({ mode = "generate", viewHistory: forceHistory }:
               )}
               <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
                 <Chip label={`ID: ${selectedHistory.id.slice(0, 8)}...`} size="small" variant="outlined" />
-                <Chip label={`${selectedHistory.cost} кредитов`} size="small" variant="outlined" />
+                <Chip label={`${selectedHistory.cost.toFixed(2)} кредитов`} size="small" variant="outlined" />
                 <Chip label={statusLabels[selectedHistory.status] || selectedHistory.status} size="small"
                   color={selectedHistory.status === "completed" ? "success" : selectedHistory.status === "failed" ? "error" : "default"} />
               </Box>

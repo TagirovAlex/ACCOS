@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { List, Datagrid, TextField, NumberField, Edit, SimpleForm, TextInput, NumberInput, BooleanInput, Create, AutocompleteInput, useNotify, WithListContext } from "react-admin";
+import { List, Datagrid, TextField, NumberField, Edit, SimpleForm, TextInput, NumberInput, BooleanInput, Create, AutocompleteInput, useNotify, WithListContext, CreateButton, TopToolbar } from "react-admin";
 import { ToggleButtonGroup, ToggleButton, Box, Card, CardContent, Typography, Grid as MuiGrid } from "@mui/material";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
@@ -63,16 +63,21 @@ const GroupTileView = () => {
   );
 };
 
+const GroupListActions = ({ view, onViewChange }: { view: string; onViewChange: (v: "list" | "tiles") => void }) => (
+  <TopToolbar>
+    <CreateButton />
+    <Box sx={{ flex: 1 }} />
+    <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) onViewChange(v); }}>
+      <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+      <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
+    </ToggleButtonGroup>
+  </TopToolbar>
+);
+
 export const GroupList = () => {
   const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("groups_view") as "list" | "tiles") ?? "list");
   return (
-    <List actions={false}>
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
-        <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("groups_view", v); } }}>
-          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
+    <List actions={<GroupListActions view={view} onViewChange={(v) => { setView(v); localStorage.setItem("groups_view", v); }} />}>
       {view === "list" ? <GroupListView /> : <GroupTileView />}
     </List>
   );

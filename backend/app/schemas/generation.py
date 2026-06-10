@@ -38,6 +38,7 @@ class GenerationRecordResponse(BaseModel):
     cost: float
     created_at: datetime
     images: list[ImageAssetResponse] = []
+    reference_images: list[str] = []
 
 
 class HistoryResponse(BaseResponse):
@@ -52,6 +53,7 @@ class GenerationStatusResponse(BaseResponse):
     cost: float = 0.0
     error_message: str | None = None
     images: list[ImageAssetResponse] = []
+    reference_images: list[str] = []
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -67,6 +69,22 @@ class AdminGroupResponse(BaseModel):
 
 class AdminGroupListResponse(BaseResponse):
     groups: list[AdminGroupResponse] = []
+
+
+class QueueItemResponse(BaseModel):
+    id: str
+    workflow_type: str
+    prompt: str
+    status: str
+    position: int
+    estimated_seconds: int
+    created_at: str
+
+
+class QueueResponse(BaseResponse):
+    items: list[QueueItemResponse] = []
+    total_ahead: int = 0
+    estimated_wait_seconds: int = 0
 
 
 class UploadResponse(BaseResponse):

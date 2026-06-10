@@ -1,5 +1,5 @@
 import { Card, CardContent, Typography, Grid, Box, Button, Skeleton, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from "@mui/material";
-import { useGetOne } from "react-admin";
+import { useGetOne, useNotify } from "react-admin";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
@@ -10,6 +10,7 @@ const INFO_BOXES = [
   { key: "generations", label: "Генерации", icon: "🎨", color: "#ab47bc", to: "/generations" },
   { key: "assets", label: "Ресурсы", icon: "🖼", color: "#26c6da", to: "/assets" },
   { key: "settings", label: "Настройки", icon: "⚙", color: "#78909c", to: "/settings" },
+  { key: "queue", label: "Очередь", icon: "⏳", color: "#ff6f00", to: "/generation-queue" },
 ];
 
 const InfoBox = ({ icon, label, value, secondary, color, to }: { icon: string; label: string; value: number | undefined; secondary?: string; color: string; to?: string }) => {
@@ -76,11 +77,16 @@ const statusColors: Record<string, "default" | "primary" | "success" | "error" |
 
 export const Dashboard = () => {
   const navigate = useNavigate();
-  const { data: dash } = useGetOne("dashboard", { id: "stats" });
+  const notify = useNotify();
+  const { data: dash, error } = useGetOne("dashboard", { id: "stats" });
   const [activity, setActivity] = useState<{ date: string; count: number }[]>([]);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    if (error) notify("Ошибка загрузки дашборда: " + (error?.message || "неизвестная"), { type: "error" });
+  }, [error, notify]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("admin_token") || localStorage.getItem("token");
     if (!token) return;
     fetch("/api/v1/admin/dashboard/activity", { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json()).then(d => { if (d?.activity) setActivity(d.activity); }).catch(() => {});
@@ -248,6 +254,9 @@ export const Dashboard = () => {
             </Button>
             <Button variant="outlined" onClick={() => navigate("/settings")} sx={{ px: 3, py: 1 }}>
               Настройки
+            </Button>
+            <Button variant="outlined" onClick={() => navigate("/generation-queue")} sx={{ px: 3, py: 1 }}>
+              ⏳ Очередь
             </Button>
           </Box>
         </CardContent>

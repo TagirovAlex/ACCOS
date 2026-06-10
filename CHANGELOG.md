@@ -1,5 +1,15 @@
 # Changelog ACCOS
 
+## Block 3 — RAG Tuning UI (Jun 10)
+- **Reindex-all/new/failed**: Массовая переиндексация всех/новых/упавших документов
+- **KnowledgeActions**: Кнопки "Переиндексировать всё", "Новые", "Упавшие" на страницах Settings + Documents
+- **Настройки расписания**: `reindex_schedule_enabled`, `reindex_cron`, `reindex_mode`
+
+## Block 4 — Reindex Scheduler (Jun 10)
+- **apscheduler**: Фоновый cron-планировщик для автоиндексации
+- **scheduler_service.py**: Запуск/остановка планировщика при старте/остановке приложения
+- **Автообновление расписания**: При изменении настроек планировщика через Admin API
+
 ## Phase 3 — RAG Knowledge Base (Jun 10)
 - **KnowledgeDocument/KnowledgeChunk**: Модели БД для базы знаний (chunk + embedding Vector(1536))
 - **KnowledgeRepository**: CRUD, поиск, векторный поиск (cosine similarity через pgvector)

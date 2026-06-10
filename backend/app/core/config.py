@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     lmstudio_model: str = "default"
     lmstudio_api_key: str = ""
     comfyui_base_url: str = "http://localhost:8188"
+    comfyui_generate_base_url: str = ""
+    comfyui_edit_base_url: str = ""
+    comfyui_video_base_url: str = ""
     comfyui_api_key: str = ""
     admin_username: str = "admin"
     admin_password: str = "admin123"
@@ -26,6 +29,9 @@ class Settings(BaseSettings):
     log_level: str = "DEBUG"
     rate_limits_enabled: bool = True
     ldap_enabled: bool = False
+    ad_clients_ou: str = ""
+    rag_embedding_model: str = "default"
+    rag_enabled: bool = False
 
     @property
     def cors_origin_list(self) -> List[str]:

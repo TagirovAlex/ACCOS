@@ -14,6 +14,7 @@ import { GenerationList, GenerationShow } from "./pages/Generations";
 import { AssetList, AssetShow } from "./pages/Assets";
 import { GenerationQueue } from "./pages/GenerationQueue";
 import { FileManager } from "./pages/FileManager";
+import { Documents } from "./pages/Documents";
 import { SettingsList, SettingsEdit, SettingsCreate } from "./pages/Settings";
 import { BackupList } from "./pages/Backups";
 import "./App.css";
@@ -64,22 +65,24 @@ const App = () => (
     darkTheme={darkTheme}
     requireAuth
   >
-    {(permissions: string) => {
-      const adminRole = localStorage.getItem("admin_role") || (permissions === "admin" ? "super_admin" : "none");
+    {() => {
+      const adminRole = localStorage.getItem("admin_role") || "none";
       const isSuperAdmin = adminRole === "super_admin";
+      const isAdmin = adminRole === "admin";
       const userPermissions = (localStorage.getItem("user_permissions") || "").split(",");
-      const canManageDocs = isSuperAdmin || userPermissions.includes("documents_manage");
+      const canManageDocs = isSuperAdmin || isAdmin || userPermissions.includes("documents_manage");
       return (
         <>
-          <Resource name="users" options={{ label: "👥 Пользователи" }} list={UserList} edit={UserEdit} create={UserCreate} show={UserShow} />
-          {isSuperAdmin && <Resource name="groups" options={{ label: "🔐 Группы доступа" }} list={GroupList} edit={GroupEdit} create={GroupCreate} />}
+          {(isSuperAdmin || isAdmin) && <Resource name="users" options={{ label: "👥 Пользователи" }} list={UserList} edit={UserEdit} create={UserCreate} show={UserShow} />}
+          {(isSuperAdmin || isAdmin) && <Resource name="groups" options={{ label: "🔐 Группы доступа" }} list={GroupList} edit={GroupEdit} create={GroupCreate} />}
           {isSuperAdmin && <Resource name="chats" options={{ label: "💬 Чаты" }} list={ChatList} show={ChatShow} />}
           {isSuperAdmin && <Resource name="generations" options={{ label: "🎨 Генерации" }} list={GenerationList} show={GenerationShow} />}
           {isSuperAdmin && <Resource name="assets" options={{ label: "🖼 Ресурсы" }} list={AssetList} show={AssetShow} />}
           {canManageDocs && <Resource name="files" options={{ label: "📁 Файлы" }} list={FileManager} />}
+          {canManageDocs && <Resource name="documents" options={{ label: "📄 Документы" }} list={Documents} />}
           {isSuperAdmin && <Resource name="generation-queue" options={{ label: "⏳ Очередь" }} list={GenerationQueue} />}
-          {isSuperAdmin && <Resource name="settings" options={{ label: "⚙ Настройки" }} list={SettingsList} edit={SettingsEdit} create={SettingsCreate} />}
-          {isSuperAdmin && <Resource name="backups" options={{ label: "📦 Бэкапы" }} list={BackupList} />}
+          {(isSuperAdmin || isAdmin) && <Resource name="settings" options={{ label: "⚙ Настройки" }} list={SettingsList} edit={SettingsEdit} create={SettingsCreate} />}
+          {(isSuperAdmin || isAdmin) && <Resource name="backups" options={{ label: "📦 Бэкапы" }} list={BackupList} />}
         </>
       );
     }}
