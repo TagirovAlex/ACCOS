@@ -31,7 +31,7 @@ class LMStudioAdapter(BaseAdapter):
             "stream": False,
         }
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=None) as client:
                 response = await client.post(
                     f"{self.base_url}/chat/completions",
                     json=payload,

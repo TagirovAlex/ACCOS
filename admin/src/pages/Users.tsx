@@ -4,7 +4,7 @@ import {
   Edit, SimpleForm, TextInput, NumberInput, BooleanInput, Create,
   ReferenceInput, SelectInput, FunctionField, useRecordContext,
   WithListContext, Pagination, Show, SimpleShowLayout, useRedirect,
-  ReferenceField, DateField,
+  ReferenceField, DateField, CreateButton, TopToolbar,
 } from "react-admin";
 import { Chip, Avatar, ToggleButtonGroup, ToggleButton, Card, CardContent, Box, Typography, Grid as MuiGrid, Button } from "@mui/material";
 import ViewListIcon from "@mui/icons-material/ViewList";
@@ -71,7 +71,7 @@ const UserCard = ({ record }: { record?: any }) => {
           {!record.is_active && <Chip label="Отключён" size="small" color="error" variant="outlined" />}
         </Box>
         <Box sx={{ textAlign: "center", mt: 1 }}>
-          <Typography variant="body2"><b>{record.balance}</b> MS</Typography>
+          <Typography variant="body2"><b>{Number(record.balance ?? 0).toFixed(2)}</b> MS</Typography>
           {record.last_login && (
             <Typography variant="caption" color="text.secondary">
               Вход: <LastLoginField record={record} />
@@ -120,6 +120,17 @@ const UserTileView = () => (
   )} />
 );
 
+const UserListActions = ({ view, onViewChange }: { view: string; onViewChange: (v: "list" | "tiles") => void }) => (
+  <TopToolbar>
+    <CreateButton />
+    <Box sx={{ flex: 1 }} />
+    <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) onViewChange(v); }}>
+      <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+      <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
+    </ToggleButtonGroup>
+  </TopToolbar>
+);
+
 export const UserList = () => {
   const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("users_view") as "list" | "tiles") ?? "list");
 
@@ -127,19 +138,8 @@ export const UserList = () => {
     <List
       pagination={<Pagination rowsPerPageOptions={[10, 25, 50, 100]} />}
       perPage={25}
-      actions={false}
+      actions={<UserListActions view={view} onViewChange={(v) => { setView(v); localStorage.setItem("users_view", v); }} />}
     >
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
-        <ToggleButtonGroup
-          value={view}
-          exclusive
-          onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("users_view", v); } }}
-          size="small"
-        >
-          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
       {view === "list" ? <UserListView /> : <UserTileView />}
     </List>
   );

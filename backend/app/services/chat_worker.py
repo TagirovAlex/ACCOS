@@ -15,6 +15,8 @@ from app.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
+_chat_worker_running = False
+
 
 async def _claim_next_chat_job():
     async with async_session_factory() as db:
@@ -117,17 +119,22 @@ async def _process_chat_job(record):
         await _update_job_status(queue_id, "failed", str(e))
 
 
-async def chat_worker_loop():
-    logger.info("Chat worker started")
+async def _drain_queue():
     while True:
-        try:
-            record = await _claim_next_chat_job()
-            if record:
-                await _process_chat_job(record)
-            else:
-                await asyncio.sleep(1)
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.error(f"Chat worker error: {e}")
-            await asyncio.sleep(5)
+        record = await _claim_next_chat_job()
+        if not record:
+            break
+        await _process_chat_job(record)
+
+
+async def ensure_chat_worker():
+    global _chat_worker_running
+    if _chat_worker_running:
+        return
+    _chat_worker_running = True
+    logger.info("Chat worker started (on-demand)")
+    try:
+        await _drain_queue()
+    finally:
+        _chat_worker_running = False
+        logger.info("Chat worker stopped (queue empty)")

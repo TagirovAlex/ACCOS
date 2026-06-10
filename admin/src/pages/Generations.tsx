@@ -1,12 +1,28 @@
 import { useState } from "react";
-import { List, Datagrid, TextField, DateField, NumberField, Show, SimpleShowLayout, ReferenceField, FunctionField, WithListContext, useRedirect } from "react-admin";
-import { Box, Typography, Chip, IconButton, Card, CardContent, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Button } from "@mui/material";
+import { List, Datagrid, TextField, DateField, NumberField, Show, SimpleShowLayout, ReferenceField, FunctionField, WithListContext, useRedirect, useDelete, DeleteButton } from "react-admin";
+import { Box, Typography, Chip, IconButton, Card, CardContent, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import DownloadIcon from "@mui/icons-material/Download";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useRecordContext } from "react-admin";
+
+function imgUrl(fp: string): string {
+  if (fp.startsWith("/")) return fp;
+  return "/" + fp;
+}
+
+function downloadFile(url: string, name: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
 
 const THUMB_SIZE = 56;
 
@@ -46,11 +62,15 @@ const ImagesGrid = ({ source, label }: { source: string; label: string }) => {
       <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
         {images.map((img: any) => (
           <Box key={img.id} sx={{ maxWidth: 200 }}>
-            <img src={`/${img.file_path}`} alt={img.filename}
+            <img src={imgUrl(img.file_path)} alt={img.filename}
               style={{ width: "100%", borderRadius: 6, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}
               onError={(e: any) => { e.target.style.display = "none"; }} />
             <Typography variant="caption" display="block" sx={{ mt: 0.25 }}>{img.filename}</Typography>
             {img.file_size != null && <Typography variant="caption" color="text.secondary">{(img.file_size / 1024).toFixed(1)} KB</Typography>}
+            <Button size="small" startIcon={<DownloadIcon />} sx={{ mt: 0.5 }}
+              onClick={() => downloadFile(imgUrl(img.file_path), img.filename)}>
+              Скачать
+            </Button>
           </Box>
         ))}
       </Box>
@@ -67,7 +87,50 @@ const SourceGenerationBlock = () => {
       <Typography variant="subtitle2" fontWeight={600} gutterBottom>Исходная генерация</Typography>
       <Chip label={sg.workflow_type} size="small" sx={{ mr: 1 }} />
       <Chip label={`ID: ${sg.id.slice(0, 8)}...`} size="small" variant="outlined" />
-      <ImagesGrid source="images" label="Исходные изображения" />
+      <Box>
+        <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2, mb: 1 }}>Исходные изображения ({(sg.images || []).length})</Typography>
+        <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
+          {(sg.images || []).map((img: any) => (
+            <Box key={img.id} sx={{ maxWidth: 200 }}>
+              <img src={imgUrl(img.file_path)} alt={img.filename}
+                style={{ width: "100%", borderRadius: 6, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}
+                onError={(e: any) => { e.target.style.display = "none"; }} />
+              <Typography variant="caption" display="block" sx={{ mt: 0.25 }}>{img.filename}</Typography>
+              <Button size="small" startIcon={<DownloadIcon />} sx={{ mt: 0.5 }}
+                onClick={() => downloadFile(imgUrl(img.file_path), img.filename)}>
+                Скачать
+              </Button>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+const ReferenceImagesBlock = () => {
+  const record = useRecordContext();
+  const refs = record?.reference_images || [];
+  if (!refs.length) return null;
+  return (
+    <Box sx={{ mt: 2, p: 2, bgcolor: "action.hover", borderRadius: 1 }}>
+      <Typography variant="subtitle2" fontWeight={600} gutterBottom>Референс-изображения (загружены пользователем)</Typography>
+      <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
+        {refs.map((fp: string, i: number) => {
+          const name = fp.split("/").pop() || `ref-${i}`;
+          return (
+            <Box key={i} sx={{ maxWidth: 200 }}>
+              <img src={fp} alt={`ref-${i}`}
+                style={{ width: "100%", borderRadius: 6, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}
+                onError={(e: any) => { e.target.style.display = "none"; }} />
+              <Button size="small" startIcon={<DownloadIcon />} sx={{ mt: 0.5 }}
+                onClick={() => downloadFile(fp, name)}>
+                Скачать
+              </Button>
+            </Box>
+          );
+        })}
+      </Box>
     </Box>
   );
 };
@@ -107,14 +170,22 @@ const GenerationListView = () => (
 
 const GenerationTileView = () => {
   const redirect = useRedirect();
+  const [deleteOne] = useDelete();
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
   return (
+  <>
     <WithListContext render={({ data }) => (
       <MuiGrid container spacing={2} sx={{ p: 2 }}>
         {data?.map((record: any) => (
           <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
-            <Card onClick={() => redirect("show", "generations", record.id)}
-              sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
-              <Box sx={{ width: "100%", height: 140, overflow: "hidden", bgcolor: "#1a1a1a" }}>
+            <Card sx={{ position: "relative", cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+              <IconButton size="small"
+                sx={{ position: "absolute", top: 4, right: 4, zIndex: 1, color: "error.light" }}
+                onClick={(e) => { e.stopPropagation(); setDeleteTarget(record); }}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+              <Box onClick={() => redirect("show", "generations", record.id)}
+                sx={{ width: "100%", height: 140, overflow: "hidden", bgcolor: "#1a1a1a" }}>
                 {record.thumbnail ? (
                   <img src={`/${record.thumbnail}`} alt=""
                     style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
@@ -130,7 +201,7 @@ const GenerationTileView = () => {
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{record.prompt}</Typography>
                 <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 0.5 }}>
                   <StatusChip record={record} />
-                  <Typography variant="caption" color="text.secondary">{record.cost} кр.</Typography>
+                  <Typography variant="caption" color="text.secondary">{Number(record.cost.toFixed(2))} кр.</Typography>
                 </Box>
                 <Typography variant="caption" color="text.secondary">
                   {record.username} · {new Date(record.created_at).toLocaleDateString()}
@@ -141,6 +212,17 @@ const GenerationTileView = () => {
         ))}
       </MuiGrid>
     )} />
+    <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
+      <DialogTitle>Удалить генерацию?</DialogTitle>
+      <DialogContent>
+        <DialogContentText>Генерация «{deleteTarget?.workflow_type}» будет удалена без возможности восстановления.</DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setDeleteTarget(null)}>Отмена</Button>
+        <Button onClick={() => { deleteOne("generations", { id: deleteTarget?.id }); setDeleteTarget(null); }} color="error">Удалить</Button>
+      </DialogActions>
+    </Dialog>
+  </>
   );
 };
 
@@ -166,6 +248,7 @@ const ShowActions = ({ listLabel, listPath }: { listLabel: string; listPath: str
       <Button startIcon={<ArrowBackIcon />} size="small" onClick={() => redirect("list", listPath)}>
         {listLabel}
       </Button>
+      <DeleteButton mutationMode="pessimistic" />
     </Box>
   );
 };
@@ -187,6 +270,7 @@ export const GenerationShow = () => (
       <DateField source="created_at" label="Создана" />
       <DateField source="updated_at" label="Обновлена" />
       <FunctionField label=" " render={() => <SourceGenerationBlock />} />
+      <FunctionField label=" " render={() => <ReferenceImagesBlock />} />
       <ImagesGrid source="images" label="Изображения результата" />
     </SimpleShowLayout>
   </Show>

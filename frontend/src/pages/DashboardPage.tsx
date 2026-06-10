@@ -193,7 +193,7 @@ export const DashboardPage = ({ user }: Props) => {
               </Avatar>
               <Box>
                 <Typography variant="body2" color="text.secondary">Баланс</Typography>
-                <Typography variant="h5" fontWeight={700}>{user.balance}</Typography>
+                <Typography variant="h5" fontWeight={700}>{(user.balance ?? 0).toFixed(2)}</Typography>
               </Box>
             </CardContent>
           </Card>

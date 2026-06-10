@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from uuid import UUID
@@ -12,6 +13,7 @@ from app.db.models.user import User
 from app.repositories.chat_repository import ChatRepository
 from app.repositories.user_repository import UserRepository
 from app.services.economy_service import EconomyService
+from app.services.chat_worker import ensure_chat_worker
 from app.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
@@ -165,5 +167,7 @@ class ChatService:
                 status="queued",
             ))
             await db.commit()
+
+        asyncio.create_task(ensure_chat_worker())
 
         return {"success": True, "message": "Queued"}

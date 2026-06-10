@@ -20,7 +20,7 @@ from app.core.paths import UPLOADS_DIR, GENERATIONS_DIR, EDITS_DIR, VIDEOS_DIR, 
 from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin
 from app.services.accrual_service import run_auto_accrual
 from app.services.queue_worker import queue_worker_loop
-from app.services.chat_worker import chat_worker_loop
+
 from app.services.settings_service import SettingsService
 from app.db.session import async_session_factory
 
@@ -41,12 +41,11 @@ logging.getLogger().addHandler(file_handler)
 
 _accrual_task = None
 _queue_worker_task = None
-_chat_worker_task = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _accrual_task, _queue_worker_task, _chat_worker_task
+    global _accrual_task, _queue_worker_task
 
     logger.info("Seeding default settings...")
     try:
@@ -72,10 +71,9 @@ async def lifespan(app: FastAPI):
 
     _accrual_task = asyncio.create_task(accrual_loop())
     _queue_worker_task = asyncio.create_task(queue_worker_loop())
-    _chat_worker_task = asyncio.create_task(chat_worker_loop())
-    logger.info("Queue worker / Chat worker started")
+    logger.info("Queue worker started")
     yield
-    for task in (_accrual_task, _queue_worker_task, _chat_worker_task):
+    for task in (_accrual_task, _queue_worker_task):
         if task:
             task.cancel()
     logger.info("Background tasks stopped")
