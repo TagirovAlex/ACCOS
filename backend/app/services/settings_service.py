@@ -122,8 +122,8 @@ class SettingsService:
              "Cost (MS) per video second"),
 
             # -- Users --
-            ("default_permissions", '["chat","generate"]',
-             "Default permissions for new users (JSON array)"),
+            ("default_permissions", '["chat","generate","edit","video","documents_manage"]',
+             "Default permissions for new users (JSON array). Доступные права: chat (чат), generate (генерация изображений), edit (редактирование Qwen), video (видео), documents_manage (база знаний)"),
             ("default_start_balance", "100",
              "Starting balance for new users in MS"),
 

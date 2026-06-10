@@ -106,6 +106,8 @@ GENERATIONS_DIR.mkdir(parents=True, exist_ok=True)
 EDITS_DIR.mkdir(parents=True, exist_ok=True)
 VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
 AVATARS_DIR.mkdir(parents=True, exist_ok=True)
+KNOWLEDGE_DIR = PROJECT_ROOT / "static" / "knowledge"
+KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _error_detail(request: Request, exc: Exception, status: int, error_id: str) -> dict:

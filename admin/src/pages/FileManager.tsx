@@ -38,6 +38,7 @@ const CHIP_DIRS = [
   { label: "edits/", path: "edits" },
   { label: "videos/", path: "videos" },
   { label: "avatars/", path: "avatars" },
+  { label: "knowledge/", path: "knowledge" },
 ];
 
 function formatSize(bytes: number): string {
@@ -59,11 +60,13 @@ export const FileManager = () => {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [currentPath, setCurrentPath] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("files_view") as "list" | "tiles") ?? "tiles");
   const [previewEntry, setPreviewEntry] = useState<FileEntry | null>(null);
 
   const load = async (dirPath: string) => {
     setLoading(true);
+    setError(null);
     try {
       const token = adminToken();
       const q = dirPath ? `?path=${encodeURIComponent(dirPath)}` : "";
@@ -78,8 +81,12 @@ export const FileManager = () => {
         }
         setEntries(filtered);
         setCurrentPath(data.current_path || "");
+      } else {
+        setError(data.error || "Не удалось загрузить папку");
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      setError("Ошибка загрузки: папка не найдена");
+    }
     setLoading(false);
   };
 
@@ -171,12 +178,15 @@ export const FileManager = () => {
         ))}
       </Box>
 
-      {loading ? <LinearProgress /> : (
-        entries.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 4 }}>
-            Папка пуста
-          </Typography>
-        ) : viewMode === "list" ? (
+      {loading ? <LinearProgress /> : error ? (
+        <Typography variant="body2" color="error" sx={{ textAlign: "center", py: 4 }}>
+          {error}
+        </Typography>
+      ) : entries.length === 0 ? (
+        <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 4 }}>
+          Папка пуста
+        </Typography>
+      ) : viewMode === "list" ? (
           <List disablePadding>
             {currentPath && (
               <ListItem disablePadding>
