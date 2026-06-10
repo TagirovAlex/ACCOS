@@ -15,12 +15,17 @@ rm -rf "$NEW"
 tar xzf /tmp/accos.tar.gz
 mv accos "$NEW"
 
-echo '=== Preserving .venv, .env, logs ==='
+echo '=== Preserving .venv, .env, logs, static/knowledge ==='
 [ -d "$OLD/.venv" ] && cp -a "$OLD/.venv" "$NEW/"
 [ -f "$OLD/config/.env" ] && cp -a "$OLD/config/.env" "$NEW/config/"
 [ -d "$OLD/logs" ] && cp -a "$OLD/logs" "$NEW/"
+[ -L "$OLD/static/knowledge" ] && cp -a "$OLD/static/knowledge" "$NEW/static/"
 
 rm -rf "$OLD" && mv "$NEW" "$OLD"
+
+# Restore symlink if mount exists but symlink was lost
+# NOTE: rm -rf first, because ln -sf TARGET EXISTING_DIR/ creates link INSIDE the dir
+[ -d /mnt/storage/knowledge ] && [ ! -L "$OLD/static/knowledge" ] && rm -rf "$OLD/static/knowledge" && ln -sf /mnt/storage/knowledge "$OLD/static/knowledge"
 rm -f /tmp/accos.tar.gz
 
 echo '=== Python deps ==='
