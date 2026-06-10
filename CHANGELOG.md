@@ -1,5 +1,26 @@
 # Changelog ACCOS
 
+## Phase 3 — RAG Knowledge Base (Jun 10)
+- **KnowledgeDocument/KnowledgeChunk**: Модели БД для базы знаний (chunk + embedding Vector(1536))
+- **KnowledgeRepository**: CRUD, поиск, векторный поиск (cosine similarity через pgvector)
+- **RAGAdapter**: Адаптер для `/v1/embeddings` (LM Studio OpenAI-compatible API)
+- **RAGService**: Извлечение текста (PDF/docx/image OCR), чанкинг (tiktoken), индексация, поиск
+- **KnowledgeService**: Фасад над RAGService + KnowledgeRepository для endpoints
+- **Knowledge endpoints**: upload, list, get, delete, replace, reindex, search, folders
+- **Chat RAG injection**: В `send_message` — поиск релевантных чанков по user.ad_group_dns, инжект в system prompt
+- **Queue worker**: `enqueue_knowledge_index(doc_id)` — асинхронная индексация после загрузки
+- **Settings**: 7 новых ключей — `ad_clients_ou`, `rag_enabled`, `rag_embedding_model`, `rag_chunk_size/overlap`, `rag_top_k`, `rag_min_score`
+- **Model fix**: KnowledgeDocument.error_message (Text, nullable)
+
+## Multi-Node ComfyUI (Jun 10)
+- **ComfyUIAdapter**: `base_url` теперь параметр конструктора, не читается из `settings`
+- **Config**: Добавлены `comfyui_generate_base_url`, `comfyui_edit_base_url`, `comfyui_video_base_url` (опционально)
+- **Settings**: 3 новых ключа в админке — URL для генерации, редактирования и видео отдельно
+- **Queue worker**: Выбор ноды ComfyUI по `workflow_type` (z_image → generate, qwen → edit, video → video)
+- **Admin panel**: Поля в форме настроек с русскими названиями
+- **comfyui_service.py**: Убран неиспользуемый импорт ComfyUIAdapter
+- **Backwards compatible**: Если новые поля пусты — всё идёт на `comfyui_base_url` как раньше
+
 ## Phase 0 — Setup & Core DB
 - Инициализирован FastAPI проект
 - Созданы SQLAlchemy модели: User, ChatSession, ChatMessage, GenerationRecord, ImageAsset, AdminSettings

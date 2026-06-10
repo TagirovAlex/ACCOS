@@ -51,85 +51,109 @@ class SettingsService:
 
     async def seed_defaults(self):
         defaults: list[tuple[str, str, str]] = [
-            # ── LDAP / Домен ──
+            # -- LDAP / Domain --
             ("ldap_server", settings.ldap_server,
-             "[Домен] Адрес LDAP-сервера для авторизации пользователей (например ldap://10.0.68.8:389)"),
+             "Domain LDAP server address for user authentication (e.g. ldap://10.0.68.8:389)"),
             ("ldap_domain", settings.ldap_domain,
-             "[Домен] NetBIOS-имя домена (например FIDELIO)"),
+             "NetBIOS domain name (e.g. FIDELIO)"),
             ("ldap_base_dn", settings.ldap_base_dn,
-              "[Домен] Базовый DN для поиска в LDAP (например DC=FIDELIO,DC=LOCAL)"),
+             "Base DN for LDAP search (e.g. DC=FIDELIO,DC=LOCAL)"),
             ("ldap_bind_dn", "",
-             "[Домен] DN учётной записи для поиска в LDAP (CN=...). Оставьте пустым, если используется ldap_bind_username"),
+             "DN of the account for LDAP search (CN=...). Leave empty if ldap_bind_username is used"),
             ("ldap_bind_username", "",
-             "[Домен] Имя учётной записи для поиска в LDAP (без домена). Используется как DOMAIN\\username"),
+             "Username for LDAP search (without domain). Used as DOMAIN\\username"),
             ("ldap_bind_password", "",
-              "[Домен] Пароль учётной записи для поиска в LDAP"),
+              "Password for LDAP search account"),
             ("ldap_enabled", "false",
-             "[Домен] Включить LDAP-аутентификацию (true/false)"),
+             "Enable LDAP authentication (true/false)"),
 
-            # ── LLM / Чат ──
+            # -- LLM / Chat --
             ("lmstudio_base_url", settings.lmstudio_base_url,
-             "[LLM] Адрес сервера LMStudio (совместимого с OpenAI API форматом) для чат-запросов"),
+             "LMStudio server address (OpenAI API compatible format) for chat requests"),
             ("lmstudio_model", settings.lmstudio_model,
-             "[LLM] Название модели по умолчанию (например default, llama, qwen и т.д.)"),
+             "Default model name (e.g. default, llama, qwen etc.)"),
             ("lmstudio_api_key", settings.lmstudio_api_key,
-             "[LLM] API-ключ для доступа к LMStudio (Bearer token). Оставьте пустым, если аутентификация не требуется"),
+             "API key for LMStudio (Bearer token). Leave empty if auth not required"),
+            ("chat_context_messages", "50",
+             "Number of recent messages sent as LLM context. Old messages are trimmed to fit context window"),
 
-            # ── Генерация изображений / ComfyUI ──
+            # -- ComfyUI / Generation --
             ("comfyui_base_url", settings.comfyui_base_url,
-             "[Генерация] Адрес сервера ComfyUI для генерации и редактирования изображений"),
+             "ComfyUI server address for image generation and editing"),
+            ("comfyui_generate_base_url", settings.comfyui_generate_base_url,
+             "URL for base generation (z_image). If empty - uses comfyui_base_url"),
+            ("comfyui_edit_base_url", settings.comfyui_edit_base_url,
+             "URL for editing (Qwen edit 1/2/3). If empty - uses comfyui_base_url"),
+            ("comfyui_video_base_url", settings.comfyui_video_base_url,
+             "URL for video (text_to_video, image_to_video). If empty - uses comfyui_base_url"),
             ("comfyui_api_key", settings.comfyui_api_key,
-              "[Генерация] API-ключ для доступа к ComfyUI (заголовок x-api-key). Оставьте пустым, если аутентификация не требуется"),
+              "API key for ComfyUI (x-api-key header). Leave empty if auth not required"),
             ("comfyui_poll_timeout_minutes", "30",
-              "[Генерация] Максимальное время ожидания генерации (в минутах). Если генерация длится дольше — задача отметится как неудачная"),
+              "Maximum generation wait time in minutes. If generation takes longer - task is marked as failed"),
             ("comfyui_poll_interval", "3",
-              "[Генерация] Интервал опроса ComfyUI (в секундах). Чем меньше — тем быстрее отклик, но выше нагрузка на сервер"),
+              "ComfyUI poll interval in seconds. Lower = faster response but higher server load"),
 
-            # ── Стоимость: LLM ──
+            # -- Pricing: LLM --
             ("llm_rate_input", "1",
-             "[Цены: LLM] Стоимость (MS) за 1 единицу расчёта. Итог: ceil(max(tokens) / tokens_per_unit) × rate"),
+             "Cost (MS) per calculation unit. Result: ceil(max(tokens) / tokens_per_unit) x rate"),
             ("llm_tokens_per_unit", "1000",
-             "[Цены: LLM] Количество токенов на 1 единицу стоимости. Итог: ceil(max(tokens) / N) × rate"),
+             "Tokens per 1 cost unit. Result: ceil(max(tokens) / N) x rate"),
             ("llm_rate_output", "0",
-             "[Цены: LLM] Не используется (зарезервировано)"),
+             "Not used (reserved)"),
 
-            # ── Стоимость: Генерация изображений ──
+            # -- Pricing: Image Generation --
             ("image_gen_base_cost", "0",
-             "[Цены: Генерация] Не используется (зарезервировано)"),
+             "Not used (reserved)"),
             ("image_gen_rate_pixel", "10",
-             "[Цены: Генерация] Стоимость (MS) за 1 единицу расчёта. Итог: ceil((W×H) / pixels_per_unit) × rate"),
+             "Cost (MS) per calculation unit. Result: ceil((WxH) / pixels_per_unit) x rate"),
             ("image_pixels_per_unit", "1000000",
-             "[Цены: Генерация] Количество пикселей на 1 единицу стоимости. Итог: ceil((W×H) / N) × rate"),
+             "Pixels per 1 cost unit. Result: ceil((WxH) / N) x rate"),
 
-            # ── Стоимость: Редактирование ──
+            # -- Pricing: Editing --
             ("image_edit_base_cost", "0",
-             "[Цены: Редактирование] Не используется (зарезервировано)"),
+             "Not used (reserved)"),
             ("image_edit_rate_pixel", "10",
-             "[Цены: Редактирование] Стоимость (MS) за 1 единицу расчёта. Итог: ceil((W×H) / pixels_per_unit) × rate"),
+             "Cost (MS) per calculation unit. Result: ceil((WxH) / pixels_per_unit) x rate"),
 
-            # ── Стоимость: Видео ──
+            # -- Pricing: Video --
             ("video_gen_base_cost", "10",
-             "[Цены: Видео] Базовая стоимость генерации видео (в MS)"),
+             "Base video generation cost in MS"),
             ("video_gen_rate_sec", "2",
-             "[Цены: Видео] Стоимость (MS) за секунду видео"),
+             "Cost (MS) per video second"),
 
-            # ── Пользователи ──
+            # -- Users --
             ("default_permissions", '["chat","generate"]',
-             "[Пользователи] Права по умолчанию для новых пользователей (JSON-массив)"),
+             "Default permissions for new users (JSON array)"),
             ("default_start_balance", "100",
-             "[Пользователи] Стартовый баланс для новых пользователей (в MS)"),
+             "Starting balance for new users in MS"),
 
-            # ── Экономика ──
+            # -- Economy --
             ("auto_accrual_amount", "10",
-             "[Экономика] Сумма автоматического начисления баланса активным пользователям (в MS)"),
+             "Auto balance accrual amount for active users (in MS)"),
             ("auto_accrual_interval_minutes", "60",
-              "[Экономика] Интервал автоматического начисления баланса (в минутах)"),
+              "Auto balance accrual interval in minutes"),
             ("auto_accrual_time", "",
-              "[Экономика] Время начисления (HH:MM, по серверу). Если пусто — используется интервал"),
+              "Accrual time (HH:MM server time). If empty - uses interval"),
 
-            # ── Доступ ──
+            # -- Access --
             ("require_ad_group_for_login", "false",
-              "[Доступ] Требовать членство в доменной группе для входа. Если включено — логин разрешён только пользователям из настроенных AD групп"),
+              "Require AD group membership for login. If enabled - only users from configured AD groups can log in"),
+
+            # -- RAG / Knowledge Base --
+            ("ad_clients_ou", settings.ad_clients_ou,
+             "Root OU for departments in AD (e.g. OU=Clients,DC=fidelio,DC=local). Used for AD group search when uploading documents"),
+            ("rag_enabled", str(settings.rag_enabled).lower(),
+             "Enable knowledge base (true/false). When enabled, document context is injected into every LLM request"),
+            ("rag_embedding_model", settings.rag_embedding_model,
+             "Embedding model name (from LM Studio). Passed as 'model' field in POST /v1/embeddings"),
+            ("rag_chunk_size", "500",
+             "Chunk size in tokens. Document text is split into fragments of this size for embedding"),
+            ("rag_chunk_overlap", "50",
+             "Overlap between adjacent chunks in tokens. Needed to preserve context at boundaries"),
+            ("rag_top_k", "5",
+             "Number of most relevant chunks returned by search"),
+            ("rag_min_score", "0.5",
+             "Minimum cosine similarity threshold. Chunks below threshold are not returned"),
         ]
         for key, value, description in defaults:
             existing = await self.repo.get_by_key(key)

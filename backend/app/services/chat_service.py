@@ -154,9 +154,23 @@ class ChatService:
         history = await self.chat_repo.get_messages(sid)
         settings_svc = SettingsService(self.session)
         ctx_count = int(await settings_svc.get("chat_context_messages") or "50")
+
+        system_content = chat_session.system_prompt or ""
+        try:
+            from app.services.knowledge_service import KnowledgeService
+            user_obj = await self.user_repo.get(uid)
+            ad_group_dns = getattr(user_obj, "ad_group_dns", None)
+            kg = KnowledgeService(self.session)
+            context = await kg.build_context(message, ad_group_dns)
+            if context:
+                rag_header = "\n\n=== Справочная информация из базы знаний ===\n"
+                system_content += rag_header + context
+        except Exception as e:
+            logger.warning(f"RAG context injection failed: {e}")
+
         messages: list[dict] = []
-        if chat_session.system_prompt:
-            messages.append({"role": "system", "content": chat_session.system_prompt})
+        if system_content:
+            messages.append({"role": "system", "content": system_content})
         for m in history[-ctx_count:]:
             messages.append({"role": m.role, "content": m.content})
         messages.append({"role": "user", "content": message})

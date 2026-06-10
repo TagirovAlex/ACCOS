@@ -4,13 +4,14 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.comfyui_adapter import ComfyUIAdapter
+from app.core.paths import GENERATIONS_DIR
 from app.db.models.generation import GenerationRecord
 from app.db.models.image_asset import ImageAsset
 from app.db.session import async_session_factory
@@ -20,7 +21,22 @@ from app.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
-GENERATED_DIR = Path(__file__).parent.parent.parent.parent / "static" / "generated"
+
+async def enqueue_knowledge_index(document_id: UUID) -> None:
+    from app.db.session import async_session_factory
+    try:
+        async with async_session_factory() as session:
+            async with session.begin():
+                from app.services.rag_service import RAGService
+                svc = RAGService(session)
+                result = await svc.index_document(document_id)
+                await session.commit()
+                if result["success"]:
+                    logger.info(f"Knowledge index completed for {document_id}: {result['chunks']} chunks")
+                else:
+                    logger.error(f"Knowledge index failed for {document_id}: {result.get('error')}")
+    except Exception as e:
+        logger.error(f"Knowledge index crashed for {document_id}: {e}")
 
 
 async def _process_generation(session: AsyncSession, record: GenerationRecord) -> None:
@@ -30,7 +46,18 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
     economy = EconomyService(session)
     settings_svc = SettingsService(session)
     api_key = await settings_svc.get("comfyui_api_key")
-    comfyui = ComfyUIAdapter(api_key=api_key)
+    base_url = await settings_svc.get("comfyui_base_url", "")
+    if record.workflow_type == "z_image":
+        node_url = await settings_svc.get("comfyui_generate_base_url", "")
+    elif record.workflow_type.startswith("qwen"):
+        node_url = await settings_svc.get("comfyui_edit_base_url", "")
+    elif record.workflow_type in ("text_to_video", "image_to_video"):
+        node_url = await settings_svc.get("comfyui_video_base_url", "")
+    else:
+        node_url = ""
+    if not node_url:
+        node_url = base_url
+    comfyui = ComfyUIAdapter(base_url=node_url, api_key=api_key)
 
     logger.info(f"Processing generation {record.id} ({record.workflow_type})")
 
@@ -60,9 +87,12 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
         if result["success"]:
             record.status = "completed"
             images = []
-            gen_dir = GENERATED_DIR / str(record.id)
+            gen_dir = GENERATIONS_DIR / str(uid) / str(record.id)
+            gen_dir.mkdir(parents=True, exist_ok=True)
             for img in result.get("images", []):
-                local_path = gen_dir / img["filename"]
+                ext = Path(img["filename"]).suffix or ".png"
+                unique_name = f"{uuid4().hex}{ext}"
+                local_path = gen_dir / unique_name
                 downloaded = await comfyui.download_image(
                     filename=img["filename"],
                     subfolder=img.get("subfolder", ""),
@@ -82,21 +112,21 @@ async def _process_generation(session: AsyncSession, record: GenerationRecord) -
                     asset = await repo.create_asset(
                         generation_id=record.id,
                         user_id=uid,
-                        filename=img["filename"],
-                        file_path=f"static/generated/{record.id}/{img['filename']}",
+                        filename=unique_name,
+                        file_path=f"static/generations/{uid}/{record.id}/{unique_name}",
                         width=img_width,
                         height=img_height,
                         file_size=img_size,
                     )
-                    images.append({"id": str(asset.id), "filename": img["filename"]})
+                    images.append({"id": str(asset.id), "filename": unique_name})
                 else:
                     asset = await repo.create_asset(
                         generation_id=record.id,
                         user_id=uid,
-                        filename=img["filename"],
-                        file_path=f"{img.get('subfolder', '')}/{img['filename']}",
+                        filename=unique_name,
+                        file_path=f"static/generations/{uid}/{record.id}/{unique_name}",
                     )
-                    images.append({"id": str(asset.id), "filename": img["filename"]})
+                    images.append({"id": str(asset.id), "filename": unique_name})
             await session.flush()
             logger.info(f"Generation {record.id} completed with {len(images)} images")
         else:
