@@ -36,6 +36,9 @@ from app.schemas.admin import (
 )
 from app.services.admin_service import AdminService
 from app.services.backup_service import BackupService
+from app.services.knowledge_service import KnowledgeService
+import uuid
+from datetime import datetime
 from app.repositories.user_repository import UserRepository
 from app.repositories.settings_repository import SettingsRepository
 from app.adapters.ldap_adapter import LDAPAdapter, MockLDAPAdapter
@@ -579,12 +582,31 @@ async def delete_file(
 async def upload_file(
     file: UploadFile = File(...),
     path: str = Form(""),
+    folder: str = Form(""),
+    ad_group_dn: str | None = Form(None),
+    db: AsyncSession = Depends(get_db),
     admin_id: str = Depends(_require_admin_or_documents),
 ):
-    abs_dir = STATIC_DIR / path if path else STATIC_DIR
+    upload_path = f"{path}/{folder}" if folder else path
+    abs_dir = STATIC_DIR / upload_path if upload_path else STATIC_DIR
     if not abs_dir.exists():
         abs_dir.mkdir(parents=True, exist_ok=True)
     abs_path = abs_dir / file.filename
     content = await file.read()
     abs_path.write_bytes(content)
-    return {"success": True, "filename": file.filename, "path": path}
+
+    if ad_group_dn:
+        storage_path = f"static/{upload_path}/{file.filename}".replace("//", "/")
+        ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+        svc = KnowledgeService(db)
+        await svc.create_document(
+            title=file.filename,
+            filename=file.filename,
+            content_type=ext,
+            file_path=storage_path,
+            folder=folder or "",
+            ad_group_dn=ad_group_dn,
+            created_by=uuid.UUID(admin_id.id) if hasattr(admin_id, "id") else uuid.UUID(str(admin_id)),
+        )
+
+    return {"success": True, "filename": file.filename, "path": upload_path}

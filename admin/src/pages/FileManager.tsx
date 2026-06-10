@@ -4,7 +4,7 @@ import {
   Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText,
   Breadcrumbs, Link, LinearProgress, IconButton, Chip, Button, Card, CardContent,
   Dialog, DialogContent, DialogTitle, DialogActions, ToggleButtonGroup, ToggleButton,
-  Grid as MuiGrid,
+  Grid as MuiGrid, TextField,
 } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
@@ -67,6 +67,7 @@ export const FileManager = () => {
   const [previewEntry, setPreviewEntry] = useState<FileEntry | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFolder, setUploadFolder] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -246,7 +247,8 @@ export const FileManager = () => {
       const token = adminToken();
       const form = new FormData();
       form.append("file", uploadFile);
-      form.append("path", currentPath);
+      form.append("path", "knowledge");
+      form.append("folder", uploadFolder);
       const res = await fetch("/api/v1/admin/files/upload", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -256,7 +258,8 @@ export const FileManager = () => {
       if (data.success) {
         setUploadOpen(false);
         setUploadFile(null);
-        load(currentPath);
+        setUploadFolder("");
+        load("knowledge");
       } else {
         setUploadError(data.error || data.detail || "Ошибка загрузки");
       }
@@ -288,7 +291,7 @@ export const FileManager = () => {
         </ToggleButtonGroup>
         {canUpload && (
           <Button startIcon={<UploadIcon />} variant="contained" size="small"
-            onClick={() => { setUploadFile(null); setUploadOpen(true); }}>
+            onClick={() => { setUploadFile(null); setUploadFolder(""); setUploadOpen(true); }}>
             Загрузить
           </Button>
         )}
@@ -351,12 +354,12 @@ export const FileManager = () => {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
             <Button variant="outlined" component="label">
               {uploadFile ? uploadFile.name : "Выберите файл"}
-              <input type="file" hidden
-                onChange={(e) => {
-                  const f = e.target.files?.[0] || null;
-                  setUploadFile(f);
-                }} />
+              <input type="file" hidden accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
             </Button>
+            <TextField label="Отдел (папка)" size="small" value={uploadFolder}
+              onChange={(e) => setUploadFolder(e.target.value)}
+              helperText="Оставьте пустым для общего доступа" />
             {uploadError && (
               <Typography variant="caption" color="error">{uploadError}</Typography>
             )}
