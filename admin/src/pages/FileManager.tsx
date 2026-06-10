@@ -42,7 +42,7 @@ const CHIP_DIRS = [
 ];
 
 function formatSize(bytes: number): string {
-  if (bytes === 0) return "—";
+  if (bytes === 0) return "\u2014";
   const units = ["B", "KB", "MB", "GB"];
   let i = 0;
   let size = bytes;
@@ -51,7 +51,7 @@ function formatSize(bytes: number): string {
 }
 
 function formatDate(mtime: number | string): string {
-  if (!mtime) return "—";
+  if (!mtime) return "\u2014";
   return new Date(Number(mtime) * 1000).toLocaleString();
 }
 
@@ -82,10 +82,10 @@ export const FileManager = () => {
         setEntries(filtered);
         setCurrentPath(data.current_path || "");
       } else {
-        setError(data.error || "Не удалось загрузить папку");
+        setError(data.error || "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043F\u0430\u043F\u043A\u0443");
       }
     } catch (e) {
-      setError("Ошибка загрузки: папка не найдена");
+      setError("\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438: \u043F\u0430\u043F\u043A\u0430 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430");
     }
     setLoading(false);
   };
@@ -118,7 +118,7 @@ export const FileManager = () => {
   const imgUrl = (entry: FileEntry) => `/static/${entry.path}`;
 
   const handleDelete = async (entry: FileEntry) => {
-    if (!window.confirm(`Удалить ${entry.is_dir ? "папку" : "файл"} "${entry.name}"?`)) return;
+    if (!window.confirm(`\u0423\u0434\u0430\u043B\u0438\u0442\u044C ${entry.is_dir ? "\u043F\u0430\u043F\u043A\u0443" : "\u0444\u0430\u0439\u043B"} "${entry.name}"?`)) return;
     try {
       const token = adminToken();
       const res = await fetch(`/api/v1/admin/files?path=${encodeURIComponent(entry.path)}`, {
@@ -133,8 +133,108 @@ export const FileManager = () => {
     } catch { /* ignore */ }
   };
 
-  const ext = (name: string) => name.includes(".") ? "." + name.split(".").pop()?.toLowerCase() : "";
+  const ext = (name: string) => (name.includes(".") ? "." + name.split(".").pop()?.toLowerCase() : "");
   const isImage = (name: string) => IMAGE_EXTS.has(ext(name));
+
+  const parentDir = () => { const p = parts.slice(0, -1).join("/"); load(p); };
+
+  const listView = (
+    <List disablePadding>
+      {currentPath ? (
+        <ListItem disablePadding>
+          <ListItemButton onClick={parentDir}>
+            <ListItemIcon><ArrowBackIcon /></ListItemIcon>
+            <ListItemText primary=".." />
+          </ListItemButton>
+        </ListItem>
+      ) : null}
+      {entries.map((entry) => {
+        const isImg = isImage(entry.name);
+        return (
+          <ListItem key={entry.path} disablePadding secondaryAction={
+            <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+              <Typography variant="caption" color="text.secondary">{formatDate(entry.modified)}</Typography>
+              <Typography variant="caption" color="text.secondary">{formatSize(entry.size)}</Typography>
+            </Box>
+          }>
+            {entry.is_dir ? (
+              <ListItemButton onClick={() => navigateDir(entry.path)}>
+                <ListItemIcon><FolderIcon color="primary" /></ListItemIcon>
+                <ListItemText primary={entry.name + "/"} />
+              </ListItemButton>
+            ) : (
+              <ListItemButton onClick={isImg ? () => setPreviewEntry(entry) : () => handleDownload(entry)}>
+                <ListItemIcon>{isImg ? <ImageIcon color="success" /> : <InsertDriveFileIcon />}</ListItemIcon>
+                <ListItemText primary={entry.name} secondary={isImg ? "\u0418\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435" : "\u0424\u0430\u0439\u043B"} />
+              </ListItemButton>
+            )}
+          </ListItem>
+        );
+      })}
+    </List>
+  );
+
+  const tilesView = (
+    <MuiGrid container spacing={2}>
+      {currentPath ? (
+        <MuiGrid size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+          <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
+            onClick={parentDir}>
+            <Box sx={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
+              <ArrowBackIcon sx={{ fontSize: 40, color: "text.disabled" }} />
+            </Box>
+            <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
+              <Typography variant="body2" noWrap textAlign="center">..</Typography>
+            </CardContent>
+          </Card>
+        </MuiGrid>
+      ) : null}
+      {entries.map((entry) => {
+        const isImg = isImage(entry.name);
+        if (entry.is_dir) {
+          return (
+            <MuiGrid key={entry.path} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+              <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
+                onClick={() => navigateDir(entry.path)}>
+                <Box sx={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
+                  <FolderIcon sx={{ fontSize: 48, color: "primary.main" }} />
+                </Box>
+                <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
+                  <Typography variant="body2" noWrap>{entry.name}/</Typography>
+                </CardContent>
+              </Card>
+            </MuiGrid>
+          );
+        }
+        return (
+          <MuiGrid key={entry.path} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+            <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
+              onClick={isImg ? () => setPreviewEntry(entry) : () => handleDownload(entry)}>
+              <Box sx={{ height: 120, overflow: "hidden", bgcolor: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {isImg ? (
+                  <img src={imgUrl(entry)} alt={entry.name}
+                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }}
+                    onError={(e: any) => { e.target.style.display = "none"; }} />
+                ) : (
+                  <InsertDriveFileIcon sx={{ fontSize: 40, color: "text.disabled" }} />
+                )}
+              </Box>
+              <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
+                <Typography variant="body2" noWrap>{entry.name}</Typography>
+                <Typography variant="caption" color="text.secondary">{formatSize(entry.size)}</Typography>
+              </CardContent>
+            </Card>
+          </MuiGrid>
+        );
+      })}
+    </MuiGrid>
+  );
+
+  const bodyContent = loading ? <LinearProgress /> : error ? (
+    <Typography variant="body2" color="error" sx={{ textAlign: "center", py: 4 }}>{error}</Typography>
+  ) : entries.length === 0 ? (
+    <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 4 }}>Папка пуста</Typography>
+  ) : viewMode === "list" ? listView : tilesView;
 
   return (
     <Box>
@@ -178,101 +278,7 @@ export const FileManager = () => {
         ))}
       </Box>
 
-      {loading ? <LinearProgress /> : error ? (
-        <Typography variant="body2" color="error" sx={{ textAlign: "center", py: 4 }}>
-          {error}
-        </Typography>
-      ) : entries.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 4 }}>
-          Папка пуста
-        </Typography>
-      ) : viewMode === "list" ? (
-          <List disablePadding>
-            {currentPath && (
-              <ListItem disablePadding>
-                <ListItemButton onClick={() => { const parent = parts.slice(0, -1).join("/"); load(parent); }}>
-                  <ListItemIcon><ArrowBackIcon /></ListItemIcon>
-                  <ListItemText primary=".." />
-                </ListItemButton>
-              </ListItem>
-            )}
-            {entries.map((entry) => {
-              const isImg = isImage(entry.name);
-              return (
-                <ListItem key={entry.path} disablePadding secondaryAction={
-                  <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-                    <Typography variant="caption" color="text.secondary">{formatDate(entry.modified)}</Typography>
-                    <Typography variant="caption" color="text.secondary">{formatSize(entry.size)}</Typography>
-                  </Box>
-                }>
-                  {entry.is_dir ? (
-                    <ListItemButton onClick={() => navigateDir(entry.path)}>
-                      <ListItemIcon><FolderIcon color="primary" /></ListItemIcon>
-                      <ListItemText primary={entry.name + "/"} />
-                    </ListItemButton>
-                  ) : (
-                    <ListItemButton onClick={isImg ? () => setPreviewEntry(entry) : () => handleDownload(entry)}>
-                      <ListItemIcon>{isImg ? <ImageIcon color="success" /> : <InsertDriveFileIcon />}</ListItemIcon>
-                      <ListItemText primary={entry.name} secondary={isImg ? "Изображение" : "Файл"} />
-                    </ListItemButton>
-                  )}
-                </ListItem>
-              );
-            })}
-          </List>
-        ) : (
-          <MuiGrid container spacing={2}>
-            {currentPath && (
-              <MuiGrid size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
-                <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
-                  onClick={() => { const parent = parts.slice(0, -1).join("/"); load(parent); }}>
-                  <Box sx={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
-                    <ArrowBackIcon sx={{ fontSize: 40, color: "text.disabled" }} />
-                  </Box>
-                  <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
-                    <Typography variant="body2" noWrap textAlign="center">..</Typography>
-                  </CardContent>
-                </Card>
-              </MuiGrid>
-            )}
-            {entries.map((entry) => {
-              const isImg = isImage(entry.name);
-              return entry.is_dir ? (
-                <MuiGrid key={entry.path} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
-                  <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
-                    onClick={() => navigateDir(entry.path)}>
-                    <Box sx={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
-                      <FolderIcon sx={{ fontSize: 48, color: "primary.main" }} />
-                    </Box>
-                    <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
-                      <Typography variant="body2" noWrap>{entry.name}/</Typography>
-                    </CardContent>
-                  </Card>
-                </MuiGrid>
-              ) : (
-                <MuiGrid key={entry.path} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
-                  <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
-                    onClick={isImg ? () => setPreviewEntry(entry) : () => handleDownload(entry)}>
-                    <Box sx={{ height: 120, overflow: "hidden", bgcolor: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {isImg ? (
-                        <img src={imgUrl(entry)} alt={entry.name}
-                          style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }}
-                          onError={(e: any) => { e.target.style.display = "none"; }} />
-                      ) : (
-                        <InsertDriveFileIcon sx={{ fontSize: 40, color: "text.disabled" }} />
-                      )}
-                    </Box>
-                    <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
-                      <Typography variant="body2" noWrap>{entry.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">{formatSize(entry.size)}</Typography>
-                    </CardContent>
-                  </Card>
-                </MuiGrid>
-              );
-            })}
-          </MuiGrid>
-        )
-      )}
+      {bodyContent}
 
       <Dialog open={!!previewEntry} onClose={() => setPreviewEntry(null)} maxWidth="lg" fullWidth>
         <DialogContent sx={{ p: 1, position: "relative" }}>
