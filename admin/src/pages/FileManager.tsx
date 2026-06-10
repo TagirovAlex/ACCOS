@@ -4,7 +4,7 @@ import {
   Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText,
   Breadcrumbs, Link, LinearProgress, IconButton, Chip, Button, Card, CardContent,
   Dialog, DialogContent, DialogTitle, DialogActions, ToggleButtonGroup, ToggleButton,
-  Grid as MuiGrid, TextField,
+  Grid as MuiGrid,
 } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
@@ -67,9 +67,8 @@ export const FileManager = () => {
   const [previewEntry, setPreviewEntry] = useState<FileEntry | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadTitle, setUploadTitle] = useState("");
-  const [uploadFolder, setUploadFolder] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const load = async (dirPath: string) => {
     setLoading(true);
@@ -242,13 +241,13 @@ export const FileManager = () => {
   const handleUpload = async () => {
     if (!uploadFile) return;
     setUploading(true);
+    setUploadError(null);
     try {
       const token = adminToken();
       const form = new FormData();
       form.append("file", uploadFile);
-      form.append("title", uploadTitle || uploadFile.name);
-      form.append("folder", uploadFolder);
-      const res = await fetch("/api/v1/knowledge/upload", {
+      form.append("path", currentPath);
+      const res = await fetch("/api/v1/admin/files/upload", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form,
@@ -257,11 +256,13 @@ export const FileManager = () => {
       if (data.success) {
         setUploadOpen(false);
         setUploadFile(null);
-        setUploadTitle("");
-        setUploadFolder("");
         load(currentPath);
+      } else {
+        setUploadError(data.error || data.detail || "Ошибка загрузки");
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      setUploadError("Ошибка сети: " + (e instanceof Error ? e.message : String(e)));
+    }
     setUploading(false);
   };
 
@@ -287,7 +288,7 @@ export const FileManager = () => {
         </ToggleButtonGroup>
         {canUpload && (
           <Button startIcon={<UploadIcon />} variant="contained" size="small"
-            onClick={() => { setUploadFile(null); setUploadTitle(""); setUploadFolder(""); setUploadOpen(true); }}>
+            onClick={() => { setUploadFile(null); setUploadOpen(true); }}>
             Загрузить
           </Button>
         )}
@@ -350,14 +351,15 @@ export const FileManager = () => {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
             <Button variant="outlined" component="label">
               {uploadFile ? uploadFile.name : "Выберите файл"}
-              <input type="file" hidden accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+              <input type="file" hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null;
+                  setUploadFile(f);
+                }} />
             </Button>
-            <TextField label="Название" size="small" value={uploadTitle}
-              onChange={(e) => setUploadTitle(e.target.value)} />
-            <TextField label="Папка" size="small" value={uploadFolder}
-              onChange={(e) => setUploadFolder(e.target.value)}
-              helperText="Оставьте пустым для общего доступа" />
+            {uploadError && (
+              <Typography variant="caption" color="error">{uploadError}</Typography>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

@@ -1,5 +1,5 @@
 import os, shutil
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse
 from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -573,3 +573,18 @@ async def delete_file(
         return JSONResponse({"success": True, "error": None})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Delete failed: {e}")
+
+
+@router.post("/files/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    path: str = Form(""),
+    admin_id: str = Depends(_require_admin_or_documents),
+):
+    abs_dir = STATIC_DIR / path if path else STATIC_DIR
+    if not abs_dir.exists():
+        abs_dir.mkdir(parents=True, exist_ok=True)
+    abs_path = abs_dir / file.filename
+    content = await file.read()
+    abs_path.write_bytes(content)
+    return {"success": True, "filename": file.filename, "path": path}
