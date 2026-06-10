@@ -3,7 +3,8 @@ import { useRedirect } from "react-admin";
 import {
   Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText,
   Breadcrumbs, Link, LinearProgress, IconButton, Chip, Button, Card, CardContent,
-  Dialog, DialogContent, DialogActions, ToggleButtonGroup, ToggleButton, Grid as MuiGrid,
+  Dialog, DialogContent, DialogTitle, DialogActions, ToggleButtonGroup, ToggleButton,
+  Grid as MuiGrid, TextField,
 } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
@@ -13,6 +14,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CloseIcon from "@mui/icons-material/Close";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
+import UploadIcon from "@mui/icons-material/Upload";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
 
@@ -63,6 +65,11 @@ export const FileManager = () => {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("files_view") as "list" | "tiles") ?? "tiles");
   const [previewEntry, setPreviewEntry] = useState<FileEntry | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadFolder, setUploadFolder] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const load = async (dirPath: string) => {
     setLoading(true);
@@ -230,6 +237,34 @@ export const FileManager = () => {
     </MuiGrid>
   );
 
+  const canUpload = currentPath === "knowledge" || currentPath.startsWith("knowledge/");
+
+  const handleUpload = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    try {
+      const token = adminToken();
+      const form = new FormData();
+      form.append("file", uploadFile);
+      form.append("title", uploadTitle || uploadFile.name);
+      form.append("folder", uploadFolder);
+      const res = await fetch("/api/v1/knowledge/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUploadOpen(false);
+        setUploadFile(null);
+        setUploadTitle("");
+        setUploadFolder("");
+        load(currentPath);
+      }
+    } catch { /* ignore */ }
+    setUploading(false);
+  };
+
   const bodyContent = loading ? <LinearProgress /> : error ? (
     <Typography variant="body2" color="error" sx={{ textAlign: "center", py: 4 }}>{error}</Typography>
   ) : entries.length === 0 ? (
@@ -250,6 +285,12 @@ export const FileManager = () => {
           <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
           <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
         </ToggleButtonGroup>
+        {canUpload && (
+          <Button startIcon={<UploadIcon />} variant="contained" size="small"
+            onClick={() => { setUploadFile(null); setUploadTitle(""); setUploadFolder(""); setUploadOpen(true); }}>
+            Загрузить
+          </Button>
+        )}
         <IconButton onClick={() => load(currentPath)} title="Обновить">
           <RefreshIcon />
         </IconButton>
@@ -301,6 +342,30 @@ export const FileManager = () => {
             </Button>
           </DialogActions>
         )}
+      </Dialog>
+
+      <Dialog open={uploadOpen} onClose={() => !uploading && setUploadOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Загрузка документа</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+            <Button variant="outlined" component="label">
+              {uploadFile ? uploadFile.name : "Выберите файл"}
+              <input type="file" hidden accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+            </Button>
+            <TextField label="Название" size="small" value={uploadTitle}
+              onChange={(e) => setUploadTitle(e.target.value)} />
+            <TextField label="Папка" size="small" value={uploadFolder}
+              onChange={(e) => setUploadFolder(e.target.value)}
+              helperText="Оставьте пустым для общего доступа" />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUploadOpen(false)} disabled={uploading}>Отмена</Button>
+          <Button variant="contained" onClick={handleUpload} disabled={!uploadFile || uploading}>
+            {uploading ? "Загрузка..." : "Загрузить"}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

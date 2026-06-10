@@ -7,48 +7,70 @@ type AuthResult = {
   error?: string;
   is_admin?: boolean;
   admin_role?: string;
+  permissions?: string;
 };
+
+function getAdminToken(): string | null {
+  return localStorage.getItem("admin_token") || localStorage.getItem("token") || null;
+}
+
+function setAdminToken(token: string) {
+  localStorage.setItem("admin_token", token);
+  localStorage.removeItem("token");
+}
+
+function removeAdminToken() {
+  localStorage.removeItem("admin_token");
+  localStorage.removeItem("token");
+  localStorage.removeItem("user_permissions");
+}
 
 export const authProvider: AuthProvider = {
   async login({ username, password }) {
     const result = await apiRequest<AuthResult>("POST", "/auth/login", { username, password });
     if (result.success && result.access_token) {
-      const role = result.admin_role || (result.is_admin ? "super_admin" : "none");
+      const role = (result.admin_role && result.admin_role !== "none") ? result.admin_role : (result.is_admin ? "super_admin" : "none");
       if (role === "none") {
         throw new Error("Требуются права администратора");
       }
       setToken(result.access_token);
-      localStorage.setItem("token", result.access_token);
+      setAdminToken(result.access_token);
       localStorage.setItem("username", username);
       localStorage.setItem("admin_role", role);
+      localStorage.setItem("user_permissions", result.permissions || "chat");
     } else {
       throw new Error(result.error || "Login failed");
     }
   },
   async logout() {
-    localStorage.removeItem("token");
+    removeAdminToken();
     localStorage.removeItem("username");
     setToken(null);
   },
   async checkError(error) {
     if (error.status === 401 || error.status === 403) {
-      localStorage.removeItem("token");
+      removeAdminToken();
       throw new Error("Session expired");
     }
   },
   async checkAuth() {
-    const token = localStorage.getItem("token");
+    const token = getAdminToken();
     if (!token) throw new Error("Not authenticated");
     setToken(token);
+    if (localStorage.getItem("token") && !localStorage.getItem("admin_token")) {
+      setAdminToken(token);
+    }
   },
-  async getPermissions() {
-    const token = localStorage.getItem("token");
+    async getPermissions() {
+    const token = getAdminToken();
     if (!token) return undefined;
     setToken(token);
     try {
       const result = await apiRequest<AuthResult>("GET", "/auth/me");
-      if (result.admin_role) localStorage.setItem("admin_role", result.admin_role);
-      return result.admin_role || (result.is_admin ? "super_admin" : "user");
+      const role = (result.admin_role && result.admin_role !== "none") ? result.admin_role : (result.is_admin ? "super_admin" : "user");
+      localStorage.setItem("admin_role", role);
+      localStorage.setItem("user_permissions", result.permissions || "chat");
+      return role;
     } catch {
       return undefined;
     }

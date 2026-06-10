@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os, shutil
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import FileResponse, JSONResponse
+from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
@@ -21,12 +24,14 @@ from app.schemas.admin import (
     AdminChatDetailResponse,
     AdminGenerationListResponse,
     AdminGenerationDetailResponse,
+    AdminGenerationQueueResponse,
     AdminAssetListResponse,
     AdminTokenStatsResponse,
     BackupListResponse,
     BackupCreateResponse,
     LdapGroupListResponse,
     LdapTestResponse,
+    FileListResponse,
     BaseResponse,
 )
 from app.services.admin_service import AdminService
@@ -34,6 +39,7 @@ from app.services.backup_service import BackupService
 from app.repositories.user_repository import UserRepository
 from app.repositories.settings_repository import SettingsRepository
 from app.adapters.ldap_adapter import LDAPAdapter, MockLDAPAdapter
+from app.core.paths import STATIC_DIR
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -49,7 +55,22 @@ async def _require_super_admin(user_id: str = Depends(get_current_user_id), db: 
     user = await UserRepository(db).get(UUID(user_id))
     if not user or user.admin_role != "super_admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
-    return user_id
+    return user
+
+
+async def _require_admin_or_documents(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await UserRepository(db).get(UUID(user_id))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    if user.admin_role in ("super_admin", "group_admin"):
+        return user
+    permissions = (user.permissions or "").split(",")
+    if "documents_manage" in permissions:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
 
 @router.get("/dashboard")
@@ -284,6 +305,28 @@ async def delete_generation(
     return BaseResponse(**result)
 
 
+@router.get("/generation-queue", response_model=AdminGenerationQueueResponse)
+async def list_generation_queue(
+    user_id: str = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    return AdminGenerationQueueResponse(**await service.list_generation_queue())
+
+
+@router.delete("/generation-queue/{gen_id}", response_model=BaseResponse)
+async def cancel_generation_from_queue(
+    gen_id: str,
+    user_id: str = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AdminService(db)
+    result = await service.cancel_generation_queue(gen_id)
+    if not result["success"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("error", "Cancel failed"))
+    return BaseResponse(**result)
+
+
 @router.get("/assets", response_model=AdminAssetListResponse)
 async def list_assets(
     skip: int = 0,
@@ -457,3 +500,76 @@ async def test_ldap_connection(
                               bind_password=bind_password or None)
         result = await adapter.test_connection()
     return LdapTestResponse(success=result.get("success", False), message=result.get("message", ""), error=result.get("error"))
+
+
+@router.get("/files", response_model=FileListResponse)
+async def list_files(
+    path: str = Query(default="", description="Relative path under static/"),
+    admin_id: str = Depends(_require_admin_or_documents),
+):
+    abs_dir = STATIC_DIR / path if path else STATIC_DIR
+    if not abs_dir.exists() or not abs_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Directory not found")
+    resolved = str(abs_dir.resolve())
+    static_resolved = str(STATIC_DIR.resolve())
+    unresolved = str(abs_dir)
+    static_unresolved = str(STATIC_DIR)
+    if not (resolved.startswith(static_resolved) or unresolved.startswith(static_unresolved)):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    entries = []
+    for child in sorted(abs_dir.iterdir()):
+        stat = child.stat()
+        rel = (child.relative_to(STATIC_DIR).as_posix()) if child != STATIC_DIR else ""
+        entries.append({
+            "name": child.name,
+            "path": rel,
+            "is_dir": child.is_dir(),
+            "size": stat.st_size if child.is_file() else 0,
+            "modified": stat.st_mtime,
+        })
+    return {"success": True, "entries": entries, "current_path": path}
+
+
+@router.get("/files/download")
+async def download_file(
+    path: str = Query(..., description="Relative path under static/"),
+    admin_id: str = Depends(_require_admin_or_documents),
+):
+    abs_path = STATIC_DIR / path
+    if not abs_path.exists() or not abs_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    resolved = str(abs_path.resolve())
+    static_resolved = str(STATIC_DIR.resolve())
+    unresolved = str(abs_path)
+    static_unresolved = str(STATIC_DIR)
+    if not (resolved.startswith(static_resolved) or unresolved.startswith(static_unresolved)):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return FileResponse(str(abs_path))
+
+
+@router.delete("/files")
+async def delete_file(
+    path: str = Query(..., description="Relative path under static/"),
+    admin_id: str = Depends(_require_admin_or_documents),
+):
+    abs_path = STATIC_DIR / path
+    if not abs_path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    resolved = str(abs_path.resolve())
+    static_resolved = str(STATIC_DIR.resolve())
+    unresolved = str(abs_path)
+    static_unresolved = str(STATIC_DIR)
+    if not (resolved.startswith(static_resolved) or unresolved.startswith(static_unresolved)):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if abs_path.samefile(STATIC_DIR):
+        raise HTTPException(status_code=400, detail="Cannot delete root directory")
+
+    try:
+        if abs_path.is_dir():
+            shutil.rmtree(str(abs_path))
+        else:
+            os.remove(str(abs_path))
+        return JSONResponse({"success": True, "error": None})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Delete failed: {e}")
