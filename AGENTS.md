@@ -203,3 +203,48 @@ class BaseAdapter(ABC):
 - Не коммитить: `.env`, `__pycache__/`, `.venv/`, `*.pyc`, `node_modules/`.
 - Ветки не создавать — вся работа в `main/master`.
 - Если commit упал (ошибка hooks, pre-commit и т.д.) — исправить проблему и сделать новый commit, не amend.
+
+## 9. План следующих блоков
+
+### Block 5: LLM Server Management
+Управление несколькими LLM-серверами для распределения нагрузки и тестирования моделей.
+
+**Модель `llm_servers`:**
+- `id`, `name`, `base_url`, `api_key` (encrypted), `model_name`, `system_prompt`, `weight` (для балансировки), `is_active`, `created_at`, `updated_at`
+
+**Backend:**
+- `POST /admin/llm-servers` — создать сервер
+- `GET /admin/llm-servers` — список серверов
+- `PUT /admin/llm-servers/{id}` — обновить
+- `DELETE /admin/llm-servers/{id}` — удалить
+- `POST /admin/llm-servers/{id}/test` — тест соединения
+
+**ChatWorker:**
+- При отправке сообщения выбирать сервер из активных (round-robin / random по weight)
+- Fallback при ошибке: переключиться на следующий доступный
+- System prompt: если задан в чате — используется он, иначе — system_prompt сервера, иначе — пусто
+
+**Admin UI:**
+- Новая страница "LLM-серверы" в админке
+- CRUD: имя, URL, API-ключ, модель, system prompt (textarea), weight (число)
+- Кнопка "Тест" — отправляет test prompt, показывает ответ/ошибку
+
+### Block 6: Images in chat
+- ChatSendRequest schema (image field)
+- Vision-формат сообщений (multipart content с type:text + type:image_url)
+- Frontend attachment UI (drag-n-drop, загрузка, превью)
+
+### Block 7: LLM Document Recognition
+- `rag_llm_ocr` setting
+- Отправка изображения документа в LM Studio vision для извлечения текста (вместо Tesseract)
+
+### RAG-2: Scraping (отложено)
+- Сбор веб-страниц по URL
+- Автоматическое добавление в базу знаний
+
+### Non-blockers
+- Audit log
+- Rate limit UI
+- Password change (для локальных пользователей)
+- Notifications
+- Document versioning
