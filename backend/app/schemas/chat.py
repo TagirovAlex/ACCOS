@@ -46,6 +46,7 @@ class ChatListResponse(BaseResponse):
 class ChatHistoryResponse(BaseResponse):
     session: ChatSessionResponse
     messages: list[ChatMessageResponse]
+    has_pending: bool = False
 
 
 class ChatSendResponse(BaseResponse):
@@ -53,3 +54,7 @@ class ChatSendResponse(BaseResponse):
     tokens_input: int = 0
     tokens_output: int = 0
     cost: float = 0.0
+
+
+class ChatCancelResponse(BaseResponse):
+    pass

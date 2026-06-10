@@ -3,8 +3,6 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import text
-
 from app.adapters.lmstudio_adapter import LMStudioAdapter
 from app.db.models.chat import ChatMessage
 from app.db.models.chat_queue import ChatQueue
@@ -22,7 +20,7 @@ async def _claim_next_chat_job():
     async with async_session_factory() as db:
         async with db.begin():
             result = await db.execute(
-                text("""
+                __import__("sqlalchemy").text("""
                     UPDATE chat_queue
                     SET status = 'processing', updated_at = NOW()
                     WHERE id = (
@@ -59,6 +57,12 @@ async def _update_job_status(queue_id, status, error_message=None, tokens_input=
                 q.cost = cost
 
 
+async def _is_cancelled(queue_id):
+    async with async_session_factory() as db:
+        q = await db.get(ChatQueue, queue_id)
+        return q and q.status == "cancelling"
+
+
 async def _process_chat_job(record):
     queue_id = record.id
     sid = record.session_id
@@ -68,6 +72,11 @@ async def _process_chat_job(record):
     logger.info(f"Processing chat job {queue_id} for session {sid}")
 
     try:
+        if await _is_cancelled(queue_id):
+            await _update_job_status(queue_id, "cancelled")
+            logger.info(f"Chat job {queue_id} cancelled before start")
+            return
+
         async with async_session_factory() as db:
             settings_svc = SettingsService(db)
             api_key = await settings_svc.get("lmstudio_api_key")
@@ -75,10 +84,45 @@ async def _process_chat_job(record):
             base_url = await settings_svc.get("lmstudio_base_url")
             llm = LMStudioAdapter(api_key=api_key, model=model, base_url=base_url)
 
-        llm_result = await llm.chat_completion(prompt_messages)
+        async def llm_call():
+            return await llm.chat_completion(prompt_messages)
+
+        async def poll_cancel():
+            while True:
+                await asyncio.sleep(2)
+                if await _is_cancelled(queue_id):
+                    return True
+
+        llm_task = asyncio.create_task(llm_call())
+        poll_task = asyncio.create_task(poll_cancel())
+
+        done, pending = await asyncio.wait(
+            [llm_task, poll_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+        if poll_task in done and not poll_task.exception() and poll_task.result():
+            await _update_job_status(queue_id, "cancelled")
+            logger.info(f"Chat job {queue_id} cancelled during generation")
+            return
+
+        llm_result = llm_task.result()
+
         if not llm_result["success"]:
             await _update_job_status(queue_id, "failed", llm_result.get("error", "LLM call failed"))
             logger.error(f"Chat job {queue_id} failed: {llm_result.get('error')}")
+            return
+
+        if await _is_cancelled(queue_id):
+            await _update_job_status(queue_id, "cancelled")
+            logger.info(f"Chat job {queue_id} cancelled after response (discarded)")
             return
 
         tokens_input = llm_result.get("tokens_input", 0)
@@ -114,6 +158,9 @@ async def _process_chat_job(record):
 
         logger.info(f"Chat job {queue_id} completed ({tokens_input}↑ {tokens_output}↓ {cost} MS)")
 
+    except asyncio.CancelledError:
+        await _update_job_status(queue_id, "cancelled")
+        logger.info(f"Chat job {queue_id} cancelled via task cancellation")
     except Exception as e:
         logger.error(f"Chat job {queue_id} crashed: {e}")
         await _update_job_status(queue_id, "failed", str(e))

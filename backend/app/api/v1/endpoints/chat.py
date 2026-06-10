@@ -11,6 +11,7 @@ from app.schemas.chat import (
     ChatHistoryResponse,
     ChatSendResponse,
     ChatSessionResponse,
+    ChatCancelResponse,
 )
 from app.services.chat_service import ChatService
 
@@ -97,3 +98,16 @@ async def delete_chat(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=result.get("error", "Chat not found"))
     return {"success": True}
+
+
+@router.post("/{session_id}/cancel", response_model=ChatCancelResponse)
+@rate_limit("30/minute")
+async def cancel_generation(
+    request: Request,
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ChatService(db)
+    result = await service.cancel_generation(user_id, session_id)
+    return ChatCancelResponse(**result)

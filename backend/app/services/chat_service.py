@@ -1,8 +1,10 @@
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from uuid import UUID
 
+import sqlalchemy as sa
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -171,3 +173,27 @@ class ChatService:
         asyncio.create_task(ensure_chat_worker())
 
         return {"success": True, "message": "Queued"}
+
+    async def cancel_generation(self, user_id: str, session_id: str) -> dict:
+        sid = UUID(session_id)
+        uid = UUID(user_id)
+
+        chat_session = await self.chat_repo.get(sid)
+        if not chat_session:
+            return {"success": False, "error": "Chat session not found"}
+        if str(chat_session.user_id) != user_id:
+            return {"success": False, "error": "Access denied"}
+
+        result = await self.session.execute(
+            sa.update(ChatQueue)
+            .where(
+                ChatQueue.session_id == sid,
+                ChatQueue.user_id == uid,
+                ChatQueue.status.in_(["queued", "processing"]),
+            )
+            .values(status="cancelling", updated_at=datetime.now(timezone.utc))
+        )
+        if result.rowcount == 0:
+            return {"success": False, "error": "No active generation to cancel"}
+
+        return {"success": True}

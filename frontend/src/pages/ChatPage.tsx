@@ -5,6 +5,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
+import StopIcon from "@mui/icons-material/Stop";
 import { api } from "../services/api";
 import { SimpleMarkdown } from "../components/SimpleMarkdown";
 
@@ -175,6 +176,18 @@ export const ChatPage = ({ user }: ChatPageProps) => {
     }
   };
 
+  const cancelGeneration = async () => {
+    if (!activeChat) return;
+    try {
+      await api("POST", `/chat/${activeChat}/cancel`);
+    } catch {
+      // ignore
+    }
+    setTyping(false);
+    setLoading(false);
+    stopPolling();
+  };
+
   const activeChatData = chats.find(c => c.id === activeChat);
 
   return (
@@ -245,13 +258,14 @@ export const ChatPage = ({ user }: ChatPageProps) => {
                 );
               })}
               {typing && (
-                <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+                <Box sx={{ display: "flex", gap: 1, mb: 2, alignItems: "center" }}>
                   <Avatar sx={{ width: 32, height: 32, bgcolor: "primary.main" }}><SmartToyIcon sx={{ fontSize: 18 }} /></Avatar>
-                  <Paper sx={{ p: 1.5, borderRadius: "16px 16px 16px 4px", bgcolor: "background.paper" }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <CircularProgress size={12} />
-                      <Typography variant="body2" color="text.secondary">ассистент печатает...</Typography>
-                    </Box>
+                  <Paper sx={{ p: 1.5, borderRadius: "16px 16px 16px 4px", bgcolor: "background.paper", display: "flex", alignItems: "center", gap: 1 }}>
+                    <CircularProgress size={12} />
+                    <Typography variant="body2" color="text.secondary">ассистент печатает...</Typography>
+                    <IconButton size="small" onClick={cancelGeneration} sx={{ ml: 1, color: "error.main", bgcolor: "action.hover", "&:hover": { bgcolor: "error.main", color: "white" } }} title="Остановить">
+                      <StopIcon fontSize="small" />
+                    </IconButton>
                   </Paper>
                 </Box>
               )}
