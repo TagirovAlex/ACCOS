@@ -101,6 +101,11 @@ class AdminService:
                         update_data[k] = UUID(v) if v else None
                     else:
                         update_data[k] = v
+            if "is_admin" in update_data:
+                if update_data["is_admin"] and ("admin_role" not in update_data or update_data.get("admin_role") in (None, "none")):
+                    update_data["admin_role"] = "admin"
+                elif not update_data["is_admin"]:
+                    update_data["admin_role"] = "none"
             if "password" in data and data["password"] and user.auth_source != "ldap":
                 update_data["hashed_password"] = hash_password(data["password"])
             if update_data:
@@ -124,7 +129,7 @@ class AdminService:
                 auth_source="local",
                 group_id=UUID(data["group_id"]) if data.get("group_id") else None,
                 is_admin=data.get("is_admin", False),
-                admin_role=data.get("admin_role", "none"),
+                admin_role=data.get("admin_role", "admin") if data.get("is_admin") and data.get("admin_role", "none") == "none" else data.get("admin_role", "none"),
                 is_active=data.get("is_active", True),
             )
             return {

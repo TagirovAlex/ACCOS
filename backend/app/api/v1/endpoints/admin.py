@@ -387,7 +387,7 @@ async def get_user_token_stats(
 
 @router.get("/settings", response_model=AdminSettingListResponse)
 async def get_settings(
-    user_id: str = Depends(_require_super_admin),
+    user_id: str = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
