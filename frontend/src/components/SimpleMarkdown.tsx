@@ -71,7 +71,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
 function parseDocLinks(text: string): string {
   return text.replace(
     /\[doc:\s*([a-f0-9\-]+)\]/gi,
-    '<a href="/api/v1/knowledge/$1/preview" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;font-weight:600" onclick="event.preventDefault();window.open(\'/api/v1/knowledge/$1/preview\',\'_blank\',\'width=800,height=600,scrollbars=1\')">📄 [документ]</a>'
+    '<span style="text-decoration:underline;font-weight:600;cursor:pointer;color:inherit" onclick="window.open(\'/api/v1/knowledge/$1/preview\',\'_blank\',\'width=800,height=600,scrollbars=1\')">📄 [документ]</span>'
   );
 }
 
@@ -99,13 +99,14 @@ export const SimpleMarkdown = ({ text }: Props) => {
         if (part.type === "code") {
           return <CodeBlock key={i} code={part.content} language={part.language || ""} />;
         }
-        const html = parseDocLinks(part.content)
+        const html = part.content
           .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
           .replace(/`([^`]+)`/g, "<code>$1</code>")
           .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
           .replace(/\*([^*]+)\*/g, "<em>$1</em>")
           .replace(/\n/g, "<br/>");
-        return <span key={i} dangerouslySetInnerHTML={{ __html: html }} />;
+        const withLinks = parseDocLinks(html);
+        return <span key={i} dangerouslySetInnerHTML={{ __html: withLinks }} />;
       })}
     </span>
   );

@@ -6,6 +6,8 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, Form, UploadFile, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from urllib.parse import quote
+
 from app.core.config import PROJECT_ROOT
 from app.core.dependencies import get_db, get_current_user_id
 from app.repositories.user_repository import UserRepository
@@ -330,7 +332,7 @@ body {{ font-family: Arial, sans-serif; margin: 20px; }}
 
     doc_title = doc["title"] or doc["filename"]
     ext = doc["content_type"]
-    file_url = f"/{doc['file_path']}"
+    file_url = quote(f"/{doc['file_path']}", safe="/")
 
     body_html = ""
     if ext in ("txt", "md"):
@@ -342,7 +344,7 @@ body {{ font-family: Arial, sans-serif; margin: 20px; }}
         b64 = base64.b64encode(file_abs.read_bytes()).decode()
         body_html = f"<img src=\"data:image/{ext};base64,{b64}\" style=\"max-width:100%;height:auto\" />"
     elif ext == "pdf":
-        body_html = f"""<iframe src="{file_url}#toolbar=0&navpanes=0&scrollbar=1"
+        body_html = f"""<iframe src="{file_url}?toolbar=0&navpanes=0&scrollbar=1"
 style="width:100%;height:90vh;border:none"></iframe>"""
     elif ext == "docx":
         from app.services.rag_service import extract_text_from_docx
