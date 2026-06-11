@@ -124,7 +124,7 @@ export const Dashboard = () => {
       <Grid container spacing={2} mb={3}>
         {INFO_BOXES.filter(box => box.key === "users" || box.key === "settings" || isSuperAdmin()).map(box => (
           <Grid size={{ xs: 6, sm: 4, md: 3, lg: 12 / 7 }} key={box.key}>
-            <StatCard icon={box.icon} label={box.label} value={d?.[box.key]} color={box.color} to={box.to} />
+            <StatCard icon={box.icon} label={box.label} value={d?.[box.key] ?? ""} color={box.color} to={box.to} />
           </Grid>
         ))}
       </Grid>
