@@ -20,6 +20,7 @@ class KnowledgeRepository:
         content_type: str,
         file_path: str,
         created_by: uuid.UUID,
+        file_hash: str | None = None,
         ad_group_dn: str | None = None,
         folder: str = "",
         doc_number: str | None = None,
@@ -31,6 +32,7 @@ class KnowledgeRepository:
             filename=filename,
             content_type=content_type,
             file_path=file_path,
+            file_hash=file_hash,
             ad_group_dn=ad_group_dn,
             folder=folder,
             doc_number=doc_number,
@@ -39,6 +41,16 @@ class KnowledgeRepository:
         )
         self.session.add(doc)
         return doc
+
+    async def find_by_hash(self, file_hash: str) -> KnowledgeDocument | None:
+        result = await self.session.execute(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.file_hash == file_hash,
+                KnowledgeDocument.deleted_at.is_(None),
+                KnowledgeDocument.is_active == True,
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def get_document(self, doc_id: uuid.UUID) -> KnowledgeDocument | None:
         result = await self.session.execute(

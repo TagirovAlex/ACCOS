@@ -23,6 +23,7 @@ class KnowledgeService:
         content_type: str,
         file_path: str,
         folder: str = "",
+        file_hash: str | None = None,
         ad_group_dn: str | None = None,
         doc_number: str | None = None,
         doc_date: datetime | None = None,
@@ -34,6 +35,7 @@ class KnowledgeService:
             filename=filename,
             content_type=content_type,
             file_path=file_path,
+            file_hash=file_hash,
             folder=folder,
             ad_group_dn=ad_group_dn,
             doc_number=doc_number,
@@ -150,6 +152,7 @@ class KnowledgeService:
         content_type: str,
         file_path: str,
         created_by: uuid.UUID,
+        file_hash: str | None = None,
     ) -> dict:
         old_doc = await self.repo.get_document(old_id)
         if not old_doc:
@@ -160,6 +163,7 @@ class KnowledgeService:
             filename=filename,
             content_type=content_type,
             file_path=file_path,
+            file_hash=file_hash,
             folder=old_doc.folder,
             ad_group_dn=old_doc.ad_group_dn,
             doc_number=old_doc.doc_number,
@@ -198,6 +202,7 @@ class KnowledgeService:
             "status": doc.status,
             "ad_group_dn": doc.ad_group_dn,
             "file_path": doc.file_path,
+            "file_hash": doc.file_hash,
             "folder": doc.folder or "",
             "doc_number": doc.doc_number,
             "doc_date": doc.doc_date.isoformat() if doc.doc_date else None,

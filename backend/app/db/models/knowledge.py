@@ -19,6 +19,7 @@ class KnowledgeDocument(Base):
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     ad_group_dn: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    file_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     file_path: Mapped[str] = mapped_column(String(1000), nullable=False)
     folder: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     doc_number: Mapped[str | None] = mapped_column(String(200), nullable=True)

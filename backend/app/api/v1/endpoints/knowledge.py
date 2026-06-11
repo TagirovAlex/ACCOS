@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, Form, UploadFile, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import hashlib
 from urllib.parse import quote
 
 from app.core.config import PROJECT_ROOT
@@ -63,17 +64,27 @@ async def upload_document(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, "File too large (max 50 MB)")
 
+    file_hash = hashlib.sha256(content).hexdigest()
+
+    svc = KnowledgeService(db)
+
+    existing = await svc.repo.find_by_hash(file_hash)
+    if existing:
+        return KnowledgeUploadResponse(success=True, document_id=str(existing.id))
+
+    safe_name = f"{uuid.uuid4().hex}.{ext}"
+
     folder_dir = folder.strip("/") if folder else ""
     knowledge_dir = PROJECT_ROOT / "static" / "knowledge"
     if folder_dir:
         knowledge_dir = knowledge_dir / folder_dir
     knowledge_dir.mkdir(parents=True, exist_ok=True)
-    file_path = knowledge_dir / file.filename
+    file_path = knowledge_dir / safe_name
     file_path.write_bytes(content)
     if folder_dir:
-        storage_path = f"static/knowledge/{folder_dir}/{file.filename}"
+        storage_path = f"static/knowledge/{folder_dir}/{safe_name}"
     else:
-        storage_path = f"static/knowledge/{file.filename}"
+        storage_path = f"static/knowledge/{safe_name}"
 
     parsed_date = None
     if doc_date:
@@ -82,13 +93,13 @@ async def upload_document(
         except (ValueError, TypeError):
             parsed_date = None
 
-    svc = KnowledgeService(db)
     result = await svc.create_document(
         title=title or file.filename,
         filename=file.filename,
         content_type=ext,
         file_path=storage_path,
         folder=folder,
+        file_hash=file_hash,
         ad_group_dn=ad_group_dn,
         doc_number=doc_number,
         doc_date=parsed_date,
@@ -204,6 +215,9 @@ async def replace_document(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, "File too large (max 50 MB)")
 
+    file_hash = hashlib.sha256(content).hexdigest()
+    safe_name = f"{uuid.uuid4().hex}.{ext}"
+
     svc = KnowledgeService(db)
     old_doc = await svc.get_document(doc_id)
     if not old_doc:
@@ -213,12 +227,12 @@ async def replace_document(
     if folder_dir:
         knowledge_dir = knowledge_dir / folder_dir
     knowledge_dir.mkdir(parents=True, exist_ok=True)
-    file_path = knowledge_dir / file.filename
+    file_path = knowledge_dir / safe_name
     file_path.write_bytes(content)
     if folder_dir:
-        storage_path = f"static/knowledge/{folder_dir}/{file.filename}"
+        storage_path = f"static/knowledge/{folder_dir}/{safe_name}"
     else:
-        storage_path = f"static/knowledge/{file.filename}"
+        storage_path = f"static/knowledge/{safe_name}"
 
     result = await svc.replace_document(
         old_id=doc_id,
@@ -226,6 +240,7 @@ async def replace_document(
         filename=file.filename,
         content_type=ext,
         file_path=storage_path,
+        file_hash=file_hash,
         created_by=uuid.UUID(user_id),
     )
     if not result["success"]:
@@ -344,8 +359,8 @@ body {{ font-family: Arial, sans-serif; margin: 20px; }}
         b64 = base64.b64encode(file_abs.read_bytes()).decode()
         body_html = f"<img src=\"data:image/{ext};base64,{b64}\" style=\"max-width:100%;height:auto\" />"
     elif ext == "pdf":
-        body_html = f"""<iframe src="{file_url}?toolbar=0&navpanes=0&scrollbar=1"
-style="width:100%;height:90vh;border:none"></iframe>"""
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=file_url)
     elif ext == "docx":
         from app.services.rag_service import extract_text_from_docx
         content = extract_text_from_docx(str(file_abs))

@@ -10,6 +10,7 @@ class KnowledgeDocumentResponse(BaseModel):
     filename: str
     content_type: str
     status: str
+    file_hash: str | None = None
     ad_group_dn: str | None = None
     folder: str = ""
     doc_number: str | None = None
