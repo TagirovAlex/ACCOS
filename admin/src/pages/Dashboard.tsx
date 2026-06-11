@@ -77,7 +77,7 @@ const statusColors: Record<string, "default" | "primary" | "success" | "error" |
 
 const adminRole = () => localStorage.getItem("admin_role") || "none";
 const isSuperAdmin = () => adminRole() === "super_admin";
-const isAdmin = () => adminRole() === "admin";
+
 
 export const Dashboard = () => {
   const navigate = useNavigate();
