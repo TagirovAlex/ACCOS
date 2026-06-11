@@ -294,6 +294,13 @@ async def list_departments(
                           bind_password=bind_password or None,
                           bind_dn=bind_dn or None)
     ous = await adapter.list_ous(search_base=clients_ou)
+    from app.repositories.user_repository import UserRepository
+    user = await UserRepository(db).get(uuid.UUID(user_id))
+    if user and user.admin_role == "none":
+        hidden_raw = await ss.get("hidden_doc_folders", "")
+        hidden = {h.strip().lower() for h in hidden_raw.split(",") if h.strip()}
+        if hidden:
+            ous = [d for d in ous if d.get("ou", "").lower() not in hidden]
     return {"departments": ous}
 
 
@@ -359,8 +366,53 @@ body {{ font-family: Arial, sans-serif; margin: 20px; }}
         b64 = base64.b64encode(file_abs.read_bytes()).decode()
         body_html = f"<img src=\"data:image/{ext};base64,{b64}\" style=\"max-width:100%;height:auto\" />"
     elif ext == "pdf":
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=file_url)
+        import json
+        from app.core.paths import STATIC_DIR as _SD
+        cache_dir = _SD / "knowledge_preview" / str(doc_id)
+        cache_info = cache_dir / "_info.json"
+        file_mtime = file_abs.stat().st_mtime
+        use_cache = False
+        if cache_info.exists():
+            try:
+                info = json.loads(cache_info.read_text())
+                if info.get("file_mtime") == file_mtime and info.get("page_count", 0) > 0:
+                    use_cache = True
+                    num_pages = info["page_count"]
+            except Exception:
+                pass
+        if use_cache:
+            pages_html = []
+            for i in range(1, num_pages + 1):
+                img_path = f"/static/knowledge_preview/{doc_id}/page_{i:04d}.jpg"
+                pages_html.append(
+                    f"<div style=\"margin-bottom:12px;text-align:center\">"
+                    f"<p style=\"color:#666;font-size:12px;margin:4px 0\">Страница {i} из {num_pages}</p>"
+                    f"<img src=\"{img_path}\" style=\"max-width:100%;height:auto;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,0.15)\" />"
+                    f"</div>"
+                )
+            body_html = "".join(pages_html)
+        else:
+            import fitz
+            import base64
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            pdf_doc = fitz.open(str(file_abs))
+            num_pages = len(pdf_doc)
+            pages_html = []
+            for page_num in range(num_pages):
+                page = pdf_doc.load_page(page_num)
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                img_data = pix.tobytes("jpeg")
+                (cache_dir / f"page_{page_num + 1:04d}.jpg").write_bytes(img_data)
+                b64 = base64.b64encode(img_data).decode()
+                pages_html.append(
+                    f"<div style=\"margin-bottom:12px;text-align:center\">"
+                    f"<p style=\"color:#666;font-size:12px;margin:4px 0\">Страница {page_num + 1} из {num_pages}</p>"
+                    f"<img src=\"data:image/jpeg;base64,{b64}\" style=\"max-width:100%;height:auto;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,0.15)\" />"
+                    f"</div>"
+                )
+            pdf_doc.close()
+            cache_info.write_text(json.dumps({"file_mtime": file_mtime, "page_count": num_pages}))
+            body_html = "".join(pages_html)
     elif ext == "docx":
         from app.services.rag_service import extract_text_from_docx
         content = extract_text_from_docx(str(file_abs))

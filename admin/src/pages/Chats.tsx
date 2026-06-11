@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { List, Datagrid, TextField, BooleanField, DateField, Show, SimpleShowLayout, ReferenceField, WithListContext, useRedirect, useDelete, DeleteButton } from "react-admin";
-import { Box, Typography, Paper, Card, CardContent, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button, IconButton } from "@mui/material";
+import { Box, Typography, Paper, Card, CardContent, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button, IconButton, Chip } from "@mui/material";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -52,19 +52,30 @@ const ChatTileView = () => {
     <MuiGrid container spacing={2} sx={{ p: 2 }}>
       {data?.map((record: any) => (
         <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
-          <Card sx={{ position: "relative", cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
-            <IconButton size="small"
-              sx={{ position: "absolute", top: 4, right: 4, zIndex: 1, color: "error.light" }}
-              onClick={(e) => { e.stopPropagation(); setDeleteTarget(record); }}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-            <CardContent onClick={() => redirect("show", "chats", record.id)}>
-              <Typography variant="body2" fontWeight={600} noWrap>{record.title || "(без названия)"}</Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>{record.username}</Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                {record.is_active ? "Активен" : "Неактивен"} · {new Date(record.created_at).toLocaleDateString()}
-              </Typography>
-            </CardContent>
+          <Card sx={{ position: "relative", cursor: "pointer", height: "100%", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+          <Box sx={{
+          position: "absolute", top: 0, left: 0, right: 0, height: 4, zIndex: 2,
+          bgcolor: record.is_active ? "success.main" : "error.main",
+          borderRadius: "4px 4px 0 0",
+          }} />
+          <IconButton size="small"
+          sx={{ position: "absolute", top: 4, right: 4, zIndex: 1, color: "error.light" }}
+          onClick={(e) => { e.stopPropagation(); setDeleteTarget(record); }}>
+          <DeleteIcon fontSize="small" />
+          </IconButton>
+          <CardContent onClick={() => redirect("show", "chats", record.id)} sx={{ pt: 2.5 }}>
+            <Typography variant="body1" fontWeight={600} noWrap>{record.title || "(без названия)"}</Typography>
+            <Typography variant="caption" sx={{ display: "block", mb: 1, color: record.is_active ? "success.main" : "error.main" }}>
+              {record.is_active ? "Активен" : "Неактивен"}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>{record.username}</Typography>
+            <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.5 }}>
+              <Chip label={`Сообщений: ${record.message_count || 0}`} size="small" variant="outlined" />
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+              Создан: {new Date(record.created_at).toLocaleDateString()}
+            </Typography>
+          </CardContent>
           </Card>
         </MuiGrid>
       ))}

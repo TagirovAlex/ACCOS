@@ -86,6 +86,9 @@ class KnowledgeService:
     async def delete_document(self, doc_id: uuid.UUID) -> bool:
         return await self.repo.soft_delete_document(doc_id)
 
+    async def get_document_chunks(self, doc_id: uuid.UUID) -> list[dict]:
+        return await self.repo.get_chunks_by_document(doc_id)
+
     async def reindex_document(self, doc_id: uuid.UUID) -> dict:
         return await self.rag.index_document(doc_id)
 

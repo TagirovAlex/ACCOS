@@ -32,7 +32,7 @@ function adminToken(): string | null {
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"]);
 
-const SYSTEM_DIRS = new Set(["css", "js", "templates", "images", "generated"]);
+const SYSTEM_DIRS = new Set(["css", "js", "templates", "images", "generated", "knowledge"]);
 
 const CHIP_DIRS = [
   { label: "generations/", path: "generations" },

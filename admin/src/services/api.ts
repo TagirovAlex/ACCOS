@@ -25,8 +25,13 @@ export async function apiRequest<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`API error ${response.status}: ${errorBody}`);
+    let errorBody = await response.text();
+    try {
+      const json = JSON.parse(errorBody);
+      errorBody = json.detail || json.error || json.message || errorBody;
+    } catch {}
+    errorBody = errorBody.replace(/<[^>]+>/g, '').trim();
+    throw new Error(errorBody || `HTTP ${response.status}`);
   }
   return response.json();
 }

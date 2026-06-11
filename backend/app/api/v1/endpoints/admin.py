@@ -36,10 +36,15 @@ from app.schemas.admin import (
     LdapTestResponse,
     FileListResponse,
     BaseResponse,
+    LlmServerCreate,
+    LlmServerUpdate,
+    LlmServerListResponse,
+    LlmServerResponse,
 )
 from app.services.admin_service import AdminService
 from app.services.backup_service import BackupService
 from app.services.knowledge_service import KnowledgeService
+from app.repositories.llm_server_repository import LlmServerRepository
 import uuid
 from datetime import datetime
 from app.repositories.user_repository import UserRepository
@@ -456,6 +461,125 @@ async def delete_backup(
     service = BackupService()
     result = await service.delete_backup(filename)
     return BaseResponse(**result)
+
+
+@router.get("/llm-servers", response_model=LlmServerListResponse)
+async def list_llm_servers(
+    user_id: str = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    repo = LlmServerRepository(db)
+    servers = await repo.list_all()
+    return LlmServerListResponse(success=True, servers=[
+        LlmServerResponse(
+            id=s.id, name=s.name, base_url=s.base_url, api_key=s.api_key or "",
+            model_name=s.model_name, system_prompt=s.system_prompt or "",
+            weight=s.weight, is_active=s.is_active,
+            created_at=s.created_at, updated_at=s.updated_at,
+        ) for s in servers
+    ])
+
+
+@router.post("/llm-servers", response_model=LlmServerResponse)
+async def create_llm_server(
+    request: LlmServerCreate,
+    user_id: str = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    repo = LlmServerRepository(db)
+    server = await repo.create(**request.model_dump())
+    return LlmServerResponse(
+        id=server.id, name=server.name, base_url=server.base_url, api_key=server.api_key or "",
+        model_name=server.model_name, system_prompt=server.system_prompt or "",
+        weight=server.weight, is_active=server.is_active,
+        created_at=server.created_at, updated_at=server.updated_at,
+    )
+
+
+@router.get("/llm-servers/{server_id}", response_model=LlmServerResponse)
+async def get_llm_server(
+    server_id: str,
+    user_id: str = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    repo = LlmServerRepository(db)
+    server = await repo.get(server_id)
+    if not server:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    return LlmServerResponse(
+        id=server.id, name=server.name, base_url=server.base_url, api_key=server.api_key or "",
+        model_name=server.model_name, system_prompt=server.system_prompt or "",
+        weight=server.weight, is_active=server.is_active,
+        created_at=server.created_at, updated_at=server.updated_at,
+    )
+
+
+@router.put("/llm-servers/{server_id}", response_model=LlmServerResponse)
+async def update_llm_server(
+    server_id: str,
+    request: LlmServerUpdate,
+    user_id: str = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    repo = LlmServerRepository(db)
+    kwargs = {k: v for k, v in request.model_dump().items() if v is not None}
+    server = await repo.update(server_id, **kwargs)
+    if not server:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    return LlmServerResponse(
+        id=server.id, name=server.name, base_url=server.base_url, api_key=server.api_key or "",
+        model_name=server.model_name, system_prompt=server.system_prompt or "",
+        weight=server.weight, is_active=server.is_active,
+        created_at=server.created_at, updated_at=server.updated_at,
+    )
+
+
+@router.delete("/llm-servers/{server_id}", response_model=BaseResponse)
+async def delete_llm_server(
+    server_id: str,
+    user_id: str = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    repo = LlmServerRepository(db)
+    ok = await repo.delete(server_id)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    return BaseResponse(success=True)
+
+
+@router.post("/llm-servers/{server_id}/test", response_model=BaseResponse)
+async def test_llm_server(
+    server_id: str,
+    user_id: str = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    repo = LlmServerRepository(db)
+    server = await repo.get(server_id)
+    if not server:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    try:
+        import httpx
+        headers = {"Content-Type": "application/json"}
+        if server.api_key:
+            headers["Authorization"] = f"Bearer {server.api_key}"
+        body = {
+            "model": server.model_name,
+            "messages": [{"role": "user", "content": "Hi, respond with just: OK"}],
+            "max_tokens": 10,
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{server.base_url.rstrip('/')}/chat/completions",
+                json=body, headers=headers,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                return BaseResponse(success=True, error=f"OK: {content[:100]}")
+            else:
+                return BaseResponse(success=False, error=f"HTTP {resp.status_code}: {resp.text[:200]}")
+    except Exception as e:
+        return BaseResponse(success=False, error=str(e)[:200])
 
 
 @router.get("/ldap-groups", response_model=LdapGroupListResponse)

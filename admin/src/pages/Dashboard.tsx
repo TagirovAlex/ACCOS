@@ -1,4 +1,4 @@
-import { Card, CardContent, Typography, Grid, Box, Button, Skeleton, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from "@mui/material";
+import { Card, CardContent, Typography, Grid, Box, Button, Skeleton, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Avatar } from "@mui/material";
 import { useGetOne, useNotify } from "react-admin";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -13,35 +13,35 @@ const INFO_BOXES = [
   { key: "queue", label: "Очередь", icon: "⏳", color: "#ff6f00", to: "/generation-queue" },
 ];
 
-const InfoBox = ({ icon, label, value, secondary, color, to }: { icon: string; label: string; value: number | undefined; secondary?: string; color: string; to?: string }) => {
+const StatCard = ({ icon, label, value, color, to, secondary }: { icon: string; label: string; value: number | string | undefined; color: string; to?: string; secondary?: string }) => {
   const nav = useNavigate();
   return (
-    <Box
+    <Card
       onClick={() => to && nav(to)}
       sx={{
-        display: "flex", bgcolor: "background.paper",
-        border: 1, borderColor: "divider", borderRadius: 1,
         cursor: to ? "pointer" : "default",
-        transition: "all 0.15s ease",
-        "&:hover": to ? { boxShadow: "0 4px 12px rgba(0,0,0,0.12)" } : {},
+        transition: "all 0.2s ease",
+        "&:hover": to ? { transform: "translateY(-2px)", boxShadow: "0 6px 20px rgba(0,0,0,0.12)" } : {},
       }}
     >
-      <Box sx={{
-        width: 80, minHeight: 80,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 32, bgcolor: color, color: "#fff",
-      }}>
-        {icon}
-      </Box>
-      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", px: 2 }}>
-        {value === undefined
-          ? <Skeleton variant="text" width={50} height={32} />
-          : <Typography variant="h5" fontWeight={700} lineHeight={1.2}>{value}</Typography>
-        }
-        <Typography variant="body2" color="text.secondary" fontSize="0.85rem">{label}</Typography>
-        {secondary && <Typography variant="caption" color="text.secondary">{secondary}</Typography>}
-      </Box>
-    </Box>
+      <CardContent sx={{ display: "flex", alignItems: "center", gap: 2, py: 2.5, "&:last-child": { pb: 2.5 } }}>
+        <Box sx={{
+          width: 56, height: 56, borderRadius: 2,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 28, bgcolor: color + "18", color: color, flexShrink: 0,
+        }}>
+          {icon}
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          {value === undefined
+            ? <Skeleton variant="text" width={60} height={32} />
+            : <Typography variant="h5" fontWeight={700} lineHeight={1.2}>{value}</Typography>
+          }
+          <Typography variant="body2" color="text.secondary" noWrap>{label}</Typography>
+          {secondary && <Typography variant="caption" color="text.secondary">{secondary}</Typography>}
+        </Box>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -92,6 +92,8 @@ export const Dashboard = () => {
       .then(r => r.json()).then(d => { if (d?.activity) setActivity(d.activity); }).catch(() => {});
   }, []);
 
+  const d = dash as any;
+
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
@@ -99,36 +101,42 @@ export const Dashboard = () => {
         <Typography variant="body2" color="text.secondary">Панель управления системой генерации контента</Typography>
       </Box>
 
-      <Grid container spacing={2} mb={4}>
+      <Grid container spacing={2} mb={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <StatCard icon="👥" label="Всего пользователей" value={d?.users} color="#448aff" to="/users" />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <StatCard icon="💬" label="Всего чатов" value={d?.chats} color="#ffa726" to="/chats" />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <StatCard icon="🎨" label="Генераций сегодня" value={d?.generations_today} color="#ab47bc" secondary="новых генераций" />
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={2} mb={3}>
         {INFO_BOXES.map(box => (
-          <Grid size={{ xs: 12, sm: 6, md: 4 }} key={box.key}>
-            <InfoBox
-              icon={box.icon}
-              label={box.label}
-              value={(dash as any)?.[box.key]}
-              color={box.color}
-              to={box.to}
-            />
+          <Grid size={{ xs: 6, sm: 4, md: 3, lg: 12 / 7 }} key={box.key}>
+            <StatCard icon={box.icon} label={box.label} value={d?.[box.key]} color={box.color} to={box.to} />
           </Grid>
         ))}
       </Grid>
 
-      <Grid container spacing={2} mb={4}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <InfoBox icon="🎨" label="За сегодня" value={(dash as any)?.generations_today} color="#ab47bc" secondary="новых генераций" />
+      <Grid container spacing={2} mb={3}>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <StatCard icon="📄" label="Документов всего" value={d?.documents} color="#43a047" />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <InfoBox icon="🖼" label="Всего ресурсов" value={(dash as any)?.assets} color="#26c6da" />
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <StatCard icon="✅" label="Проиндексировано" value={d?.documents_indexed} color="#2e7d32" />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <InfoBox icon="💬" label="Всего чатов" value={(dash as any)?.chats} color="#ffa726" />
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <StatCard icon="📊" label="Токенов ввода" value={d?.total_tokens_input !== undefined ? Number(d.total_tokens_input).toLocaleString() : undefined} color="#ffa000" />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <InfoBox icon="👥" label="Всего пользователей" value={(dash as any)?.users} color="#448aff" />
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <StatCard icon="📊" label="Токенов вывода" value={d?.total_tokens_output !== undefined ? Number(d.total_tokens_output).toLocaleString() : undefined} color="#e65100" />
         </Grid>
       </Grid>
 
-      <Grid container spacing={2} mb={4}>
+      <Grid container spacing={2} mb={3}>
         <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardContent>
@@ -136,7 +144,7 @@ export const Dashboard = () => {
                 <Typography variant="h6" fontWeight={600}>Последние генерации</Typography>
                 <Button size="small" onClick={() => navigate("/generations")}>Все</Button>
               </Box>
-              {!(dash as any)?.recent_generations?.length ? (
+              {!d?.recent_generations?.length ? (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 3 }}>Нет генераций</Typography>
               ) : (
                 <TableContainer component={Paper} variant="outlined">
@@ -149,7 +157,7 @@ export const Dashboard = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {(dash as any).recent_generations.map((g: any) => (
+                      {d.recent_generations.map((g: any) => (
                         <TableRow key={g.id} hover sx={{ cursor: "pointer" }} onClick={() => navigate(`/generations/${g.id}/show`)}>
                           <TableCell>{g.workflow_type}</TableCell>
                           <TableCell><Chip label={statusLabels[g.status] || g.status} size="small" color={statusColors[g.status] || "default"} /></TableCell>
@@ -171,21 +179,31 @@ export const Dashboard = () => {
                 <Typography variant="h6" fontWeight={600}>Последние пользователи</Typography>
                 <Button size="small" onClick={() => navigate("/users")}>Все</Button>
               </Box>
-              {!(dash as any)?.recent_users?.length ? (
+              {!d?.recent_users?.length ? (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 3 }}>Нет пользователей</Typography>
               ) : (
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Имя</TableCell>
+                        <TableCell>Пользователь</TableCell>
                         <TableCell>Зарегистрирован</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {(dash as any).recent_users.map((u: any) => (
+                      {d.recent_users.map((u: any) => (
                         <TableRow key={u.id} hover sx={{ cursor: "pointer" }} onClick={() => navigate(`/users/${u.id}/show`)}>
-                          <TableCell>{u.username}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              <Avatar src={u.avatar_path ? `/${u.avatar_path}` : undefined} sx={{ width: 28, height: 28, fontSize: 14 }}>
+                                {(u.full_name || u.username || "?").charAt(0).toUpperCase()}
+                              </Avatar>
+                              <Box>
+                                <Typography variant="body2">{u.full_name || u.username}</Typography>
+                                {u.full_name && <Typography variant="caption" color="text.secondary">{u.username}</Typography>}
+                              </Box>
+                            </Box>
+                          </TableCell>
                           <TableCell><Typography variant="caption">{new Date(u.created_at).toLocaleString()}</Typography></TableCell>
                         </TableRow>
                       ))}
@@ -198,7 +216,7 @@ export const Dashboard = () => {
         </Grid>
       </Grid>
 
-      <Grid container spacing={2} mb={4}>
+      <Grid container spacing={2} mb={3}>
         <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardContent>
@@ -206,7 +224,7 @@ export const Dashboard = () => {
                 <Typography variant="h6" fontWeight={600}>Последние чаты</Typography>
                 <Button size="small" onClick={() => navigate("/chats")}>Все</Button>
               </Box>
-              {!(dash as any)?.recent_chats?.length ? (
+              {!d?.recent_chats?.length ? (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 3 }}>Нет чатов</Typography>
               ) : (
                 <TableContainer component={Paper} variant="outlined">
@@ -218,7 +236,7 @@ export const Dashboard = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {(dash as any).recent_chats.map((c: any) => (
+                      {d.recent_chats.map((c: any) => (
                         <TableRow key={c.id} hover sx={{ cursor: "pointer" }} onClick={() => navigate(`/chats/${c.id}/show`)}>
                           <TableCell>{c.title}</TableCell>
                           <TableCell><Typography variant="caption">{new Date(c.created_at).toLocaleString()}</Typography></TableCell>

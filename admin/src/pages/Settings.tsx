@@ -23,7 +23,7 @@ const API = "/api/v1/admin/settings";
 interface Setting {
   key: string;
   value: string;
-  description: string;
+  description: string | null;
 }
 
 interface CategoryDef {
@@ -47,13 +47,13 @@ const CATEGORIES: CategoryDef[] = [
 
 const CATEGORY_ORDER = CATEGORIES.map((c) => c.key);
 
-function parseCategory(desc: string): string {
-  const m = desc.match(/^\[(.+?)\]/);
+function parseCategory(desc: string | null): string {
+  const m = desc?.match(/^\[(.+?)\]/);
   return m ? m[1] : "Прочее";
 }
 
-function stripCategory(desc: string): string {
-  return desc.replace(/^\[.+?\]\s*/, "");
+function stripCategory(desc: string | null): string {
+  return (desc || "").replace(/^\[.+?\]\s*/, "");
 }
 
 const BOOLEAN_KEYS = new Set(["require_ad_group_for_login", "ldap_enabled"]);
@@ -103,6 +103,8 @@ const FIELD_DISPLAY_NAMES: Record<string, string> = {
   auto_accrual_interval_minutes: "Интервал начисления (минуты)",
   auto_accrual_time: "Время начисления (HH:MM, по серверу)",
   chat_context_messages: "Сообщений в контексте чата",
+  help_content: "Справка для пользователя",
+  hidden_doc_folders: "Скрытые папки документов",
 };
 
 const MASKED_KEYS = new Set(["ldap_bind_password", "llm_api_key"]);
@@ -157,6 +159,22 @@ function SettingField({
         type="number"
         slotProps={{ htmlInput: { step: "any", min: 0 } }}
         sx={{ mb: 2 }}
+      />
+    );
+  }
+
+  if (setting.key === "help_content") {
+    return (
+      <MuiTextField
+        label={label}
+        helperText={helper}
+        value={value}
+        onChange={(e) => onChange(setting.key, e.target.value)}
+        fullWidth
+        multiline
+        minRows={12}
+        maxRows={40}
+        sx={{ mb: 2, "& .MuiInputBase-root": { fontFamily: "monospace", fontSize: "0.875rem" } }}
       />
     );
   }

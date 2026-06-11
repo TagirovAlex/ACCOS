@@ -6,6 +6,7 @@ from app.db.models.admin_settings import AdminSettings
 from app.db.models.user_group import UserGroup
 from app.db.models.chat_queue import ChatQueue
 from app.db.models.knowledge import KnowledgeDocument, KnowledgeChunk
+from app.db.models.llm_server import LlmServer
 
 __all__ = [
     "User",
@@ -18,4 +19,5 @@ __all__ = [
     "ChatQueue",
     "KnowledgeDocument",
     "KnowledgeChunk",
+    "LlmServer",
 ]

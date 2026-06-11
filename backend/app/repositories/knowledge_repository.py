@@ -122,6 +122,7 @@ class KnowledgeRepository:
         if not doc:
             return False
         doc.deleted_at = datetime.now(timezone.utc)
+        await self.delete_chunks_by_document(doc_id)
         return True
 
     async def replace_document(

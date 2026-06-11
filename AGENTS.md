@@ -206,6 +206,78 @@ class BaseAdapter(ABC):
 
 ## 9. План следующих блоков
 
+### Block 0: Module System Core
+Реализация полноценной модульной инфраструктуры. Все последующие блоки разрабатываются как модули.
+
+**ModuleRegistry:**
+- Центральный реестр модулей (Singleton)
+- Автообнаружение: `discover_modules()` сканирует `modules/`, загружает все наследники `BaseModule`
+- Порядок загрузки по `depends_on` (топологическая сортировка)
+- `register_all(app)` — итерация по модулям, вызов `module.register_routes(app)`
+- Lifecycle: `on_startup()`, `on_shutdown()` (вызов в lifespan)
+- `get_module(name)` — получение модуля по имени
+
+**BaseModule (расширенный) — единая структура модуля:**
+```python
+class BaseModule(ABC):
+    name: str
+    depends_on: list[str]
+    
+    @abstractmethod
+    def register_routes(self, app: FastAPI) -> None: ...
+    
+    def get_name(self) -> str: ...
+    def on_startup(self) -> None: ...
+    def on_shutdown(self) -> None: ...
+    
+    def get_settings_schema(self) -> list[ModuleSettingDef]: ...
+    def get_admin_menu(self) -> list[MenuItemDef]: ...
+    def get_user_menu(self) -> list[MenuItemDef]: ...
+```
+
+**ModuleSettingDef — стандартное описание настройки модуля:**
+- `key: str` — уникальный ключ (например `telegram_bot_chat_id`)
+- `label: str` — отображаемое имя (например "Telegram ID")
+- `type: str` — `"string"`, `"boolean"`, `"number"`, `"select"`, `"password"`
+- `category: str` — категория для группировки в UI
+- `default: Any` — значение по умолчанию
+- `is_user_setting: bool` — True = видно в ЛК пользователя, False = только админ
+- `is_admin_setting: bool` — True = видно в админке
+- `validation: dict | None` — опциональные правила валидации (regex, min, max, options)
+- `description: str` — подсказка
+
+**MenuItemDef — стандартное описание пункта меню:**
+- `label: str` — текст пункта
+- `path: str` — URL (например `/telegram`)
+- `icon: str` — имя MUI-иконки
+- `permission: str | None` — требуемое право (None = всем)
+- `order: int` — порядок сортировки
+
+**Модель module_settings (таблица БД):**
+- `id` (PK), `user_id` (FK → users, nullable = глобальная), `module_name` (str), `key` (str), `value` (text), `created_at`, `updated_at`
+- Unique: `(user_id, module_name, key)` — user_id NULL = глобальное значение модуля
+
+**Модель module_menu_items (опционально):**
+- Для статического определения пунктов меню модулями
+
+**Сбор настроек:**
+- Admin API: `GET /admin/modules/{name}/settings` — глобальные настройки модуля
+- Admin API: `GET /admin/users/{id}/module-settings` — настройки модуля для конкретного пользователя
+- User API: `GET /user/module-settings` — свои настройки модулей
+- Admin Panel: динамическая секция "Настройки модулей" в Settings + вкладка "Модули" в профиле пользователя
+- User Frontend: динамическая секция в ProfilePage
+
+**Безопасность:**
+- Валидация всех значений настроек через `ModuleSettingDef.validation`
+- Проверка прав доступа к пунктам меню
+- Изоляция модулей друг от друга
+
+**Рефакторинг существующих модулей:**
+- ChatModule, ComfyUIModule, RAGModule — привести к единому BaseModule
+- RAGModule — исправить (добавить register_routes, get_name)
+- main.py — перевести на модульную загрузку (`registry.register_all(app)`)
+- Все текущие роуты (`auth`, `user`, `chat`, `generation`, `orchestration`, `admin`, `knowledge`, `help`) должны регистрироваться через модули
+
 ### Block 5: LLM Server Management
 Управление несколькими LLM-серверами для распределения нагрузки и тестирования моделей.
 
@@ -233,6 +305,8 @@ class BaseAdapter(ABC):
 - ChatSendRequest schema (image field)
 - Vision-формат сообщений (multipart content с type:text + type:image_url)
 - Frontend attachment UI (drag-n-drop, загрузка, превью)
+- **Проверка vision-способностей модели**: перед включением отправки картинок проверить модель LM Studio через `/v1/models` — смотреть `supports_vision` или наличие vision-ключевых слов в имени (llava, qwen-vl, vision, llama3.2-vision)
+- Если модель не поддерживает vision — не показывать кнопку прикрепления изображения и блокировать image field в запросе
 
 ### Block 7: LLM Document Recognition
 - `rag_llm_ocr` setting
@@ -242,9 +316,15 @@ class BaseAdapter(ABC):
 - Сбор веб-страниц по URL
 - Автоматическое добавление в базу знаний
 
-### Non-blockers
-- Audit log
-- Rate limit UI
-- Password change (для локальных пользователей)
-- Notifications
-- Document versioning
+### Видео-генерация (отложено)
+- text_to_video.json, image_to_video.json — workflow зарезервированы
+- Запуск через ComfyUI как отдельный workflow_type
+- Расчёт стоимости через VideoGenCostStrategy
+
+### Полезное
+1. **Audit log** — логирование всех действий пользователей и админов
+2. **PDF preview caching** — lazy render-to-images при первом открытии, сохранение в `static/knowledge_preview/{doc_id}/`, отдача готовых картинок при повторных просмотрах (реализовано)
+3. **Rate limit UI** — отображение и настройка лимитов через админку
+4. **Password change** — смена пароля для локальных пользователей (не LDAP)
+5. **Notifications** — система уведомлений (завершение генерации, ошибки, новый пользователь)
+6. **Document versioning** — версионирование документов в базе знаний

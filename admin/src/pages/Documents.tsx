@@ -6,7 +6,7 @@ import {
   Dialog, DialogContent, DialogTitle, DialogActions,
   Grid as MuiGrid, Select, MenuItem, FormControl, InputLabel, Alert,
   ToggleButtonGroup, ToggleButton,
-  Tooltip,
+  Tooltip, Checkbox, FormGroup, FormControlLabel, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, Paper,
 } from "@mui/material";
 import DescriptionIcon from "@mui/icons-material/Description";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -23,6 +23,7 @@ import HomeIcon from "@mui/icons-material/Home";
 import BusinessIcon from "@mui/icons-material/Business";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 
 interface Department {
   dn: string;
@@ -88,6 +89,7 @@ export const Documents = () => {
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [documents, setDocuments] = useState<KnowledgeDoc[]>([]);
   const [viewMode, setViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("docs_view") as "list" | "tiles") ?? "list");
+  const [rootViewMode, setRootViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("docs_root_view") as "list" | "tiles") ?? "tiles");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadFolder, setUploadFolder] = useState("");
@@ -100,6 +102,35 @@ export const Documents = () => {
   const [chunksDoc, setChunksDoc] = useState<KnowledgeDoc | null>(null);
   const [chunks, setChunks] = useState<any[]>([]);
   const [chunksLoading, setChunksLoading] = useState(false);
+  const [hiddenFolders, setHiddenFolders] = useState<string[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [draftHidden, setDraftHidden] = useState<string[]>([]);
+
+  const loadHiddenFolders = async () => {
+    try {
+      const token = adminToken();
+      const res = await fetch("/api/v1/admin/settings", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      const setting = (data.settings || []).find((s: any) => s.key === "hidden_doc_folders");
+      if (setting && setting.value) {
+        setHiddenFolders(setting.value.split(",").map((s: string) => s.trim()).filter(Boolean));
+      }
+    } catch {}
+  };
+
+  const saveHiddenFolders = async (folders: string[]) => {
+    try {
+      const token = adminToken();
+      await fetch("/api/v1/admin/settings/hidden_doc_folders", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ value: folders.join(",") }),
+      });
+      setHiddenFolders(folders);
+    } catch {}
+  };
 
   const loadDepartments = async () => {
     try {
@@ -129,7 +160,12 @@ export const Documents = () => {
     setLoading(false);
   };
 
-  useEffect(() => { loadDepartments(); }, []);
+  useEffect(() => {
+    loadDepartments();
+    loadHiddenFolders();
+  }, []);
+
+  const visibleDepartments = departments.filter((d) => !hiddenFolders.includes(d.ou));
 
   const navigateFolder = (folder: string | null) => {
     setCurrentFolder(folder);
@@ -286,7 +322,7 @@ export const Documents = () => {
           } sx={{ flex: "0 0 150px" }} />
           <Box sx={{ flex: "0 0 200px", display: "flex", gap: 0.5 }}>
             <Tooltip title="Просмотр">
-              <IconButton size="small" onClick={() => window.open(`/api/v1/knowledge/${doc.id}/preview`, "_blank", "width=800,height=600,scrollbars=1")}>
+              <IconButton size="small" onClick={() => window.open(`/api/v1/knowledge/${doc.id}/preview`, "preview", "width=900,height=700,scrollbars=yes,resizable=yes")}>
                 <PreviewIcon fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -341,7 +377,7 @@ export const Documents = () => {
                 </Box>
                 <Box sx={{ display: "flex", gap: 0.5, mt: 1 }}>
                   <Tooltip title="Просмотр">
-                    <IconButton size="small" onClick={() => window.open(`/api/v1/knowledge/${doc.id}/preview`, "_blank", "width=800,height=600,scrollbars=1")}>
+                    <IconButton size="small" onClick={() => window.open(`/api/v1/knowledge/${doc.id}/preview`, "preview", "width=900,height=700,scrollbars=yes,resizable=yes")}>
                       <PreviewIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
@@ -369,35 +405,94 @@ export const Documents = () => {
     </MuiGrid>
   );
 
-  const rootView = (
-    <Box>
-      <Typography variant="h6" sx={{ mb: 2 }}>Папки документов</Typography>
-      <MuiGrid container spacing={2}>
-        <MuiGrid size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+  const rootTilesView = (
+    <MuiGrid container spacing={2}>
+      <MuiGrid size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+        <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
+          onClick={() => navigateFolder("")}>
+          <Box sx={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
+            <HomeIcon sx={{ fontSize: 48, color: "primary.main" }} />
+          </Box>
+          <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
+            <Typography variant="body2" noWrap textAlign="center">Общий доступ</Typography>
+          </CardContent>
+        </Card>
+      </MuiGrid>
+      {visibleDepartments.map((dep) => (
+        <MuiGrid key={dep.dn} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
           <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
-            onClick={() => navigateFolder("")}>
+            onClick={() => navigateFolder(dep.ou)}>
             <Box sx={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
-              <HomeIcon sx={{ fontSize: 48, color: "primary.main" }} />
+              <BusinessIcon sx={{ fontSize: 48, color: "secondary.main" }} />
             </Box>
             <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
-              <Typography variant="body2" noWrap textAlign="center">Общий доступ</Typography>
+              <Typography variant="body2" noWrap textAlign="center">{dep.ou}</Typography>
+              {dep.description && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {dep.description}
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </MuiGrid>
-        {departments.map((dep) => (
-          <MuiGrid key={dep.dn} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
-            <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
-              onClick={() => navigateFolder(dep.ou)}>
-              <Box sx={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
-                <BusinessIcon sx={{ fontSize: 48, color: "secondary.main" }} />
+      ))}
+    </MuiGrid>
+  );
+
+  const rootListView = (
+    <TableContainer component={Paper} variant="outlined">
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Папка</TableCell>
+            <TableCell>Описание</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          <TableRow hover sx={{ cursor: "pointer" }} onClick={() => navigateFolder("")}>
+            <TableCell>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <HomeIcon fontSize="small" color="primary" />
+                <Typography variant="body2">Общий доступ</Typography>
               </Box>
-              <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
-                <Typography variant="body2" noWrap textAlign="center">{dep.ou}</Typography>
-              </CardContent>
-            </Card>
-          </MuiGrid>
-        ))}
-      </MuiGrid>
+            </TableCell>
+            <TableCell><Typography variant="caption" color="text.secondary">Общедоступные документы</Typography></TableCell>
+          </TableRow>
+          {visibleDepartments.map((dep) => (
+            <TableRow key={dep.dn} hover sx={{ cursor: "pointer" }} onClick={() => navigateFolder(dep.ou)}>
+              <TableCell>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <BusinessIcon fontSize="small" color="secondary" />
+                  <Typography variant="body2">{dep.ou}</Typography>
+                </Box>
+              </TableCell>
+              <TableCell><Typography variant="caption" color="text.secondary">{dep.description || "\u2014"}</Typography></TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      {visibleDepartments.length === 0 && departments.length > 0 && (
+        <Box sx={{ p: 2, textAlign: "center" }}>
+          <Typography variant="body2" color="text.secondary">Все папки скрыты. Измените настройку отображения папок.</Typography>
+        </Box>
+      )}
+    </TableContainer>
+  );
+
+  const rootView = (
+    <Box>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+        <Typography variant="h6" sx={{ flex: 1 }}>Папки документов</Typography>
+        <ToggleButtonGroup value={rootViewMode} exclusive size="small"
+          onChange={(_, v) => { if (v) { setRootViewMode(v); localStorage.setItem("docs_root_view", v); } }}>
+          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
+        </ToggleButtonGroup>
+        <Button size="small" startIcon={<VisibilityIcon />} onClick={() => { setDraftHidden([...hiddenFolders]); setSettingsOpen(true); }}>
+          Настройка папок
+        </Button>
+      </Box>
+      {rootViewMode === "list" ? rootListView : rootTilesView}
     </Box>
   );
 
@@ -529,6 +624,41 @@ export const Documents = () => {
           <Button onClick={() => setUploadOpen(false)} disabled={uploading}>Отмена</Button>
           <Button variant="contained" onClick={handleUpload} disabled={!uploadFile || uploading}>
             {uploading ? "Загрузка..." : "Загрузить"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Настройка отображения папок</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Отметьте папки, которые нужно скрыть из списка:
+          </Typography>
+          <FormGroup>
+            {departments.map((dep) => (
+              <FormControlLabel
+                key={dep.dn}
+                control={
+                  <Checkbox
+                    checked={!draftHidden.includes(dep.ou)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setDraftHidden(draftHidden.filter((f) => f !== dep.ou));
+                      } else {
+                        setDraftHidden([...draftHidden, dep.ou]);
+                      }
+                    }}
+                  />
+                }
+                label={dep.ou}
+              />
+            ))}
+          </FormGroup>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSettingsOpen(false)}>Отмена</Button>
+          <Button variant="contained" onClick={() => { saveHiddenFolders(draftHidden); setSettingsOpen(false); }}>
+            Сохранить
           </Button>
         </DialogActions>
       </Dialog>

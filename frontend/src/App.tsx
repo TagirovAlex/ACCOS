@@ -11,6 +11,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import SettingsIcon from "@mui/icons-material/Settings";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import { lightTheme, darkTheme } from "./assets/themes";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -18,6 +19,7 @@ import { ChatPage } from "./pages/ChatPage";
 import { GenerationPage } from "./pages/GenerationPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { KnowledgePage } from "./pages/KnowledgePage";
+import { HelpPage } from "./pages/HelpPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { getMe, logout, type User } from "./services/auth";
 import { GenerationProvider, useGenerationStatus } from "./services/generationContext";
@@ -61,6 +63,7 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
     ...(canVideo ? [{ path: "/video", label: "Видео", icon: <MovieIcon /> }] : []),
     ...(canGenerate || canEdit || canVideo ? [{ path: "/history", label: "История", icon: <HistoryIcon /> }] : []),
     ...(canManageDocs ? [{ path: "/knowledge", label: "Документы", icon: <MenuBookIcon /> }] : []),
+    { path: "/help", label: "Помощь", icon: <HelpOutlineIcon /> },
     { path: "/profile", label: "Профиль", icon: <SettingsIcon /> },
   ];
 
@@ -118,6 +121,7 @@ function Layout({ user, onLogout }: { user: User; onLogout: () => void }) {
               <Route path="/history" element={<ErrorBoundary key="history"><GenerationPage key="history" mode="all" viewHistory /></ErrorBoundary>} />
               <Route path="/profile" element={<ErrorBoundary><ProfilePage user={user} /></ErrorBoundary>} />
               {canManageDocs && <Route path="/knowledge" element={<ErrorBoundary><KnowledgePage /></ErrorBoundary>} />}
+              <Route path="/help" element={<ErrorBoundary><HelpPage /></ErrorBoundary>} />
             </Routes>
             <GlobalGenBar />
           </GenerationProvider>

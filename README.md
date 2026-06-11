@@ -12,17 +12,25 @@
 
 | Область | Статус |
 |---------|--------|
-| Бэкенд (FastAPI) | ✅ Завершён (Phases 0–4) |
-| Admin API | ✅ Завершён (Phase 5) — 30+ эндпоинтов |
-| Admin Panel (React) | ✅ Завершён (Phase 5) — 12 страниц |
+| Бэкенд (FastAPI) | ✅ Завершён (Phases 0–4 + Block 3-5) |
+| Admin API | ✅ Завершён (Phase 5) — 35+ эндпоинтов |
+| Admin Panel (React) | ✅ Завершён (Phase 5) — 14 страниц |
 | User Frontend (React) | ✅ Завершён (Phase 6) |
 | Тесты бэкенда (26/26) | ✅ Все проходят |
 | Тесты фронтенда (16/16) | ✅ Все проходят |
 | Rate limiting | ✅ slowapi (login 5/min, gen 10/min, chat 30/min) |
 | Очередь генераций | ✅ Фоновая очередь через queue_worker |
-| Файловый менеджер | ✅ Просмотр/скачивание/удаление файлов в `static/` |
-| Бэкапы БД | ✅ pg_dump через Admin API |
+| Очередь чатов | ✅ Фоновая очередь через chat_worker (асинхронный LLM) |
+| Отмена генерации | ✅ Cancel через POST /chat/{id}/cancel |
+| Файловый менеджер | ✅ Просмотр/скачивание/удаление/загрузка файлов в `static/` |
+| Бэкапы БД | ✅ pg_dump через Admin API + tile/row toggle |
 | LDAP управление | ✅ Просмотр групп AD, тест соединения, синхронизация |
+| Управление LLM-серверами | ✅ CRUD нескольких серверов, тест соединения, веса балансировки |
+| RAG База знаний | ✅ Chunking + embedding + векторный поиск (pgvector) |
+| RAG Тюнинг UI | ✅ Реиндекс (all/new/failed), настройки chunk_size/overlap/top_k |
+| RAG Планировщик | ✅ APScheduler cron-автоиндексация документов |
+| Превью документов | ✅ PDF/docx/txt preview + кеширование PDF в изображения |
+| Help-страница | ✅ Markdown-справка через react-markdown |
 
 ---
 
@@ -356,6 +364,15 @@ C:\Github\ACCOS\
 | GET | `/api/v1/admin/files` | super_admin | Список файлов в static/ |
 | GET | `/api/v1/admin/files/download` | super_admin | Скачать файл |
 | DELETE | `/api/v1/admin/files` | super_admin | Удалить файл/папку |
+| POST | `/api/v1/admin/files/upload` | super_admin | Загрузить файл в статику |
+| GET | `/api/v1/admin/llm-servers` | super_admin | Список LLM-серверов |
+| POST | `/api/v1/admin/llm-servers` | super_admin | Создать LLM-сервер |
+| GET | `/api/v1/admin/llm-servers/{id}` | super_admin | LLM-сервер по ID |
+| PUT | `/api/v1/admin/llm-servers/{id}` | super_admin | Обновить LLM-сервер |
+| DELETE | `/api/v1/admin/llm-servers/{id}` | super_admin | Удалить LLM-сервер |
+| POST | `/api/v1/admin/llm-servers/{id}/test` | super_admin | Тест соединения |
+| POST | `/api/v1/admin/reindex-all` | super_admin | Переиндексировать все доки |
+| POST | `/api/v1/admin/reindex-new` | super_admin | Переиндексировать новые/упавшие |
 
 ---
 
@@ -646,13 +663,18 @@ npm run dev                      # → http://localhost:3000
 | Phase 4 | Оркестрация (Image→Edit, Image→Video) | ✅ |
 | Phase 5 | Admin API + React Admin Panel | ✅ |
 | Phase 6 | User Frontend (React) | ✅ |
+| Block 3 | RAG Knowledge Base + Chunking + Embedding + Search | ✅ |
+| Block 3 | RAG Tuning UI (реиндекс all/new/failed, параметры) | ✅ |
+| Block 4 | Reindex Scheduler (APScheduler cron) | ✅ |
+| Block 5 | LLM Server Management (множественные LLM-серверы) | ✅ |
 | **Будущее** | **Что можно сделать дальше** | |
+| Block 6 | Изображения в чате (vision-формат, drag-n-drop) | 📝 |
+| Block 7 | LLM Document Recognition (вместо Tesseract) | 📝 |
 | — | Видео-генерация (text_to_video.json, image_to_video.json) | ⏳ |
+| — | Scraping внешних сайтов в базу знаний | 📝 |
 | — | E2E тесты (Playwright) | 📝 |
 | — | CI/CD (GitHub Actions) | 📝 |
 | — | Мониторинг и алертинг | 📝 |
-| — | Frontend тесты (Vitest) | ✅ |
-| — | Rate limiting (slowapi) | ✅ |
 
 ---
 

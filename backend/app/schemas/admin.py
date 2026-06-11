@@ -289,3 +289,40 @@ class FileEntry(BaseModel):
 class FileListResponse(BaseResponse):
     entries: list[FileEntry] = []
     current_path: str = ""
+
+
+class LlmServerCreate(BaseModel):
+    name: str
+    base_url: str
+    api_key: str = ""
+    model_name: str = "default"
+    system_prompt: str = ""
+    weight: int = 1
+    is_active: bool = True
+
+
+class LlmServerUpdate(BaseModel):
+    name: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    model_name: str | None = None
+    system_prompt: str | None = None
+    weight: int | None = None
+    is_active: bool | None = None
+
+
+class LlmServerResponse(BaseModel):
+    id: str
+    name: str
+    base_url: str
+    api_key: str = ""
+    model_name: str
+    system_prompt: str = ""
+    weight: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class LlmServerListResponse(BaseResponse):
+    servers: list[LlmServerResponse] = []

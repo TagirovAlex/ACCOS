@@ -20,6 +20,7 @@ echo '=== Preserving .venv, .env, logs, static/knowledge ==='
 [ -f "$OLD/config/.env" ] && cp -a "$OLD/config/.env" "$NEW/config/"
 [ -d "$OLD/logs" ] && cp -a "$OLD/logs" "$NEW/"
 [ -L "$OLD/static/knowledge" ] && cp -a "$OLD/static/knowledge" "$NEW/static/"
+[ -d "$OLD/static/knowledge_preview" ] && cp -a "$OLD/static/knowledge_preview" "$NEW/static/"
 
 rm -rf "$OLD" && mv "$NEW" "$OLD"
 

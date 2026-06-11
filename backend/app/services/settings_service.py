@@ -139,6 +139,12 @@ class SettingsService:
             ("require_ad_group_for_login", "false",
              "[Домен] Требовать группу AD для входа. Если включено - только пользователи из настроенных групп AD могут входить"),
 
+            # -- Help / Spravka --
+            ("help_content", "",
+             "[Пользователи] Текст страницы справки для пользователя (HTML/Markdown)"),
+            ("hidden_doc_folders", "",
+             "[База знаний] Список скрытых папок с документами (через запятую)"),
+
             # -- RAG / Knowledge Base --
             ("ad_clients_ou", settings.ad_clients_ou,
              "[База знаний] Корневая OU для отделов в AD (например OU=Clients,DC=fidelio,DC=local)"),

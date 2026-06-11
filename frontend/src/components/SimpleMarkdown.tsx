@@ -71,7 +71,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
 function parseDocLinks(text: string): string {
   return text.replace(
     /\[doc:\s*([a-f0-9\-]+)\]/gi,
-    '<span style="text-decoration:underline;font-weight:600;cursor:pointer;color:inherit" onclick="window.open(\'/api/v1/knowledge/$1/preview\',\'_blank\')">📄 [документ]</span>'
+    '<span style="text-decoration:underline;font-weight:600;cursor:pointer;color:inherit" onclick="var w=Math.round(screen.width*0.85);var h=Math.round(screen.height*0.85);window.open(\'/api/v1/knowledge/$1/preview\',\'preview\',\'width=\'+w+\',height=\'+h+\',scrollbars=yes,resizable=yes\')">📄 [документ]</span>'
   );
 }
 

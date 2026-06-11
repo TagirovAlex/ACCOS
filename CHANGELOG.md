@@ -1,5 +1,15 @@
 # Changelog ACCOS
 
+## Block 5 — LLM Server Management + UI Fixes (Jun 11)
+- **Model `llm_servers`**: новая таблица + миграция `a1b2c3d4e5f6`
+- **CRUD API `/admin/llm-servers`**: создание, список, редактирование, удаление, тест соединения
+- **Admin UI «LLM-серверы»**: страница с list/tiles toggle, добавление/редактирование серверов, кнопка «Тест»
+- **Dashboard**: редизайн карточек (StatCard вместо InfoBox), компактнее, чище
+- **Backups**: добавлен tile/row toggle
+- **Groups**: карточки книжная ориентация (описание, чипы прав, стартовый баланс)
+- **Chats**: карточки книжная ориентация (статус, кол-во сообщений)
+- **Documents**: root view папок отделов — добавлен list/tiles toggle
+
 ## Block 3 — RAG Tuning UI (Jun 10)
 - **Reindex-all/new/failed**: Массовая переиндексация всех/новых/упавших документов
 - **KnowledgeActions**: Кнопки "Переиндексировать всё", "Новые", "Упавшие" на страницах Settings + Documents

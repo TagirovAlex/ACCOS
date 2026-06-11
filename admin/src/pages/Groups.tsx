@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { List, Datagrid, TextField, NumberField, Edit, SimpleForm, TextInput, NumberInput, BooleanInput, Create, AutocompleteInput, useNotify, WithListContext, CreateButton, TopToolbar } from "react-admin";
-import { ToggleButtonGroup, ToggleButton, Box, Card, CardContent, Typography, Grid as MuiGrid } from "@mui/material";
+import { List, Datagrid, TextField, NumberField, Edit, SimpleForm, TextInput, NumberInput, BooleanInput, Create, AutocompleteInput, useNotify, WithListContext, CreateButton, TopToolbar, useRedirect } from "react-admin";
+import { ToggleButtonGroup, ToggleButton, Box, Card, CardContent, Typography, Grid as MuiGrid, Chip } from "@mui/material";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
 import { getToken } from "../services/api";
@@ -44,16 +44,32 @@ const GroupListView = () => (
 );
 
 const GroupTileView = () => {
+  const redirect = useRedirect();
   return (
     <WithListContext render={({ data }) => (
       <MuiGrid container spacing={2} sx={{ p: 2 }}>
         {data?.map((record: any) => (
           <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
-            <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+            <Card sx={{ cursor: "pointer", height: "100%", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
+              onClick={() => redirect("edit", "groups", record.id)}>
               <CardContent>
-                <Typography variant="body2" fontWeight={600} noWrap>{record.name}</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{record.ad_group_dn}</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{record.permissions}</Typography>
+                <Typography variant="body1" fontWeight={600} noWrap>{record.name}</Typography>
+                {record.description && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {record.description}
+                  </Typography>
+                )}
+                <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mb: 1 }}>
+                  {(record.permissions || "").split(",").filter(Boolean).map((p: string) => (
+                    <Chip key={p} label={p.trim()} size="small" color={p.trim() === "admin" ? "error" : "primary"} variant="outlined" />
+                  ))}
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }} noWrap>{record.ad_group_dn}</Typography>
+                {record.start_balance > 0 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                    Стартовый баланс: {record.start_balance}
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </MuiGrid>

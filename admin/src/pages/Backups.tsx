@@ -2,11 +2,15 @@ import { useState, useEffect } from "react";
 import {
   Typography, Box, Button, IconButton,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, CircularProgress, Alert, Tooltip,
+  Paper, CircularProgress, Alert, Tooltip, Card, CardContent,
+  ToggleButtonGroup, ToggleButton, Grid as MuiGrid,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import BackupIcon from "@mui/icons-material/Backup";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import GridViewIcon from "@mui/icons-material/GridView";
+import StorageIcon from "@mui/icons-material/Storage";
 import { useNotify, Confirm } from "react-admin";
 import { getToken } from "../services/api";
 
@@ -30,6 +34,7 @@ export const BackupList = () => {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("backups_view") as "list" | "tiles") ?? "list");
   const notify = useNotify();
 
   const token = getToken();
@@ -92,7 +97,7 @@ export const BackupList = () => {
     <Box>
       <Typography variant="h5" mb={3}>Управление бэкапами</Typography>
 
-      <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+      <Box sx={{ display: "flex", gap: 1, mb: 2, alignItems: "center" }}>
         <Button
           variant="contained"
           startIcon={<BackupIcon />}
@@ -109,6 +114,12 @@ export const BackupList = () => {
         >
           Обновить
         </Button>
+        <Box sx={{ flex: 1 }} />
+        <ToggleButtonGroup value={view} exclusive size="small"
+          onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("backups_view", v); } }}>
+          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
+        </ToggleButtonGroup>
       </Box>
 
       {loading && (
@@ -125,7 +136,7 @@ export const BackupList = () => {
         <Alert severity="info">Бэкапов пока нет</Alert>
       )}
 
-      {!loading && backups.length > 0 && (
+      {!loading && backups.length > 0 && view === "list" && (
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
@@ -154,6 +165,33 @@ export const BackupList = () => {
             </TableBody>
           </Table>
         </TableContainer>
+      )}
+
+      {!loading && backups.length > 0 && view === "tiles" && (
+        <MuiGrid container spacing={2}>
+          {backups.map((b) => (
+            <MuiGrid key={b.filename} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+              <Card sx={{ position: "relative", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+                <CardContent>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+                    <StorageIcon color="primary" sx={{ fontSize: 36 }} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={600} noWrap>{b.filename}</Typography>
+                      <Typography variant="caption" color="text.secondary">{formatBytes(b.size_bytes)}</Typography>
+                    </Box>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                    {b.created_at}
+                  </Typography>
+                  <Button size="small" color="error" startIcon={<DeleteIcon />}
+                    onClick={() => setDeleteTarget(b.filename)}>
+                    Удалить
+                  </Button>
+                </CardContent>
+              </Card>
+            </MuiGrid>
+          ))}
+        </MuiGrid>
       )}
 
       <Confirm

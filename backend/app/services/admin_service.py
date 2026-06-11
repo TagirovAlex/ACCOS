@@ -526,6 +526,7 @@ class AdminService:
 
     async def get_dashboard_stats(self) -> dict:
         from sqlalchemy import func as sa_func
+        from app.db.models.knowledge import KnowledgeDocument
         users_count = (await self.session.execute(select(sa_func.count()).select_from(User))).scalar()
         groups_count = (await self.session.execute(select(sa_func.count()).select_from(UserGroup))).scalar()
         chats_count = (await self.session.execute(select(sa_func.count()).select_from(ChatSession))).scalar()
@@ -536,6 +537,15 @@ class AdminService:
         assets_count = (await self.session.execute(
             select(sa_func.count()).select_from(ImageAsset)
             .where(ImageAsset.deleted_at.is_(None))
+        )).scalar()
+        docs_count = (await self.session.execute(
+            select(sa_func.count()).select_from(KnowledgeDocument)
+            .where(KnowledgeDocument.deleted_at.is_(None))
+        )).scalar()
+        indexed_count = (await self.session.execute(
+            select(sa_func.count()).select_from(KnowledgeDocument)
+            .where(KnowledgeDocument.deleted_at.is_(None))
+            .where(KnowledgeDocument.status == "ready")
         )).scalar()
 
         token_row = (await self.session.execute(
@@ -575,11 +585,13 @@ class AdminService:
             "generations": gens_count or 0,
             "assets": assets_count or 0,
             "generations_today": gens_today,
+            "documents": docs_count or 0,
+            "documents_indexed": indexed_count or 0,
             "total_tokens_input": total_tokens_input,
             "total_tokens_output": total_tokens_output,
             "total_llm_cost": total_llm_cost,
             "recent_users": [
-                {"id": str(u.id), "username": u.username, "created_at": u.created_at}
+                {"id": str(u.id), "username": u.username, "full_name": u.full_name, "avatar_path": u.avatar_path, "created_at": u.created_at}
                 for u in recent_users
             ],
             "recent_chats": [

@@ -17,6 +17,7 @@ import { FileManager } from "./pages/FileManager";
 import { Documents } from "./pages/Documents";
 import { SettingsList, SettingsEdit, SettingsCreate } from "./pages/Settings";
 import { BackupList } from "./pages/Backups";
+import { LlmServerList } from "./pages/LlmServers";
 import "./App.css";
 
 const ThemeMenuItem = () => {
@@ -83,6 +84,7 @@ const App = () => (
           {isSuperAdmin && <Resource name="generation-queue" options={{ label: "⏳ Очередь" }} list={GenerationQueue} />}
           {(isSuperAdmin || isAdmin) && <Resource name="settings" options={{ label: "⚙ Настройки" }} list={SettingsList} edit={SettingsEdit} create={SettingsCreate} />}
           {(isSuperAdmin || isAdmin) && <Resource name="backups" options={{ label: "📦 Бэкапы" }} list={BackupList} />}
+          {isSuperAdmin && <Resource name="llm-servers" options={{ label: "🤖 LLM-серверы" }} list={LlmServerList} />}
         </>
       );
     }}

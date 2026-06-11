@@ -179,6 +179,13 @@ const GenerationTileView = () => {
         {data?.map((record: any) => (
           <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
             <Card sx={{ position: "relative", cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+              <Box sx={{
+                position: "absolute", top: 0, left: 0, right: 0, height: 4, zIndex: 2,
+                bgcolor: record.status === "completed" ? "success.main"
+                  : record.status === "failed" ? "error.main"
+                  : record.status === "processing" ? "info.main" : "grey.400",
+                borderRadius: "4px 4px 0 0",
+              }} />
               <IconButton size="small"
                 sx={{ position: "absolute", top: 4, right: 4, zIndex: 1, color: "error.light" }}
                 onClick={(e) => { e.stopPropagation(); setDeleteTarget(record); }}>
