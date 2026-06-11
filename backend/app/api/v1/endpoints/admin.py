@@ -57,7 +57,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 async def _require_admin(user_id: str = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
     user = await UserRepository(db).get(UUID(user_id))
-    if not user or user.admin_role not in ("super_admin", "group_admin"):
+    if not user or user.admin_role not in ("super_admin", "group_admin", "admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return user_id
 
@@ -76,7 +76,7 @@ async def _require_admin_or_documents(
     user = await UserRepository(db).get(UUID(user_id))
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    if user.admin_role in ("super_admin", "group_admin"):
+    if user.admin_role in ("super_admin", "group_admin", "admin"):
         return user
     permissions = (user.permissions or "").split(",")
     if "documents_manage" in permissions:
@@ -86,7 +86,7 @@ async def _require_admin_or_documents(
 
 @router.get("/dashboard")
 async def get_dashboard_stats(
-    user_id: str = Depends(_require_super_admin),
+    user_id: str = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
@@ -95,7 +95,7 @@ async def get_dashboard_stats(
 
 @router.get("/dashboard/activity")
 async def get_dashboard_activity(
-    user_id: str = Depends(_require_super_admin),
+    user_id: str = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = AdminService(db)
