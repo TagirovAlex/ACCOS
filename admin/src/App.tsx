@@ -75,7 +75,7 @@ const App = () => (
       return (
         <>
           {(isSuperAdmin || isAdmin) && <Resource name="users" options={{ label: "👥 Пользователи" }} list={UserList} edit={UserEdit} create={UserCreate} show={UserShow} />}
-          {(isSuperAdmin || isAdmin) && <Resource name="groups" options={{ label: "🔐 Группы доступа" }} list={GroupList} edit={GroupEdit} create={GroupCreate} />}
+          {isSuperAdmin && <Resource name="groups" options={{ label: "🔐 Группы доступа" }} list={GroupList} edit={GroupEdit} create={GroupCreate} />}
           {isSuperAdmin && <Resource name="chats" options={{ label: "💬 Чаты" }} list={ChatList} show={ChatShow} />}
           {isSuperAdmin && <Resource name="generations" options={{ label: "🎨 Генерации" }} list={GenerationList} show={GenerationShow} />}
           {isSuperAdmin && <Resource name="assets" options={{ label: "🖼 Ресурсы" }} list={AssetList} show={AssetShow} />}

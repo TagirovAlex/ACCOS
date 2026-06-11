@@ -91,10 +91,11 @@ export const Documents = () => {
   const [viewMode, setViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("docs_view") as "list" | "tiles") ?? "list");
   const [rootViewMode, setRootViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("docs_root_view") as "list" | "tiles") ?? "tiles");
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadFolder, setUploadFolder] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadResults, setUploadResults] = useState<{filename: string; success: boolean; error?: string}[] | null>(null);
   const [reindexing, setReindexing] = useState<string | null>(null);
   const [batchReindexing, setBatchReindexing] = useState<string | null>(null);
   const [batchResult, setBatchResult] = useState<string | null>(null);
@@ -239,26 +240,33 @@ export const Documents = () => {
   };
 
   const handleUpload = async () => {
-    if (!uploadFile) return;
+    if (uploadFiles.length === 0) return;
     setUploading(true);
     setUploadError(null);
+    setUploadResults(null);
     try {
       const token = adminToken();
       const form = new FormData();
-      form.append("file", uploadFile);
-      form.append("title", uploadFile.name);
+      for (const f of uploadFiles) {
+        form.append("files", f);
+      }
       form.append("folder", uploadFolder);
-      const res = await fetch("/api/v1/knowledge/upload", {
+      const res = await fetch("/api/v1/knowledge/upload-batch", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
       const data = await res.json();
-      if (data.success) {
-        setUploadOpen(false);
-        setUploadFile(null);
-        setUploadFolder("");
-        if (currentFolder !== null) loadDocuments(currentFolder);
+      if (data.success && data.results) {
+        setUploadResults(data.results);
+        if (data.results.some((r: any) => !r.success)) {
+          setUploadError("Некоторые файлы не загрузились");
+        } else {
+          setUploadOpen(false);
+          setUploadFiles([]);
+          setUploadFolder("");
+          if (currentFolder !== null) loadDocuments(currentFolder);
+        }
       } else {
         setUploadError(data.error || data.detail || "Ошибка загрузки");
       }
@@ -511,7 +519,7 @@ export const Documents = () => {
               <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
             </ToggleButtonGroup>
             <Button startIcon={<UploadIcon />} variant="contained" size="small"
-              onClick={() => { setUploadFile(null); setUploadFolder(currentFolder === "" ? "" : currentFolder!); setUploadError(null); setUploadOpen(true); }}>
+              onClick={() => { setUploadFiles([]); setUploadFolder(currentFolder === "" ? "" : currentFolder!); setUploadError(null); setUploadResults(null); setUploadOpen(true); }}>
               Загрузить
             </Button>
             <Tooltip title="Переиндексировать все документы">
@@ -600,14 +608,28 @@ export const Documents = () => {
       </Dialog>
 
       <Dialog open={uploadOpen} onClose={() => !uploading && setUploadOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Загрузка документа {currentFolder !== null ? `в ${folderLabel}` : ""}</DialogTitle>
+        <DialogTitle>Загрузка документов {currentFolder !== null ? `в ${folderLabel}` : ""}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
             <Button variant="outlined" component="label">
-              {uploadFile ? uploadFile.name : "Выберите файл"}
-              <input type="file" hidden accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+              {uploadFiles.length > 0
+                ? `Выбрано файлов: ${uploadFiles.length}`
+                : "Выберите файлы"}
+              <input type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (files) setUploadFiles(Array.from(files));
+                }} />
             </Button>
+            {uploadFiles.length > 0 && (
+              <Box sx={{ maxHeight: 200, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1 }}>
+                {uploadFiles.map((f, i) => (
+                  <Typography key={i} variant="caption" display="block" noWrap>
+                    {f.name}
+                  </Typography>
+                ))}
+              </Box>
+            )}
             <FormControl size="small" fullWidth>
               <InputLabel>Отдел</InputLabel>
               <Select value={uploadFolder} label="Отдел" onChange={(e) => setUploadFolder(e.target.value)}>
@@ -617,13 +639,25 @@ export const Documents = () => {
                 ))}
               </Select>
             </FormControl>
+            {uploadResults && (
+              <Box sx={{ maxHeight: 200, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1 }}>
+                {uploadResults.map((r, i) => (
+                  <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography variant="caption" noWrap sx={{ flex: 1 }}>{r.filename}</Typography>
+                    <Typography variant="caption" color={r.success ? "success.main" : "error.main"}>
+                      {r.success ? "OK" : r.error || "Ошибка"}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
             {uploadError && <Typography variant="caption" color="error">{uploadError}</Typography>}
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setUploadOpen(false)} disabled={uploading}>Отмена</Button>
-          <Button variant="contained" onClick={handleUpload} disabled={!uploadFile || uploading}>
-            {uploading ? "Загрузка..." : "Загрузить"}
+          <Button onClick={() => { setUploadOpen(false); setUploadFiles([]); setUploadResults(null); }} disabled={uploading}>Отмена</Button>
+          <Button variant="contained" onClick={handleUpload} disabled={uploadFiles.length === 0 || uploading}>
+            {uploading ? `Загрузка (${uploadFiles.length})...` : "Загрузить"}
           </Button>
         </DialogActions>
       </Dialog>

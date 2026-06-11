@@ -16,28 +16,41 @@ logger = logging.getLogger(__name__)
 def extract_text_from_pdf(file_path: str) -> str:
     import pdfplumber
     text_parts = []
+    num_pages = 0
     with pdfplumber.open(file_path) as pdf:
+        num_pages = len(pdf.pages)
         for page in pdf.pages:
             page_text = page.extract_text() or ""
             text_parts.append(page_text)
     result = "\n".join(text_parts)
-    if result.strip():
+    stripped = result.strip()
+
+    if stripped and num_pages > 0 and len(stripped) / num_pages > 20:
         return result
+
     import fitz
     import pytesseract
     from PIL import Image
     import io
-    doc = fitz.open(file_path)
-    ocr_parts = []
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        pix = page.get_pixmap()
-        img_data = pix.tobytes("png")
-        img = Image.open(io.BytesIO(img_data))
-        text = pytesseract.image_to_string(img, lang="rus+eng")
-        ocr_parts.append(text)
-    doc.close()
-    return "\n".join(ocr_parts)
+
+    try:
+        doc = fitz.open(file_path)
+        ocr_parts = []
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            pix = page.get_pixmap(dpi=300)
+            img_data = pix.tobytes("png")
+            img = Image.open(io.BytesIO(img_data))
+            text = pytesseract.image_to_string(img, lang="rus+eng")
+            ocr_parts.append(text)
+        doc.close()
+        ocr_text = "\n".join(ocr_parts)
+        if ocr_text.strip():
+            return ocr_text
+    except Exception as e:
+        logger.error(f"OCR fallback failed for {file_path}: {e}")
+
+    return result if stripped else ""
 
 
 def extract_text_from_docx(file_path: str) -> str:
@@ -104,9 +117,14 @@ class RAGService:
         self.settings_svc = SettingsService(session)
 
     async def _get_adapter(self) -> RAGAdapter:
-        base_url = await self.settings_svc.get("lmstudio_base_url", "")
-        model = await self.settings_svc.get("rag_embedding_model", "default")
-        api_key = await self.settings_svc.get("lmstudio_api_key", "")
+        model = await self.settings_svc.get("rag_embedding_model", "intfloat/multilingual-e5-small")
+        if model.startswith("local/"):
+            api_key = ""
+            base_url = "local"
+            model = model.replace("local/", "", 1)
+        else:
+            base_url = await self.settings_svc.get("lmstudio_base_url", "")
+            api_key = await self.settings_svc.get("lmstudio_api_key", "")
         return RAGAdapter(base_url=base_url, model=model, api_key=api_key)
 
     async def index_document(self, document_id: uuid.UUID) -> dict:

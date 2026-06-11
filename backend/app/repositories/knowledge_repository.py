@@ -160,7 +160,6 @@ class KnowledgeRepository:
                 "content": c.content,
                 "chunk_index": c.chunk_index,
                 "meta": c.meta,
-                "created_at": c.created_at.isoformat() if c.created_at else None,
             }
             for c in chunks
         ]

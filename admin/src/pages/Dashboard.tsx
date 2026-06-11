@@ -75,6 +75,10 @@ const statusColors: Record<string, "default" | "primary" | "success" | "error" |
   queued: "default", processing: "info", completed: "success", failed: "error",
 };
 
+const adminRole = () => localStorage.getItem("admin_role") || "none";
+const isSuperAdmin = () => adminRole() === "super_admin";
+const isAdmin = () => adminRole() === "admin";
+
 export const Dashboard = () => {
   const navigate = useNavigate();
   const notify = useNotify();
@@ -105,16 +109,20 @@ export const Dashboard = () => {
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <StatCard icon="👥" label="Всего пользователей" value={d?.users} color="#448aff" to="/users" />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <StatCard icon="💬" label="Всего чатов" value={d?.chats} color="#ffa726" to="/chats" />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <StatCard icon="🎨" label="Генераций сегодня" value={d?.generations_today} color="#ab47bc" secondary="новых генераций" />
-        </Grid>
+        {isSuperAdmin() && (
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+            <StatCard icon="💬" label="Всего чатов" value={d?.chats} color="#ffa726" to="/chats" />
+          </Grid>
+        )}
+        {isSuperAdmin() && (
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+            <StatCard icon="🎨" label="Генераций сегодня" value={d?.generations_today} color="#ab47bc" secondary="новых генераций" />
+          </Grid>
+        )}
       </Grid>
 
       <Grid container spacing={2} mb={3}>
-        {INFO_BOXES.map(box => (
+        {INFO_BOXES.filter(box => box.key === "users" || box.key === "settings" || isSuperAdmin()).map(box => (
           <Grid size={{ xs: 6, sm: 4, md: 3, lg: 12 / 7 }} key={box.key}>
             <StatCard icon={box.icon} label={box.label} value={d?.[box.key]} color={box.color} to={box.to} />
           </Grid>
@@ -137,40 +145,42 @@ export const Dashboard = () => {
       </Grid>
 
       <Grid container spacing={2} mb={3}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-                <Typography variant="h6" fontWeight={600}>Последние генерации</Typography>
-                <Button size="small" onClick={() => navigate("/generations")}>Все</Button>
-              </Box>
-              {!d?.recent_generations?.length ? (
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 3 }}>Нет генераций</Typography>
-              ) : (
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Тип</TableCell>
-                        <TableCell>Статус</TableCell>
-                        <TableCell>Время</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {d.recent_generations.map((g: any) => (
-                        <TableRow key={g.id} hover sx={{ cursor: "pointer" }} onClick={() => navigate(`/generations/${g.id}/show`)}>
-                          <TableCell>{g.workflow_type}</TableCell>
-                          <TableCell><Chip label={statusLabels[g.status] || g.status} size="small" color={statusColors[g.status] || "default"} /></TableCell>
-                          <TableCell><Typography variant="caption">{new Date(g.created_at).toLocaleString()}</Typography></TableCell>
+        {isSuperAdmin() && (
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                  <Typography variant="h6" fontWeight={600}>Последние генерации</Typography>
+                  <Button size="small" onClick={() => navigate("/generations")}>Все</Button>
+                </Box>
+                {!d?.recent_generations?.length ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 3 }}>Нет генераций</Typography>
+                ) : (
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Тип</TableCell>
+                          <TableCell>Статус</TableCell>
+                          <TableCell>Время</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
+                      </TableHead>
+                      <TableBody>
+                        {d.recent_generations.map((g: any) => (
+                          <TableRow key={g.id} hover sx={{ cursor: "pointer" }} onClick={() => navigate(`/generations/${g.id}/show`)}>
+                            <TableCell>{g.workflow_type}</TableCell>
+                            <TableCell><Chip label={statusLabels[g.status] || g.status} size="small" color={statusColors[g.status] || "default"} /></TableCell>
+                            <TableCell><Typography variant="caption">{new Date(g.created_at).toLocaleString()}</Typography></TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
 
         <Grid size={{ xs: 12, md: 6 }}>
           <Card>
@@ -216,49 +226,51 @@ export const Dashboard = () => {
         </Grid>
       </Grid>
 
-      <Grid container spacing={2} mb={3}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-                <Typography variant="h6" fontWeight={600}>Последние чаты</Typography>
-                <Button size="small" onClick={() => navigate("/chats")}>Все</Button>
-              </Box>
-              {!d?.recent_chats?.length ? (
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 3 }}>Нет чатов</Typography>
-              ) : (
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Название</TableCell>
-                        <TableCell>Создан</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {d.recent_chats.map((c: any) => (
-                        <TableRow key={c.id} hover sx={{ cursor: "pointer" }} onClick={() => navigate(`/chats/${c.id}/show`)}>
-                          <TableCell>{c.title}</TableCell>
-                          <TableCell><Typography variant="caption">{new Date(c.created_at).toLocaleString()}</Typography></TableCell>
+      {isSuperAdmin() && (
+        <Grid container spacing={2} mb={3}>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                  <Typography variant="h6" fontWeight={600}>Последние чаты</Typography>
+                  <Button size="small" onClick={() => navigate("/chats")}>Все</Button>
+                </Box>
+                {!d?.recent_chats?.length ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 3 }}>Нет чатов</Typography>
+                ) : (
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Название</TableCell>
+                          <TableCell>Создан</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
+                      </TableHead>
+                      <TableBody>
+                        {d.recent_chats.map((c: any) => (
+                          <TableRow key={c.id} hover sx={{ cursor: "pointer" }} onClick={() => navigate(`/chats/${c.id}/show`)}>
+                            <TableCell>{c.title}</TableCell>
+                            <TableCell><Typography variant="caption">{new Date(c.created_at).toLocaleString()}</Typography></TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
 
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" fontWeight={600} mb={2}>Активность генераций (14 дней)</Typography>
-              <ActivityChart data={activity} />
-            </CardContent>
-          </Card>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" fontWeight={600} mb={2}>Активность генераций (14 дней)</Typography>
+                <ActivityChart data={activity} />
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
-      </Grid>
+      )}
 
       <Card>
         <CardContent>
@@ -267,15 +279,19 @@ export const Dashboard = () => {
             <Button variant="contained" onClick={() => navigate("/users/create")} sx={{ px: 3, py: 1 }}>
               + Создать пользователя
             </Button>
-            <Button variant="outlined" onClick={() => navigate("/groups/create")} sx={{ px: 3, py: 1 }}>
-              + Создать группу
-            </Button>
+            {isSuperAdmin() && (
+              <Button variant="outlined" onClick={() => navigate("/groups/create")} sx={{ px: 3, py: 1 }}>
+                + Создать группу
+              </Button>
+            )}
             <Button variant="outlined" onClick={() => navigate("/settings")} sx={{ px: 3, py: 1 }}>
               Настройки
             </Button>
-            <Button variant="outlined" onClick={() => navigate("/generation-queue")} sx={{ px: 3, py: 1 }}>
-              ⏳ Очередь
-            </Button>
+            {isSuperAdmin() && (
+              <Button variant="outlined" onClick={() => navigate("/generation-queue")} sx={{ px: 3, py: 1 }}>
+                ⏳ Очередь
+              </Button>
+            )}
           </Box>
         </CardContent>
       </Card>

@@ -58,6 +58,18 @@ class KnowledgeUploadResponse(BaseModel):
     error: str | None = None
 
 
+class BatchUploadItem(BaseModel):
+    filename: str
+    success: bool
+    document_id: str | None = None
+    error: str | None = None
+
+
+class KnowledgeUploadBatchResponse(BaseModel):
+    success: bool
+    results: list[BatchUploadItem] = []
+
+
 class KnowledgeSearchQuery(BaseModel):
     query: str
     top_k: int = 5

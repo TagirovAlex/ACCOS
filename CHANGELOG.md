@@ -3,6 +3,7 @@
 ## Block 5 — LLM Server Management + UI Fixes (Jun 11)
 - **Model `llm_servers`**: новая таблица + миграция `a1b2c3d4e5f6`
 - **CRUD API `/admin/llm-servers`**: создание, список, редактирование, удаление, тест соединения
+- **Batch document upload**: новый эндпоинт `POST /api/v1/knowledge/upload-batch` + multi-file выбор в админке и пользовательском интерфейсе
 - **Admin UI «LLM-серверы»**: страница с list/tiles toggle, добавление/редактирование серверов, кнопка «Тест»
 - **Dashboard**: редизайн карточек (StatCard вместо InfoBox), компактнее, чище
 - **Backups**: добавлен tile/row toggle

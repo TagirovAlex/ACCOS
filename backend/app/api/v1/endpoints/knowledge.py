@@ -20,6 +20,8 @@ from fastapi.responses import HTMLResponse
 
 from app.schemas.knowledge import (
     KnowledgeUploadResponse,
+    KnowledgeUploadBatchResponse,
+    BatchUploadItem,
     KnowledgeSearchQuery,
     KnowledgeSearchResponse,
     FolderListResponse,
@@ -107,6 +109,65 @@ async def upload_document(
         created_by=uuid.UUID(user_id),
     )
     return KnowledgeUploadResponse(success=True, document_id=str(result["document_id"]))
+
+
+@router.post("/upload-batch", response_model=KnowledgeUploadBatchResponse)
+async def upload_documents_batch(
+    files: list[UploadFile] = File(...),
+    folder: str = Form(""),
+    ad_group_dn: str | None = Form(None),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    await _require_documents_manage(db, user_id)
+
+    results: list[BatchUploadItem] = []
+    svc = KnowledgeService(db)
+
+    for file in files:
+        try:
+            ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+            if ext not in ALLOWED_EXTENSIONS:
+                results.append(BatchUploadItem(filename=file.filename, success=False, error=f"Unsupported file type: .{ext}"))
+                continue
+
+            content = await file.read()
+            if len(content) > MAX_FILE_SIZE:
+                results.append(BatchUploadItem(filename=file.filename, success=False, error="File too large (max 50 MB)"))
+                continue
+
+            file_hash = hashlib.sha256(content).hexdigest()
+            existing = await svc.repo.find_by_hash(file_hash)
+            if existing:
+                results.append(BatchUploadItem(filename=file.filename, success=True, document_id=str(existing.id)))
+                continue
+
+            safe_name = f"{uuid.uuid4().hex}.{ext}"
+            folder_dir = folder.strip("/") if folder else ""
+            knowledge_dir = PROJECT_ROOT / "static" / "knowledge"
+            if folder_dir:
+                knowledge_dir = knowledge_dir / folder_dir
+            knowledge_dir.mkdir(parents=True, exist_ok=True)
+            file_path = knowledge_dir / safe_name
+            file_path.write_bytes(content)
+            storage_path = f"static/knowledge/{folder_dir}/{safe_name}" if folder_dir else f"static/knowledge/{safe_name}"
+
+            result = await svc.create_document(
+                title=file.filename,
+                filename=file.filename,
+                content_type=ext,
+                file_path=storage_path,
+                folder=folder,
+                file_hash=file_hash,
+                ad_group_dn=ad_group_dn,
+                created_by=uuid.UUID(user_id),
+            )
+            results.append(BatchUploadItem(filename=file.filename, success=True, document_id=result["document_id"]))
+        except Exception as e:
+            logger.error(f"Batch upload failed for {file.filename}: {e}")
+            results.append(BatchUploadItem(filename=file.filename, success=False, error=str(e)[:200]))
+
+    return KnowledgeUploadBatchResponse(success=True, results=results)
 
 
 @router.get("/documents")

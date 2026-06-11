@@ -29,10 +29,11 @@ export const KnowledgePage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [uploadFileState, setUploadFileState] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadFolder, setUploadFolder] = useState("");
   const [departments, setDepartments] = useState<Department[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadResults, setUploadResults] = useState<{filename:string;success:boolean;error?:string}[] | null>(null);
 
   const loadDocs = useCallback(async () => {
     setLoading(true);
@@ -54,31 +55,40 @@ export const KnowledgePage = () => {
 
   const handleUploadOpen = () => {
     loadDepartments();
-    setUploadFileState(null);
+    setUploadFiles([]);
     setUploadFolder("");
+    setUploadResults(null);
     setUploadOpen(true);
   };
 
   const handleUpload = async () => {
-    if (!uploadFileState) return;
+    if (uploadFiles.length === 0) return;
     setUploading(true);
+    setUploadResults(null);
     try {
       const form = new FormData();
-      form.append("file", uploadFileState);
-      form.append("title", uploadFileState.name);
+      for (const f of uploadFiles) {
+        form.append("files", f);
+      }
       form.append("folder", uploadFolder);
       if (uploadFolder) {
         const dept = departments.find(d => d.ou === uploadFolder);
         if (dept) form.append("ad_group_dn", dept.dn);
       }
       const token = localStorage.getItem("token");
-      await fetch("/api/v1/knowledge/upload", {
+      const res = await fetch("/api/v1/knowledge/upload-batch", {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
       });
-      setUploadOpen(false);
-      loadDocs();
+      const data = await res.json();
+      if (data.success && data.results) {
+        setUploadResults(data.results);
+        if (data.results.every((r: any) => r.success)) {
+          setUploadOpen(false);
+          loadDocs();
+        }
+      }
     } catch { /* ignore */ }
     setUploading(false);
   };
@@ -119,14 +129,26 @@ export const KnowledgePage = () => {
       )}
 
       <Dialog open={uploadOpen} onClose={() => !uploading && setUploadOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Загрузка документа</DialogTitle>
+        <DialogTitle>Загрузка документов</DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
             <Button variant="outlined" component="label">
-              {uploadFileState ? uploadFileState.name : "Выберите файл"}
-              <input type="file" hidden accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
-                onChange={e => setUploadFileState(e.target.files?.[0] || null)} />
+              {uploadFiles.length > 0
+                ? `Выбрано файлов: ${uploadFiles.length}`
+                : "Выберите файлы"}
+              <input type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
+                onChange={e => {
+                  const files = e.target.files;
+                  if (files) setUploadFiles(Array.from(files));
+                }} />
             </Button>
+            {uploadFiles.length > 0 && (
+              <Box sx={{ maxHeight: 200, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1 }}>
+                {uploadFiles.map((f, i) => (
+                  <Typography key={i} variant="caption" display="block" noWrap>{f.name}</Typography>
+                ))}
+              </Box>
+            )}
             <FormControl size="small" fullWidth>
               <InputLabel>Отдел</InputLabel>
               <Select value={uploadFolder}
@@ -138,12 +160,24 @@ export const KnowledgePage = () => {
                 ))}
               </Select>
             </FormControl>
+            {uploadResults && (
+              <Box sx={{ maxHeight: 200, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1 }}>
+                {uploadResults.map((r, i) => (
+                  <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography variant="caption" noWrap sx={{ flex: 1 }}>{r.filename}</Typography>
+                    <Typography variant="caption" color={r.success ? "success.main" : "error.main"}>
+                      {r.success ? "OK" : r.error || "Ошибка"}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setUploadOpen(false)} disabled={uploading}>Отмена</Button>
-          <Button variant="contained" onClick={handleUpload} disabled={!uploadFileState || uploading}>
-            {uploading ? "Загрузка..." : "Загрузить"}
+          <Button onClick={() => { setUploadOpen(false); setUploadFiles([]); setUploadResults(null); }} disabled={uploading}>Отмена</Button>
+          <Button variant="contained" onClick={handleUpload} disabled={uploadFiles.length === 0 || uploading}>
+            {uploading ? `Загрузка (${uploadFiles.length})...` : "Загрузить"}
           </Button>
         </DialogActions>
       </Dialog>
