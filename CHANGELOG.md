@@ -1,5 +1,15 @@
 # Changelog ACCOS
 
+## Phase 2 — Documentation Scraper (Jun 14)
+- **Model**: `doc_scrape_jobs` — хранение задач скрапинга (статус, прогресс, ошибки)
+- **Migration**: `5c2755f18c3d` — add_doc_scrape_jobs_table
+- **DocScraperAdapter**: BFS-краулер на httpx + trafilatura + BeautifulSoup, 6 фильтров исключения, задержка 0.5с
+- **DocScraperService**: оркестрация crawl → chunk → embed → ingest в RAG через KnowledgeChunks
+- **Admin API**: `POST /admin/doc-scraper/scrape`, `GET /admin/doc-scraper/jobs`, `POST cancel/retry`, `DELETE /sites/{name}`
+- **Admin UI**: MUI страница "📚 Doc Scraper" в админке, диалог запуска, статусы, cancel/retry/delete
+- **Chunking**: семантическая разбивка по абзацам, chunk_size/overlap из настроек RAG
+- **Bugfix**: миграция `e5f4d3c2b1a0` — FK user_id исправлен с String(36) на Uuid для совместимости с users.id
+
 ## Phase 1C — Web Fetch Module: MCP Server for LM Studio (Jun 14)
 - **MCP WebFetch сервер**: порт 8100, SSE transport, два инструмента — `fetch_web_page` и `search_in_page`
 - **Server**: запускается в lifespan main.py как фоновый uvicorn, использует `WebFetchAdapter` для загрузки

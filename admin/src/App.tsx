@@ -20,6 +20,7 @@ import { SettingsList, SettingsEdit, SettingsCreate } from "./pages/Settings";
 import { BackupList } from "./pages/Backups";
 import { LlmServerList } from "./pages/LlmServers";
 import { WebFetchAccess } from "./pages/WebFetchAccess";
+import { DocScraperAccess } from "./pages/DocScraper";
 import "./App.css";
 
 const ThemeMenuItem = () => {
@@ -88,6 +89,7 @@ const App = () => (
           {(isSuperAdmin || isAdmin) && <Resource name="backups" options={{ label: "📦 Бэкапы" }} list={BackupList} />}
           {isSuperAdmin && <Resource name="llm-servers" options={{ label: "🤖 LLM-серверы" }} list={LlmServerList} />}
           {(isSuperAdmin || isAdmin) && <Resource name="web-fetch" options={{ label: "🌐 Web Fetch" }} list={WebFetchAccess} />}
+          {(isSuperAdmin || isAdmin) && <Resource name="doc-scraper" options={{ label: "📚 Doc Scraper" }} list={DocScraperAccess} />}
           <CustomRoutes noLayout>
             <Route path="/web-fetch" element={<WebFetchAccess />} />
           </CustomRoutes>

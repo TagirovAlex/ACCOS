@@ -17,7 +17,7 @@ from app.core.rate_limit import limiter
 
 from app.core.config import settings, PROJECT_ROOT
 from app.core.paths import UPLOADS_DIR, GENERATIONS_DIR, EDITS_DIR, VIDEOS_DIR, AVATARS_DIR
-from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin, knowledge, help as help_endpoint, web_fetch_admin
+from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin, knowledge, help as help_endpoint, web_fetch_admin, doc_scraper_admin
 from app.services.accrual_service import run_auto_accrual
 from app.services.queue_worker import queue_worker_loop
 from app.services.scheduler_service import start_scheduler, stop_scheduler, update_schedule
@@ -45,6 +45,13 @@ logging.getLogger().addHandler(file_handler)
 _accrual_task = None
 _queue_worker_task = None
 _mcp_server_task = None
+
+
+async def _safe_start_uvicorn(server: uvicorn.Server, name: str, port: int) -> None:
+    try:
+        await server.serve()
+    except (SystemExit, OSError) as e:
+        logger.warning(f"{name} on port {port} could not start (port busy?): {e}")
 
 
 @asynccontextmanager
@@ -84,10 +91,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting MCP WebFetch server on port 8100...")
     try:
         from app.mcp.server_app import mcp_starlette
-        mcp_config = uvicorn.Config(mcp_starlette, host="0.0.0.0", port=8100, log_level="info", reload=False, workers=1)
+        mcp_config = uvicorn.Config(mcp_starlette, host="0.0.0.0", port=8100, log_level="info", reload=False)
         mcp_server = uvicorn.Server(mcp_config)
-        _mcp_server_task = asyncio.create_task(mcp_server.serve())
-        logger.info("MCP WebFetch server started on http://0.0.0.0:8100/api/v1/mcp/sse")
+        _mcp_server_task = asyncio.create_task(_safe_start_uvicorn(mcp_server, "MCP WebFetch", 8100))
     except Exception as e:
         logger.warning(f"Failed to start MCP server: {e}")
 
@@ -178,6 +184,7 @@ app.include_router(admin.router, prefix="/api/v1")
 app.include_router(knowledge.router)
 app.include_router(help_endpoint.router)
 app.include_router(web_fetch_admin.router, prefix="/api/v1")
+app.include_router(doc_scraper_admin.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health")
