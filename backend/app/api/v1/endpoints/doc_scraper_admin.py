@@ -121,6 +121,7 @@ async def delete_job(
 ):
     svc = DocScraperService(db)
     result = await svc.delete_job(job_id)
+    await db.commit()
     return result
 
 
@@ -132,4 +133,5 @@ async def delete_site(
 ):
     svc = DocScraperService(db)
     result = await svc.delete_site(site_name)
+    await db.commit()
     return result

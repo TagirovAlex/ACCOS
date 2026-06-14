@@ -10,7 +10,7 @@ from app.mcp.web_fetch_server import app as mcp_app
 
 logger = logging.getLogger(__name__)
 
-sse = SseServerTransport("/api/v1/mcp/messages/")
+sse = SseServerTransport("/api/v1/mcp/messages/")  # ponytail: mounted at /api/v1/mcp on main app
 
 
 async def handle_sse(request: Request):
@@ -24,9 +24,9 @@ async def handle_sse(request: Request):
 
 mcp_starlette = Starlette(
     routes=[
-        Route("/api/v1/mcp/sse", endpoint=handle_sse),
+        Route("/sse", endpoint=handle_sse),
         Route(
-            "/api/v1/mcp/messages/",
+            "/messages/",
             endpoint=sse.handle_post_message,
             methods=["POST"],
         ),

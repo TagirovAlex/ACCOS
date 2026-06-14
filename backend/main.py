@@ -45,19 +45,11 @@ logging.getLogger().addHandler(file_handler)
 
 _accrual_task = None
 _queue_worker_task = None
-_mcp_server_task = None
-
-
-async def _safe_start_uvicorn(server: uvicorn.Server, name: str, port: int) -> None:
-    try:
-        await server.serve()
-    except (SystemExit, OSError) as e:
-        logger.warning(f"{name} on port {port} could not start (port busy?): {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _accrual_task, _queue_worker_task, _mcp_server_task
+    global _accrual_task, _queue_worker_task
 
     logger.info("Seeding default settings...")
     try:
@@ -194,6 +186,14 @@ _registry.register(ChatModule())
 _registry.register(ComfyUIModule())
 _registry.register(RAGModule())
 logger.info(f"Module registry initialized with {len(_registry.get_all_modules())} modules")
+
+# Mount MCP WebFetch as sub-app instead of separate port (fixes port 8100 conflict with --workers)
+try:
+    from app.mcp.server_app import mcp_starlette
+    app.mount("/api/v1/mcp", mcp_starlette)
+    logger.info("MCP WebFetch mounted on /api/v1/mcp")
+except Exception as e:
+    logger.warning(f"Failed to mount MCP WebFetch: {e}")
 
 
 @app.get("/api/v1/health")
