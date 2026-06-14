@@ -7,6 +7,7 @@ from app.db.models.user_group import UserGroup
 from app.db.models.chat_queue import ChatQueue
 from app.db.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from app.db.models.llm_server import LlmServer
+from app.db.models.web_fetch_permissions import WebFetchPermissions
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "KnowledgeDocument",
     "KnowledgeChunk",
     "LlmServer",
+    "WebFetchPermissions",
 ]

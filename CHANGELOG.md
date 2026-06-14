@@ -1,5 +1,12 @@
 # Changelog ACCOS
 
+## Phase 1A — Web Fetch Module: Database + Adapter (Jun 14)
+- **Model `web_fetch_permissions`**: новая таблица с per-user настройками (enabled, лимиты, домены)
+- **Migration**: `e5f4d3c2b1a0_add_web_fetch_permissions_table`
+- **WebFetchAdapter**: `httpx` + `trafilatura` → извлекает контент URL в markdown, блокирует бинарные типы/расширения
+- **Admin settings**: 5 новых ключей — `web_fetch_enabled/max_size/timeout/blocked_extensions/blocked_domains`
+- **Dependencies**: `trafilatura==2.0.0`, `beautifulsoup4==4.12.3`
+
 ## Block 5 — LLM Server Management + UI Fixes (Jun 11)
 - **Model `llm_servers`**: новая таблица + миграция `a1b2c3d4e5f6`
 - **CRUD API `/admin/llm-servers`**: создание, список, редактирование, удаление, тест соединения

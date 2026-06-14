@@ -166,6 +166,19 @@ class SettingsService:
              "[База знаний] CRON-выражение для расписания (по умолчанию ежедневно в 3:00)"),
             ("reindex_mode", "all",
              "[База знаний] Режим переиндексации: all — все документы, new — только новые/упавшие"),
+
+            # -- Web Fetch --
+            ("web_fetch_enabled", "false",
+             "[Веб-парсер] Включить авто-детект URL в чате"),
+            ("web_fetch_max_size", "10000",
+             "[Веб-парсер] Максимум символов на один запрос"),
+            ("web_fetch_timeout", "15",
+             "[Веб-парсер] Таймаут HTTP-запроса в секундах"),
+            ("web_fetch_blocked_extensions",
+             ".pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.tar,.gz,.exe,.dmg,.iso,.bin,.mp3,.mp4,.avi,.mov,.png,.jpg,.jpeg,.gif,.svg,.webp",
+             "[Веб-парсер] Заблокированные расширения файлов (через запятую)"),
+            ("web_fetch_blocked_domains", "",
+             "[Веб-парсер] Глобальный чёрный список доменов (через запятую)"),
         ]
         for key, value, description in defaults:
             existing = await self.repo.get_by_key(key)

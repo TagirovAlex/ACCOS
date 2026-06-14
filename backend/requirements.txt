@@ -23,3 +23,5 @@ pytesseract==0.3.13
 PyMuPDF==1.27.2
 weasyprint==62.3
 apscheduler==3.10.4
+trafilatura==2.0.0
+beautifulsoup4==4.12.3
