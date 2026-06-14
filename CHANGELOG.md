@@ -1,6 +1,10 @@
 # Changelog ACCOS
 
-## Phase 2 — Documentation Scraper (Jun 14)
+## Phase 2 — Documentation Scraper + SPA Crawler (Jun 14)
+- **SPA Crawler Fix**: `SpaCrawlerAdapter` переписан — теперь через `page.evaluate()` с JSON-телом `{"curUrl": ...}` (Content-Type: application/json) вместо form-urlencoded. API ClickHelp возвращает 202 Accepted для form-urlencoded и 200 OK для JSON.
+- **SPA Crawler Test**: 21/21 страниц iikoOffice 9.x успешно извлечены, 112 чанков загружены в RAG без единой ошибки.
+- **Adapter**: Auto-detect SPA (URL содержит `#!`) → `SpaCrawlerAdapter` вместо `DocScraperAdapter`. Запуск Chromium через `executable_path="/usr/bin/chromium"` (системный Chromium версии 149).
+- **Bugfix**: slug со слешом в конце отфильтрованы через `path != ""`; `_background_tasks` set для Python 3.11 GC; `db.commit()` перед `create_task` для избежания race condition.
 - **Model**: `doc_scrape_jobs` — хранение задач скрапинга (статус, прогресс, ошибки)
 - **Migration**: `5c2755f18c3d` — add_doc_scrape_jobs_table
 - **DocScraperAdapter**: BFS-краулер на httpx + trafilatura + BeautifulSoup, 6 фильтров исключения, задержка 0.5с
