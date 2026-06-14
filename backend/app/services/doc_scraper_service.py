@@ -213,6 +213,11 @@ class DocScraperService:
         return {"success": True, "job_id": job_id, "status": "cancelled"}
 
     async def delete_job(self, job_id: str) -> dict:
+        job = await self.repo.get(job_id)
+        if not job:
+            return {"success": False, "error": "Job not found"}
+        site_name = job.site_name
+        await self.delete_site(site_name)
         ok = await self.repo.delete(job_id)
         return {"success": ok, "error": None if ok else "Job not found"}
 

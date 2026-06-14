@@ -28,6 +28,7 @@ from app.modules import ModuleRegistry, ChatModule, ComfyUIModule, RAGModule
 
 import uvicorn
 
+MCP_LOCK_PATH = "/tmp/accos_mcp.lock"
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.DEBUG),
     format="[%(asctime)s] %(levelname)s %(module)s: %(message)s",
@@ -45,6 +46,15 @@ logging.getLogger().addHandler(file_handler)
 
 _accrual_task = None
 _queue_worker_task = None
+_mcp_server_task = None
+_i_started_mcp = False
+
+
+async def _safe_start_uvicorn(server: uvicorn.Server, name: str, port: int) -> None:
+    try:
+        await server.serve()
+    except (SystemExit, OSError) as e:
+        logger.warning(f"{name} on port {port} could not start (port busy?): {e}")
 
 
 @asynccontextmanager
@@ -81,12 +91,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to start reindex scheduler: {e}")
 
-    logger.info("Starting MCP WebFetch server on port 8100...")
+    global _i_started_mcp
     try:
+        fd = os.open(MCP_LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.close(fd)
+        _i_started_mcp = True
         from app.mcp.server_app import mcp_starlette
         mcp_config = uvicorn.Config(mcp_starlette, host="0.0.0.0", port=8100, log_level="info", reload=False)
         mcp_server = uvicorn.Server(mcp_config)
         _mcp_server_task = asyncio.create_task(_safe_start_uvicorn(mcp_server, "MCP WebFetch", 8100))
+    except FileExistsError:
+        logger.info("MCP WebFetch already running on port 8100 (lockfile present)")
     except Exception as e:
         logger.warning(f"Failed to start MCP server: {e}")
 
@@ -95,6 +110,11 @@ async def lifespan(app: FastAPI):
         await stop_scheduler()
     except Exception as e:
         logger.error(f"Failed to stop reindex scheduler: {e}")
+    if _i_started_mcp:
+        try:
+            os.unlink(MCP_LOCK_PATH)
+        except Exception:
+            pass
     for task in (_accrual_task, _queue_worker_task, _mcp_server_task):
         if task and not task.done():
             task.cancel()
@@ -186,14 +206,6 @@ _registry.register(ChatModule())
 _registry.register(ComfyUIModule())
 _registry.register(RAGModule())
 logger.info(f"Module registry initialized with {len(_registry.get_all_modules())} modules")
-
-# Mount MCP WebFetch as sub-app instead of separate port (fixes port 8100 conflict with --workers)
-try:
-    from app.mcp.server_app import mcp_starlette
-    app.mount("/api/v1/mcp", mcp_starlette)
-    logger.info("MCP WebFetch mounted on /api/v1/mcp")
-except Exception as e:
-    logger.warning(f"Failed to mount MCP WebFetch: {e}")
 
 
 @app.get("/api/v1/health")

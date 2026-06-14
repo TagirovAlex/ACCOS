@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  Box, Typography, TextField as MuiTextField, Button, Switch, FormControlLabel,
+  Box, Typography, TextField as MuiTextField, Button,
   Alert, Snackbar, CircularProgress, Paper, List, ListItemButton, ListItemIcon, ListItemText,
 } from "@mui/material";
 import ExtensionIcon from "@mui/icons-material/Extension";

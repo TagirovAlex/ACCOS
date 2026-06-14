@@ -162,11 +162,7 @@ export const DocScraperAccess = () => {
                     {["failed","cancelled"].includes(job.status) && (
                       <Tooltip title="Run"><IconButton size="small" onClick={() => runJob(job.id)}><PlayArrowIcon fontSize="small" /></IconButton></Tooltip>
                     )}
-                    {job.status === "completed" ? (
-                      <Tooltip title="Delete from RAG"><IconButton size="small" onClick={() => setConfirmDelete({id: job.site_name, name: job.site_name, type: "rag"})}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
-                    ) : (
-                      <Tooltip title="Delete job"><IconButton size="small" onClick={() => setConfirmDelete({id: job.id, name: job.site_name, type: "job"})}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
-                    )}
+                    <Tooltip title="Delete job"><IconButton size="small" onClick={() => setConfirmDelete({id: job.id, name: job.site_name, type: "job"})}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
                   </TableCell>
                 </TableRow>
               ))}
@@ -197,11 +193,7 @@ export const DocScraperAccess = () => {
                     {["failed","cancelled"].includes(job.status) && (
                       <Button size="small" color="primary" startIcon={<PlayArrowIcon />} onClick={() => runJob(job.id)}>Run</Button>
                     )}
-                    {job.status === "completed" ? (
-                      <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={() => setConfirmDelete({id: job.site_name, name: job.site_name, type: "rag"})}>Delete</Button>
-                    ) : (
-                      <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={() => setConfirmDelete({id: job.id, name: job.site_name, type: "job"})}>Delete</Button>
-                    )}
+                    <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={() => setConfirmDelete({id: job.id, name: job.site_name, type: "job"})}>Delete</Button>
                   </Box>
                 </CardContent>
               </Card>
