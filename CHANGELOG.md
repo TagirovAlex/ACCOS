@@ -2,7 +2,8 @@
 
 ## Phase 2 — Documentation Scraper + SPA Crawler (Jun 14)
 - **SPA Crawler Fix**: `SpaCrawlerAdapter` переписан — теперь через `page.evaluate()` с JSON-телом `{"curUrl": ...}` (Content-Type: application/json) вместо form-urlencoded. API ClickHelp возвращает 202 Accepted для form-urlencoded и 200 OK для JSON.
-- **SPA Crawler Test**: 21/21 страниц iikoOffice 9.x успешно извлечены, 112 чанков загружены в RAG без единой ошибки.
+- **Tree expansion**: `_discover()` теперь рекурсивно раскрывает все коллапсированные узлы ASP.NET TreeView (`CHTree_nodeChildrenCollapsed`) через `a[data-node-id] .CHTree_btn` перед сбором ссылок.
+- **Results**: 21 → 247 уникальных статей iikoOffice 9.x обнаружено, 246 извлечены, 2019 чанков загружены в RAG.
 - **Adapter**: Auto-detect SPA (URL содержит `#!`) → `SpaCrawlerAdapter` вместо `DocScraperAdapter`. Запуск Chromium через `executable_path="/usr/bin/chromium"` (системный Chromium версии 149).
 - **Bugfix**: slug со слешом в конце отфильтрованы через `path != ""`; `_background_tasks` set для Python 3.11 GC; `db.commit()` перед `create_task` для избежания race condition.
 - **Model**: `doc_scrape_jobs` — хранение задач скрапинга (статус, прогресс, ошибки)

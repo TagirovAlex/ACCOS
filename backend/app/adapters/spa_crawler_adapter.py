@@ -123,6 +123,34 @@ class SpaCrawlerAdapter(BaseAdapter):
         await page.wait_for_timeout(3000)
 
         project = self._extract_project(base_url)
+
+        # Expand all collapsed tree nodes recursively
+        for _ in range(50):
+            nodes = await page.evaluate("""
+                () => {
+                    const containers = document.querySelectorAll('.CHTree_nodeContainer');
+                    const result = [];
+                    containers.forEach(c => {
+                        const ul = c.querySelector(':scope > ul');
+                        if (ul && ul.classList.contains('CHTree_nodeChildrenCollapsed')) {
+                            const a = c.querySelector(':scope > a');
+                            const nodeId = a ? a.getAttribute('data-node-id') : null;
+                            if (nodeId) result.push(nodeId);
+                        }
+                    });
+                    return result;
+                }
+            """)
+            if not nodes:
+                break
+            for node_id in nodes:
+                try:
+                    await page.click(f"a[data-node-id='{node_id}'] .CHTree_btn", timeout=3000)
+                    await page.wait_for_timeout(200)
+                except Exception:
+                    pass
+
+        # Collect all links after full expansion
         links = await page.eval_on_selector_all(
             f"a[href*='{project}']",
             "els => els.map(el => el.getAttribute('href'))",
