@@ -19,6 +19,7 @@ class ChatUpdateRequest(BaseModel):
 
 class ChatSendRequest(BaseModel):
     message: str
+    file: str | None = None
 
 
 class ChatSessionResponse(BaseModel):
@@ -54,6 +55,14 @@ class ChatSendResponse(BaseResponse):
     tokens_input: int = 0
     tokens_output: int = 0
     cost: float = 0.0
+
+
+class ChatUploadResponse(BaseResponse):
+    file_path: str = ""
+
+
+class ChatVisionResponse(BaseResponse):
+    supports_vision: bool = False
 
 
 class ChatCancelResponse(BaseResponse):

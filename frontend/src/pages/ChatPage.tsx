@@ -6,8 +6,29 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import StopIcon from "@mui/icons-material/Stop";
-import { api } from "../services/api";
+import AttachFileIcon from "@mui/icons-material/AttachFile";
+import CloseIcon from "@mui/icons-material/Close";
+import { api, uploadFile } from "../services/api";
 import { SimpleMarkdown } from "../components/SimpleMarkdown";
+
+const FILE_ICONS: Record<string, string> = {
+  pdf: "📄", docx: "📑", xlsx: "📊", pptx: "📽️",
+  image: "🖼️", other: "📎",
+};
+
+function getFileIcon(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+  if (["png", "jpg", "jpeg", "gif", "webp", "bmp"].includes(ext)) return FILE_ICONS.image;
+  if (ext === "pdf") return FILE_ICONS.pdf;
+  if (["doc", "docx"].includes(ext)) return FILE_ICONS.docx;
+  if (["xls", "xlsx"].includes(ext)) return FILE_ICONS.xlsx;
+  if (["ppt", "pptx"].includes(ext)) return FILE_ICONS.pptx;
+  return FILE_ICONS.other;
+}
+
+function isImage(name: string): boolean {
+  return ["png", "jpg", "jpeg", "gif", "webp", "bmp"].includes(name.split(".").pop()?.toLowerCase() || "");
+}
 
 interface Chat {
   id: string;
@@ -39,6 +60,7 @@ export const ChatPage = ({ user }: ChatPageProps) => {
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [createDialog, setCreateDialog] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -47,11 +69,22 @@ export const ChatPage = ({ user }: ChatPageProps) => {
   const [editTitle, setEditTitle] = useState("");
   const [editSystemPrompt, setEditSystemPrompt] = useState("");
   const [avatarError, setAvatarError] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [attachedPreview, setAttachedPreview] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [supportsVision, setSupportsVision] = useState(false);
   const avatarUrl = user?.avatar_path ? `/${user.avatar_path}` : null;
 
-  useEffect(() => { loadChats(); return () => stopPolling(); }, []);
+  useEffect(() => { loadChats(); checkVision(); return () => stopPolling(); }, []);
   useEffect(() => { if (activeChat) loadMessages(activeChat); return () => stopPolling(); }, [activeChat]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, typing]);
+
+  const checkVision = async () => {
+    try {
+      const res: any = await api("GET", "/chat/vision");
+      setSupportsVision(res.supports_vision);
+    } catch { /* ignore */ }
+  };
 
   const loadChats = async () => {
     try {
@@ -156,20 +189,46 @@ export const ChatPage = ({ user }: ChatPageProps) => {
     setDeleteTarget(null);
   };
 
+  const handleFileSelect = (file: File | null) => {
+    if (!file) return;
+    if (isImage(file.name)) {
+      const reader = new FileReader();
+      reader.onload = (e) => setAttachedPreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setAttachedPreview(null);
+    }
+    setAttachedFile(file);
+  };
+
+  const clearAttached = () => {
+    setAttachedFile(null);
+    setAttachedPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const sendMessage = async () => {
-    if (!input.trim() || !activeChat) return;
+    if ((!input.trim() && !attachedFile) || !activeChat) return;
     const msg = input;
     setInput("");
     setLoading(true);
     setTyping(true);
-    const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: msg, created_at: new Date().toISOString() };
+    const tempId = `temp-${Date.now()}`;
+    const userMsg: Message = { id: tempId, role: "user", content: msg || (attachedPreview ? "[Изображение]" : "[Файл]"), created_at: new Date().toISOString() };
     setMessages(prev => [...prev, userMsg]);
+    clearAttached();
     try {
-      await api("POST", `/chat/${activeChat}/send`, { message: msg });
-      // reload messages to get server-assigned IDs and start typing polling
+      let filePath: string | undefined;
+      if (attachedFile) {
+        const uploadRes: any = await uploadFile(`/chat/${activeChat}/upload`, attachedFile);
+        if (uploadRes.success) filePath = uploadRes.file_path;
+      }
+      const body: any = { message: msg };
+      if (filePath) body.file = filePath;
+      await api("POST", `/chat/${activeChat}/send`, body);
       loadMessages(activeChat);
     } catch (e: any) {
-      setMessages(prev => prev.map(m => m.id === userMsg.id ? { ...m, content: `${m.content}\n\n⚠️ Ошибка отправки: ${e.message}` } : m));
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, content: `${m.content}\n\n⚠️ Ошибка отправки: ${e.message}` } : m));
       setError("Ошибка отправки сообщения");
       setTyping(false);
       setLoading(false);
@@ -180,15 +239,43 @@ export const ChatPage = ({ user }: ChatPageProps) => {
     if (!activeChat) return;
     try {
       await api("POST", `/chat/${activeChat}/cancel`);
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
     setTyping(false);
     setLoading(false);
     stopPolling();
   };
 
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) handleFileSelect(file);
+        return;
+      }
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = () => setDragOver(false);
+
   const activeChatData = chats.find(c => c.id === activeChat);
+
+  const canAttach = supportsVision;
+
+  const fileName = attachedFile?.name || "";
 
   return (
     <Box sx={{ display: "flex", height: "100%", minHeight: 0, gap: 2 }}>
@@ -209,7 +296,17 @@ export const ChatPage = ({ user }: ChatPageProps) => {
           ))}
         </List>
       </Paper>
-      <Paper sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 2 }}>
+      <Paper
+        sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 2, position: "relative" }}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+      >
+        {dragOver && (
+          <Box sx={{ position: "absolute", inset: 0, zIndex: 10, bgcolor: "action.hover", display: "flex", alignItems: "center", justifyContent: "center", border: "3px dashed", borderColor: "primary.main", borderRadius: 2 }}>
+            <Typography variant="h6" color="primary">Перетащите файл сюда</Typography>
+          </Box>
+        )}
         {activeChat ? (
           <>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2, py: 1, borderBottom: 1, borderColor: "divider" }}>
@@ -272,11 +369,41 @@ export const ChatPage = ({ user }: ChatPageProps) => {
               <div ref={bottomRef} />
             </Box>
             <Divider />
-            <Box sx={{ p: 2, display: "flex", gap: 1 }}>
-              <TextField fullWidth size="small" placeholder="Введите сообщение..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()} disabled={loading} sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3 } }} />
-              <IconButton color="primary" onClick={sendMessage} disabled={loading || !input.trim()} sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}>
-                <SendIcon />
-              </IconButton>
+            <Box sx={{ p: 2 }}>
+              {attachedFile && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, p: 1, bgcolor: "action.hover", borderRadius: 2 }}>
+                  {attachedPreview ? (
+                    <Box sx={{ position: "relative", width: 80, height: 80 }}>
+                      <img src={attachedPreview} alt="preview" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8 }} />
+                      <IconButton size="small" onClick={clearAttached} sx={{ position: "absolute", top: -6, right: -6, bgcolor: "background.paper", boxShadow: 1, "&:hover": { bgcolor: "action.hover" } }}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ) : (
+                    <>
+                      <Typography variant="h5">{getFileIcon(fileName)}</Typography>
+                      <Typography variant="body2" sx={{ flex: 1 }}>{fileName}</Typography>
+                      <IconButton size="small" onClick={clearAttached}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </>
+                  )}
+                </Box>
+              )}
+              <Box sx={{ display: "flex", gap: 1 }}>
+                {canAttach && (
+                  <>
+                    <input type="file" ref={fileInputRef} hidden onChange={e => handleFileSelect(e.target.files?.[0] || null)} />
+                    <IconButton size="small" onClick={() => fileInputRef.current?.click()} sx={{ alignSelf: "flex-end", mb: 0.5 }} title="Прикрепить файл">
+                      <AttachFileIcon />
+                    </IconButton>
+                  </>
+                )}
+                <TextField fullWidth size="small" placeholder={canAttach ? "Введите сообщение..." : "Прикрепите файл..."} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()} onPaste={handlePaste} disabled={loading} sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3 } }} />
+                <IconButton color="primary" onClick={sendMessage} disabled={loading || (!input.trim() && !attachedFile)} sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}>
+                  <SendIcon />
+                </IconButton>
+              </Box>
             </Box>
           </>
         ) : (
@@ -287,7 +414,6 @@ export const ChatPage = ({ user }: ChatPageProps) => {
         )}
       </Paper>
 
-      {/* Create dialog */}
       <Dialog open={createDialog} onClose={() => setCreateDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ color: "text.primary" }}>Новый чат</DialogTitle>
         <DialogContent>
@@ -300,7 +426,6 @@ export const ChatPage = ({ user }: ChatPageProps) => {
         </DialogActions>
       </Dialog>
 
-      {/* Settings dialog */}
       <Dialog open={settingsDialog} onClose={() => setSettingsDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ color: "text.primary" }}>Настройки чата</DialogTitle>
         <DialogContent>
@@ -313,7 +438,6 @@ export const ChatPage = ({ user }: ChatPageProps) => {
         </DialogActions>
       </Dialog>
 
-      {/* Delete dialog */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
         <DialogTitle>Удалить чат?</DialogTitle>
         <DialogContent><DialogContentText>Это действие нельзя отменить. Все сообщения будут удалены.</DialogContentText></DialogContent>

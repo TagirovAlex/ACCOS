@@ -1,7 +1,5 @@
 import logging
-
-import httpx
-
+import time
 from typing import Any
 
 import httpx
@@ -10,6 +8,10 @@ from app.adapters.base import BaseAdapter
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+_vision_cache: dict[str, tuple[bool, float]] = {}
+_VISION_CACHE_TTL = 300
+_VISION_KEYWORDS = {"llava", "qwen-vl", "pixtral", "vision", "llama-vision", "llama-3.2-vision", "llama3.2-vision"}
 
 
 class LMStudioAdapter(BaseAdapter):
@@ -68,3 +70,42 @@ class LMStudioAdapter(BaseAdapter):
         except Exception as e:
             logger.error(f"LMStudio error: {e}")
             return {"success": False, "error": str(e)}
+
+    async def check_vision_capability(self) -> bool:
+        now = time.time()
+        cache_key = f"{self.base_url}:{self.model}"
+        if cache_key in _vision_cache:
+            cached, ts = _vision_cache[cache_key]
+            if now - ts < _VISION_CACHE_TTL:
+                return cached
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(
+                    f"{self.base_url}/models",
+                    headers={"Authorization": f"Bearer {self.api_key}"} if self.api_key else {},
+                )
+                if resp.status_code == 200:
+                    models = resp.json().get("data", [])
+                    for m in models:
+                        mid = (m.get("id") or "").lower()
+                        mlower = self.model.lower()
+                        if mlower in mid:
+                            supports = m.get("supports_vision", False)
+                            if supports:
+                                _vision_cache[cache_key] = (True, now)
+                                return True
+                            for kw in _VISION_KEYWORDS:
+                                if kw in mid:
+                                    _vision_cache[cache_key] = (True, now)
+                                    return True
+                            _vision_cache[cache_key] = (False, now)
+                            return False
+        except Exception as e:
+            logger.warning(f"Vision check failed: {e}")
+        mlower = self.model.lower()
+        for kw in _VISION_KEYWORDS:
+            if kw in mlower:
+                _vision_cache[cache_key] = (True, now)
+                return True
+        _vision_cache[cache_key] = (False, now)
+        return False

@@ -8,6 +8,9 @@ import sqlalchemy as sa
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import base64
+from pathlib import Path
+
 from app.db.models.chat import ChatMessage
 from app.db.models.chat_queue import ChatQueue
 from app.db.session import async_session_factory
@@ -17,6 +20,7 @@ from app.repositories.user_repository import UserRepository
 from app.services.economy_service import EconomyService
 from app.services.chat_worker import ensure_chat_worker
 from app.services.settings_service import SettingsService
+from app.services.file_parser_service import get_file_type, extract_text
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +141,7 @@ class ChatService:
         ok = await self.chat_repo.delete(sid)
         return {"success": ok, "error": None if ok else "Failed to delete chat"}
 
-    async def send_message(self, user_id: str, session_id: str, message: str) -> dict:
+    async def send_message(self, user_id: str, session_id: str, message: str, file: str | None = None) -> dict:
         uid = UUID(user_id)
         sid = UUID(session_id)
 
@@ -147,8 +151,45 @@ class ChatService:
         if str(chat_session.user_id) != user_id:
             return {"success": False, "error": "Access denied"}
 
+        user_content: str | list[dict] = message
+        file_injected = False
+
+        if file:
+            file_path = Path(file)
+            if file_path.exists():
+                file_type = get_file_type(file)
+                if file_type == "image":
+                    try:
+                        from app.adapters.lmstudio_adapter import LMStudioAdapter
+                        llm = LMStudioAdapter()
+                        has_vision = await llm.check_vision_capability()
+                    except Exception:
+                        has_vision = False
+                    if has_vision:
+                        with open(file, "rb") as f:
+                            b64 = base64.b64encode(f.read()).decode()
+                        ext = file_path.suffix.lstrip(".") or "png"
+                        mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}.get(ext, "image/png")
+                        user_content = [
+                            {"type": "text", "text": message or "Опиши это изображение"},
+                            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                        ]
+                        file_injected = True
+                    else:
+                        text = extract_text(file)
+                        if text:
+                            file_injected = True
+                else:
+                    text = extract_text(file)
+                    if text:
+                        file_injected = True
+                if file_injected and isinstance(user_content, str) and user_content == message:
+                    fname = file_path.name
+                    user_content = f"[File: {fname}]\n{text}\n[/File]\n\n{message}"
+
         async with async_session_factory() as persist_session:
-            persist_session.add(ChatMessage(session_id=sid, role="user", content=message))
+            content_str = json.dumps(user_content) if isinstance(user_content, list) else user_content
+            persist_session.add(ChatMessage(session_id=sid, role="user", content=content_str))
             await persist_session.commit()
 
         history = await self.chat_repo.get_messages(sid)
@@ -192,8 +233,12 @@ class ChatService:
         else:
             messages.append({"role": "system", "content": tool_instruction})
         for m in history[-ctx_count:]:
-            messages.append({"role": m.role, "content": m.content})
-        messages.append({"role": "user", "content": message})
+            try:
+                mc = json.loads(m.content) if m.content.startswith("[") or m.content.startswith("{") else m.content
+            except (json.JSONDecodeError, ValueError):
+                mc = m.content
+            messages.append({"role": m.role, "content": mc})
+        messages.append({"role": "user", "content": user_content})
 
         async with async_session_factory() as db:
             db.add(ChatQueue(

@@ -179,6 +179,18 @@ class SettingsService:
              "[Веб-парсер] Заблокированные расширения файлов (через запятую)"),
             ("web_fetch_blocked_domains", "",
              "[Веб-парсер] Глобальный чёрный список доменов (через запятую)"),
+
+            # -- Chat file uploads --
+            ("chat_file_max_size_image", "10485760",
+             "[Чат] Максимальный размер изображения в байтах (10MB)"),
+            ("chat_file_max_size_pdf", "52428800",
+             "[Чат] Максимальный размер PDF в байтах (50MB)"),
+            ("chat_file_max_size_docx", "10485760",
+             "[Чат] Максимальный размер Word в байтах (10MB)"),
+            ("chat_file_max_size_xlsx", "10485760",
+             "[Чат] Максимальный размер Excel в байтах (10MB)"),
+            ("chat_file_max_size_pptx", "31457280",
+             "[Чат] Максимальный размер PowerPoint в байтах (30MB)"),
         ]
         for key, value, description in defaults:
             existing = await self.repo.get_by_key(key)
