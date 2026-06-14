@@ -1,5 +1,14 @@
 # Changelog ACCOS
 
+## Phase 1B — Web Fetch Module: Backend + Admin UI (Jun 14)
+- **WebFetchRepository**: CRUD + upsert + domain validation per user
+- **WebFetchService**: URL auto-detection (regex), permission chain (global → user permission → per-user enabled → domains), trafilatura extraction
+- **ChatService.send_message**: автоматический детект URL в сообщении → fetch → инжект в system prompt (вслед за RAG)
+- **Admin API**: `GET /admin/web-fetch/permissions`, `GET/PUT /admin/web-fetch/permissions/{user_id}`
+- **Admin UI**: новая страница «Web Fetch» — таблица пользователей с toggles, лимитами, доменами, inline-редактирование через диалог
+- **Право `web`**: добавлено в default_permissions, проверяется в WebFetchService.check_user_permission
+- **Pydantic схемы**: `WebFetchPermissionUpdate`, `WebFetchPermissionResponse`, `WebFetchPermissionListResponse`
+
 ## Phase 1A — Web Fetch Module: Database + Adapter (Jun 14)
 - **Model `web_fetch_permissions`**: новая таблица с per-user настройками (enabled, лимиты, домены)
 - **Migration**: `e5f4d3c2b1a0_add_web_fetch_permissions_table`

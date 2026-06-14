@@ -122,7 +122,7 @@ class SettingsService:
              "[Цены: Видео] Стоимость за секунду видео"),
 
             # -- Users --
-            ("default_permissions", '["chat","generate","edit","video","documents_manage"]',
+            ("default_permissions", '["chat","generate","edit","video","documents_manage","web"]',
              "[Пользователи] Права доступа по умолчанию для новых пользователей (JSON-массив)"),
             ("default_start_balance", "100",
              "[Пользователи] Стартовый баланс для новых пользователей в MS"),

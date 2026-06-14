@@ -38,6 +38,7 @@ export const dataProvider: any = {
     let data = json[resource] || [];
     if (resource === "files") data = [];
     if (resource === "generation-queue") data = json.items || [];
+    if (resource === "web-fetch") data = json.permissions || [];
     if (resource === "settings") data = mapSettings(data);
     data = data.map((item: any) => ({ ...item, id: item.id ?? item.key }));
     return { data, total: data.length };

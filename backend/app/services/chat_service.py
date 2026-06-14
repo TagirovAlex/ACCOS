@@ -171,6 +171,15 @@ class ChatService:
         except Exception as e:
             logger.warning(f"RAG context injection failed: {e}")
 
+        try:
+            from app.services.web_fetch_service import WebFetchService
+            wf = WebFetchService(self.session)
+            web_context = await wf.process_urls(user_id, message)
+            if web_context:
+                system_content += web_context
+        except Exception as e:
+            logger.warning(f"Web fetch injection failed: {e}")
+
         messages: list[dict] = []
         if system_content:
             messages.append({"role": "system", "content": system_content})

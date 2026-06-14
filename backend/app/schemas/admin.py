@@ -326,3 +326,31 @@ class LlmServerResponse(BaseModel):
 
 class LlmServerListResponse(BaseResponse):
     servers: list[LlmServerResponse] = []
+
+
+class WebFetchPermissionUpdate(BaseModel):
+    enabled: bool | None = None
+    requests_per_hour: int | None = None
+    requests_per_day: int | None = None
+    max_chars: int | None = None
+    allowed_domains: str | None = None
+    blocked_domains: str | None = None
+
+
+class WebFetchPermissionResponse(BaseModel):
+    id: str
+    user_id: str
+    username: str = ""
+    enabled: bool
+    requests_per_hour: int
+    requests_per_day: int
+    max_chars: int
+    allowed_domains: str = ""
+    blocked_domains: str = ""
+    created_at: datetime
+    updated_at: datetime
+
+
+class WebFetchPermissionListResponse(BaseResponse):
+    permissions: list[WebFetchPermissionResponse] = []
+    users_without_perms: list[dict] = []

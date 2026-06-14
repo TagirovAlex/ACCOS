@@ -17,7 +17,7 @@ from app.core.rate_limit import limiter
 
 from app.core.config import settings, PROJECT_ROOT
 from app.core.paths import UPLOADS_DIR, GENERATIONS_DIR, EDITS_DIR, VIDEOS_DIR, AVATARS_DIR
-from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin, knowledge, help as help_endpoint
+from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin, knowledge, help as help_endpoint, web_fetch_admin
 from app.services.accrual_service import run_auto_accrual
 from app.services.queue_worker import queue_worker_loop
 from app.services.scheduler_service import start_scheduler, stop_scheduler, update_schedule
@@ -163,6 +163,7 @@ app.include_router(orchestration.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(knowledge.router)
 app.include_router(help_endpoint.router)
+app.include_router(web_fetch_admin.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health")
