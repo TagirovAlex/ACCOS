@@ -222,11 +222,11 @@ class ChatService:
             logger.warning(f"Web fetch injection failed: {e}")
 
         messages: list[dict] = []
-        tool_instruction = (
-            "ВАЖНО: вы НЕ знаете содержимое сайтов. Для получения информации с любого URL ОБЯЗАТЕЛЬНО используйте fetch_web_page. НИКОГДА не выдумывайте содержимое страниц и не придумывайте URL. "
-            "и search_in_page (искать текст на странице). "
-            "Если тебе нужно получить информацию из интернета — используй эти инструменты, не говори что не можешь."
-        )
+        _wf_prompt = await settings_svc.get("web_fetch_prompt")
+        if _wf_prompt:
+            tool_instruction = _wf_prompt
+        else:
+            tool_instruction = "ВАЖНО: вы НЕ знаете содержимое сайтов. Для получения информации с любого URL ОБЯЗАТЕЛЬНО используйте fetch_web_page. НИКОГДА не выдумывайте содержимое страниц и не придумывайте URL."
         gen_instruction = (
             "\n\nВы можете генерировать документы. Для генерации верните JSON: "
             '{"_generate": {"template": "имя шаблона", "variables": {"ключ": "значение"}, "format": "pdf"}} '

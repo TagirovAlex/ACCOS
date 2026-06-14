@@ -132,7 +132,7 @@ async def _process_chat_job(record):
         total_tokens_input = 0
         total_tokens_output = 0
 
-        for round_num in range(6):
+        for round_num in range(10):
             async def llm_call(current_messages=messages):
                 return await llm.chat_completion(current_messages, tools=WEB_FETCH_TOOLS)
 

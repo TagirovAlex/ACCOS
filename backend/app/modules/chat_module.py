@@ -20,4 +20,5 @@ class ChatModule(BaseModule):
             ModuleSettingDef(key="llm_rate_input", label="Input rate (MS per unit)", type="number", category="pricing", default=1, is_admin_setting=True, description="Cost per 1000 input tokens"),
             ModuleSettingDef(key="llm_rate_output", label="Output rate (MS per unit)", type="number", category="pricing", default=1, is_admin_setting=True, description="Cost per 1000 output tokens"),
             ModuleSettingDef(key="llm_tokens_per_unit", label="Tokens per unit", type="number", category="pricing", default=1000, is_admin_setting=True, description="Token count per pricing unit"),
+            ModuleSettingDef(key="web_fetch_prompt", label="Web fetch instruction", type="string", category="general", default="", is_admin_setting=True, description="System prompt override for web fetch tools. Пусто = стандартная инструкция."),
         ]
