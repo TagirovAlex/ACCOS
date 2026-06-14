@@ -84,6 +84,13 @@ async def update_module_setting(
 ):
     repo = ModuleSettingsRepository(db)
     await repo.set_global(module_name, key, request.value)
+    result = await db.execute(select(AdminSettings).where(AdminSettings.key == key))
+    admin_row = result.scalar_one_or_none()
+    if admin_row:
+        admin_row.value = request.value
+    else:
+        db.add(AdminSettings(key=key, value=request.value))
+    await db.commit()
     return BaseResponse(success=True)
 
 

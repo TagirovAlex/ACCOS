@@ -1,52 +1,77 @@
 import { useState, useEffect } from "react";
 import {
-  Box, Typography, TextField as MuiTextField, Button,
+  Box, Typography, TextField as MuiTextField, Button, Switch, FormControlLabel,
+  Select, MenuItem, FormControl, InputLabel,
   Alert, Snackbar, CircularProgress, Paper, List, ListItemButton, ListItemIcon, ListItemText,
 } from "@mui/material";
 import ExtensionIcon from "@mui/icons-material/Extension";
 import { getToken } from "../services/api";
 
-interface ModuleSetting {
+interface SettingDef {
   module_name: string;
   key: string;
-  value: string;
+  label: string;
+  type: string;
+  category: string;
+  default: any;
+  description: string;
+  is_admin_setting: boolean;
+  is_user_setting: boolean;
+  validation: Record<string, any> | null;
+  value: string | null;
 }
 
-const DEFINED_MODULES = [
-  ["chat", "Чат"],
-  ["comfyui", "ComfyUI"],
-  ["rag", "База знаний"],
-];
-
-const SETTING_LABELS: Record<string, string> = {};
-
-const MASKED_KEYS = new Set<string>();
-
-function SettingField({
-  setting, value, onChange,
-}: {
-  setting: ModuleSetting;
+function SettingField({ def, value, onChange }: {
+  def: SettingDef;
   value: string;
   onChange: (key: string, val: string) => void;
 }) {
-  const label = SETTING_LABELS[setting.key] || setting.key;
+  const label = def.label || def.key;
+  const desc = def.description || def.key;
+  const handle = (v: string) => onChange(def.key, v);
+
+  if (def.type === "boolean") {
+    return (
+      <FormControlLabel
+        control={<Switch checked={value === "true"} onChange={(e) => handle(e.target.checked ? "true" : "false")} />}
+        label={<Box><Typography variant="body2">{label}</Typography><Typography variant="caption" color="text.secondary">{desc}</Typography></Box>}
+        sx={{ mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}
+      />
+    );
+  }
+
+  if (def.type === "select" && def.validation?.options) {
+    return (
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <InputLabel>{label}</InputLabel>
+        <Select value={value || ""} label={label} onChange={(e) => handle(e.target.value)}>
+          {def.validation.options.map((opt: string) => (
+            <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+          ))}
+        </Select>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>{desc}</Typography>
+      </FormControl>
+    );
+  }
+
   return (
     <MuiTextField
       label={label}
-      helperText={setting.key}
-      value={value}
-      onChange={(e) => onChange(setting.key, e.target.value)}
+      helperText={desc}
+      value={value ?? ""}
+      onChange={(e) => handle(e.target.value)}
       fullWidth
-      multiline={value.length > 60}
-      minRows={value.length > 60 ? 2 : undefined}
-      type={MASKED_KEYS.has(setting.key) ? "password" : "text"}
+      multiline={def.type === "textarea" || (value ?? "").length > 80}
+      minRows={def.type === "textarea" ? 3 : (value ?? "").length > 80 ? 2 : undefined}
+      type={def.type === "password" ? "password" : def.type === "number" ? "number" : "text"}
+      slotProps={{ htmlInput: def.type === "number" ? { step: "any" } : undefined }}
       sx={{ mb: 2 }}
     />
   );
 }
 
 function ModuleSettingsForm({ moduleName, onSaved }: { moduleName: string; onSaved: () => void }) {
-  const [settings, setSettings] = useState<ModuleSetting[]>([]);
+  const [settings, setSettings] = useState<SettingDef[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,10 +85,10 @@ function ModuleSettingsForm({ moduleName, onSaved }: { moduleName: string; onSav
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      const list: ModuleSetting[] = (data.settings || []);
+      const list: SettingDef[] = (data.settings || []).filter((s: SettingDef) => s.is_admin_setting);
       setSettings(list);
       const v: Record<string, string> = {};
-      for (const s of list) v[s.key] = s.value;
+      for (const s of list) v[s.key] = s.value ?? "";
       setValues(v);
     } catch {
       setSnack({ msg: "Ошибка загрузки", sev: "error" });
@@ -83,8 +108,8 @@ function ModuleSettingsForm({ moduleName, onSaved }: { moduleName: string; onSav
     try {
       const token = getToken();
       for (const s of settings) {
-        const newVal = values[s.key] ?? s.value;
-        if (newVal !== s.value) {
+        const newVal = values[s.key] ?? "";
+        if (newVal !== (s.value ?? "")) {
           await fetch(`/api/v1/admin/modules/${moduleName}/settings/${s.key}`, {
             method: "PUT",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -109,12 +134,20 @@ function ModuleSettingsForm({ moduleName, onSaved }: { moduleName: string; onSav
     return <Typography color="text.secondary">У этого модуля нет настроек</Typography>;
   }
 
-  const hasChanges = settings.some((s) => (values[s.key] ?? s.value) !== s.value);
+  const categories = [...new Set(settings.map((s) => s.category || "general"))].sort();
+  const hasChanges = settings.some((s) => (values[s.key] ?? "") !== (s.value ?? ""));
 
   return (
     <Box>
-      {settings.map((s) => (
-        <SettingField key={s.key} setting={s} value={values[s.key] ?? s.value} onChange={handleChange} />
+      {categories.map((cat) => (
+        <Box key={cat} sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" color="primary" sx={{ mb: 1.5, textTransform: "capitalize" }}>
+            {cat === "general" ? "Общие" : cat === "connection" ? "Подключение" : cat === "pricing" ? "Стоимость" : cat === "llm" ? "LLM" : cat === "indexing" ? "Индексация" : cat === "retrieval" ? "Поиск" : cat === "embedding" ? "Эмбеддинги" : cat === "scheduling" ? "Расписание" : cat === "display" ? "Отображение" : cat === "restrictions" ? "Ограничения" : cat}
+          </Typography>
+          {settings.filter((s) => (s.category || "general") === cat).map((s) => (
+            <SettingField key={s.key} def={s} value={values[s.key] ?? ""} onChange={handleChange} />
+          ))}
+        </Box>
       ))}
       <Box sx={{ mt: 3, display: "flex", gap: 1 }}>
         <Button variant="contained" onClick={handleSave} disabled={!hasChanges || saving}>
@@ -122,7 +155,7 @@ function ModuleSettingsForm({ moduleName, onSaved }: { moduleName: string; onSav
         </Button>
         <Button variant="outlined" onClick={() => {
           const v: Record<string, string> = {};
-          for (const s of settings) v[s.key] = s.value;
+          for (const s of settings) v[s.key] = s.value ?? "";
           setValues(v);
         }} disabled={!hasChanges}>
           Сбросить
@@ -138,17 +171,39 @@ function ModuleSettingsForm({ moduleName, onSaved }: { moduleName: string; onSav
 }
 
 export const ModuleSettings = () => {
+  const [modules, setModules] = useState<{ name: string; label: string }[]>([]);
   const [tab, setTab] = useState(0);
 
-  const currentModule = DEFINED_MODULES[tab] || DEFINED_MODULES[0];
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = getToken();
+        const res = await fetch("/api/v1/admin/modules", { headers: { Authorization: `Bearer ${token}` } });
+        const data = await res.json();
+        const names: Record<string, string> = {
+          chat: "Чат", comfyui: "ComfyUI", rag: "База знаний",
+          web_fetch: "Web Fetch", doc_scraper: "Doc Scraper",
+          files: "Файлы", documents: "Документы",
+        };
+        if (data.modules) {
+          setModules(data.modules.map((m: any) => ({ name: m.name, label: names[m.name] || m.name })));
+        }
+      } catch {}
+    })();
+  }, []);
+
+  if (modules.length === 0) return <CircularProgress sx={{ display: "block", mx: "auto", mt: 4 }} />;
+  if (tab >= modules.length) setTab(0);
+
+  const current = modules[tab] || modules[0];
 
   return (
     <Box sx={{ display: "flex", gap: 3 }}>
       <Paper sx={{ width: 240, flexShrink: 0, borderRadius: 2, overflow: "hidden" }}>
         <List dense disablePadding>
-          {DEFINED_MODULES.map(([name, label], i) => (
+          {modules.map((m, i) => (
             <ListItemButton
-              key={name}
+              key={m.name}
               selected={tab === i}
               onClick={() => setTab(i)}
               sx={{
@@ -164,7 +219,7 @@ export const ModuleSettings = () => {
                 <ExtensionIcon />
               </ListItemIcon>
               <ListItemText
-                primary={label}
+                primary={m.label}
                 primaryTypographyProps={{ variant: "body2", fontWeight: tab === i ? 600 : 400 }}
               />
             </ListItemButton>
@@ -172,8 +227,8 @@ export const ModuleSettings = () => {
         </List>
       </Paper>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="h6" fontWeight={600} mb={3}>{currentModule[1]}</Typography>
-        <ModuleSettingsForm moduleName={currentModule[0]} onSaved={() => {}} />
+        <Typography variant="h6" fontWeight={600} mb={3}>{current.label}</Typography>
+        <ModuleSettingsForm moduleName={current.name} onSaved={() => {}} />
       </Box>
     </Box>
   );
