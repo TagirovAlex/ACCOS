@@ -21,7 +21,7 @@ def upgrade() -> None:
     op.create_table(
         "web_fetch_permissions",
         sa.Column("id", sa.String(36), primary_key=True),
-        sa.Column("user_id", sa.String(36), sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True),
+        sa.Column("user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True),
         sa.Column("enabled", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("requests_per_hour", sa.Integer(), nullable=False, server_default="10"),
         sa.Column("requests_per_day", sa.Integer(), nullable=False, server_default="50"),

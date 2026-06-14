@@ -63,6 +63,7 @@ class WebFetchService:
         adapter = WebFetchAdapter(timeout=timeout, max_chars=max_chars)
 
         results = []
+        fetched_count = 0
         for url in urls:
             domain = urlparse(url).hostname or ""
             if domain in blocked_global:
@@ -73,7 +74,8 @@ class WebFetchService:
                 continue
             result = await adapter.fetch(url, max_chars=max_chars, timeout=timeout)
             if result["success"]:
-                results.append(f"=== Content from: {url} ===\n{result['content']}")
+                results.append(result["content"])
+                fetched_count += 1
             else:
                 logger.warning("Failed to fetch %s: %s", url, result.get("error"))
                 results.append(f"[Failed to fetch: {url} — {result.get('error')}]")
@@ -81,10 +83,11 @@ class WebFetchService:
         if not results:
             return None
 
+        if fetched_count > 0:
+            await self.web_repo.increment_usage(user_id, fetched_count)
+
         context = "\n\n".join(results)
         header = (
-            "\n\n=== WEB FETCH: Содержимое веб-страниц ===\n"
-            "Пользователь отправил URL(ы). Ниже приведено содержимое этих страниц. "
-            "Используй этот контент для ответа пользователю, если это уместно.\n\n"
+            "\n\n[Web Fetch: пользователь отправил ссылки, ниже их содержимое для ответа]\n\n"
         )
         return header + context

@@ -58,3 +58,11 @@ class WebFetchRepository:
         if allowed:
             return any(domain == d or domain.endswith("." + d) for d in allowed)
         return True
+
+    async def increment_usage(self, user_id: str, count: int = 1) -> None:
+        from datetime import datetime, timezone
+        perms = await self.get_by_user_id(user_id)
+        if perms:
+            perms.usage_count = (perms.usage_count or 0) + count
+            perms.last_usage_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            await self.session.flush()

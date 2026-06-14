@@ -5,13 +5,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db
 from app.api.v1.endpoints.admin import _require_admin
-from app.repositories.doc_scraper_repository import DocScraperRepository
+from app.db.session import async_session_factory
 from app.services.doc_scraper_service import DocScraperService
 from app.schemas.doc_scraper import StartScrapeRequest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/doc-scraper", tags=["admin-doc-scraper"])
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+async def _run_job(job_id: str) -> None:
+    current = asyncio.current_task()
+    try:
+        async with async_session_factory() as session:
+            svc = DocScraperService(session)
+            await svc.execute_job(job_id)
+    except Exception:
+        logger.exception(f"_run_job failed for {job_id}")
+    finally:
+        _background_tasks.discard(current)
 
 
 @router.post("/scrape")
@@ -31,7 +45,10 @@ async def start_scrape(
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Failed to start job"))
 
-    asyncio.create_task(svc.execute_job(result["job_id"]))
+    await db.commit()
+    task = asyncio.create_task(_run_job(result["job_id"]))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
     return result
 
 
@@ -76,7 +93,34 @@ async def retry_job(
     _admin=Depends(_require_admin),
 ):
     svc = DocScraperService(db)
-    result = await svc.execute_job(job_id)
+    job = await svc.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["status"] in ("crawling", "processing", "ingesting"):
+        raise HTTPException(status_code=400, detail=f"Job is already {job['status']}")
+
+    result = await svc.start_job(
+        site_url=job["site_url"],
+        site_name=job["site_name"],
+        max_pages=job["max_pages"],
+        max_depth=job["max_depth"],
+        created_by=job["created_by"],
+    )
+    await db.commit()
+    task = asyncio.create_task(_run_job(result["job_id"]))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return result
+
+
+@router.delete("/jobs/{job_id}")
+async def delete_job(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(_require_admin),
+):
+    svc = DocScraperService(db)
+    result = await svc.delete_job(job_id)
     return result
 
 

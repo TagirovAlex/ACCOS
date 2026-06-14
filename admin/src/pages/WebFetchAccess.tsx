@@ -3,10 +3,12 @@ import {
   Card, CardContent, Typography, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Paper, Switch, Button,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  IconButton, Tooltip, Chip, Box, Snackbar, Alert,
+  IconButton, Tooltip, Chip, Box, Snackbar, Alert, ToggleButtonGroup, ToggleButton,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import LanguageIcon from "@mui/icons-material/Language";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import GridViewIcon from "@mui/icons-material/GridView";
 import { apiRequest } from "../services/api";
 
 interface WebFetchPerms {
@@ -17,6 +19,8 @@ interface WebFetchPerms {
   requests_per_hour: number;
   requests_per_day: number;
   max_chars: number;
+  usage_count: number;
+  last_usage_at: string | null;
   allowed_domains: string;
   blocked_domains: string;
 }
@@ -26,11 +30,35 @@ interface UserWithoutPerms {
   username: string;
 }
 
+function emptyPerms(userId: string, username: string): WebFetchPerms {
+  return { id: "", user_id: userId, username, enabled: false, requests_per_hour: 10, requests_per_day: 50, max_chars: 10000, usage_count: 0, last_usage_at: null, allowed_domains: "", blocked_domains: "" };
+}
+
+const PermCard = ({ p, onEdit, onToggle }: { p: WebFetchPerms; onEdit: (p: WebFetchPerms) => void; onToggle: (userId: string, current: boolean) => void }) => (
+  <Card sx={{ cursor: "pointer", height: "100%", display: "flex", flexDirection: "column", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+    <CardContent onClick={() => onEdit(p)} sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center">
+        <Typography variant="subtitle1" fontWeight={600}>{p.username || p.user_id}</Typography>
+        <Switch checked={p.enabled} onChange={(e) => { e.stopPropagation(); onToggle(p.user_id, p.enabled); }} size="small" onClick={(e) => e.stopPropagation()} />
+      </Box>
+      <Box display="flex" gap={1} flexWrap="wrap" mt={1}>
+        <Chip label={`${p.requests_per_hour}/ч`} size="small" variant="outlined" />
+        <Chip label={`${p.requests_per_day}/д`} size="small" variant="outlined" />
+        <Chip label={`${p.usage_count ?? 0} used`} size="small" variant="outlined" />
+        </Box>
+    {p.last_usage_at && <Typography variant="caption" color="text.secondary">Last: {new Date(p.last_usage_at).toLocaleDateString()}</Typography>}
+      {p.allowed_domains && <Typography variant="caption" color="success.main" noWrap>Разрешено: {p.allowed_domains}</Typography>}
+      {p.blocked_domains && <Typography variant="caption" color="error.main" noWrap>Заблокировано: {p.blocked_domains}</Typography>}
+    </CardContent>
+  </Card>
+);
+
 export const WebFetchAccess = () => {
   const [permissions, setPermissions] = useState<WebFetchPerms[]>([]);
   const [usersWithoutPerms, setUsersWithoutPerms] = useState<UserWithoutPerms[]>([]);
   const [editDialog, setEditDialog] = useState<{ open: boolean; perms: WebFetchPerms | null; userId?: string }>({ open: false, perms: null });
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({ open: false, message: "", severity: "success" });
+  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("web_fetch_view") as "list" | "tiles") ?? "list");
 
   const loadData = useCallback(async () => {
     try {
@@ -70,9 +98,15 @@ export const WebFetchAccess = () => {
   return (
     <Card sx={{ m: 2, mt: 10 }}>
       <CardContent>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-          <LanguageIcon color="primary" fontSize="large" />
-          <Typography variant="h5" fontWeight={700}>Web Fetch — Доступ к веб-страницам</Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2, justifyContent: "space-between" }}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <LanguageIcon color="primary" fontSize="large" />
+            <Typography variant="h5" fontWeight={700}>Web Fetch — Доступ к веб-страницам</Typography>
+          </Box>
+          <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("web_fetch_view", v); }}}>
+            <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+            <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
+          </ToggleButtonGroup>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
           Управление доступом пользователей к веб-страницам через чат.
@@ -91,60 +125,74 @@ export const WebFetchAccess = () => {
                   label={u.username}
                   size="small"
                   variant="outlined"
-                  onClick={() => setEditDialog({ open: true, perms: { ...emptyPerms(u.user_id, u.username), user_id: u.user_id, username: u.username }, userId: u.user_id })}
+                  onClick={() => setEditDialog({ open: true, perms: emptyPerms(u.user_id, u.username), userId: u.user_id })}
                 />
               ))}
             </Box>
           </Box>
         )}
 
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Пользователь</TableCell>
-                <TableCell align="center">Включён</TableCell>
-                <TableCell align="right">Запросов/час</TableCell>
-                <TableCell align="right">Запросов/день</TableCell>
-                <TableCell align="right">Макс. символов</TableCell>
-                <TableCell>Разрешённые домены</TableCell>
-                <TableCell>Заблокиров. домены</TableCell>
-                <TableCell align="center">Действия</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {permissions.length === 0 && (
+        {view === "list" ? (
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
-                    <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                      Нет настроек web fetch. Нажмите на пользователя выше, чтобы добавить.
-                    </Typography>
-                  </TableCell>
+                  <TableCell>Пользователь</TableCell>
+                  <TableCell align="center">Включён</TableCell>
+                  <TableCell align="right">Запросов/час</TableCell>
+                  <TableCell align="right">Запросов/день</TableCell>
+                  <TableCell align="right">Использовано</TableCell>
+                  <TableCell align="right">Макс. символов</TableCell>
+                  <TableCell>Разрешённые домены</TableCell>
+                  <TableCell>Заблокиров. домены</TableCell>
+                  <TableCell align="center">Действия</TableCell>
                 </TableRow>
-              )}
-              {permissions.map((p) => (
-                <TableRow key={p.id} hover>
-                  <TableCell>{p.username || p.user_id}</TableCell>
-                  <TableCell align="center">
-                    <Switch checked={p.enabled} onChange={() => handleToggle(p.user_id, p.enabled)} size="small" />
-                  </TableCell>
-                  <TableCell align="right">{p.requests_per_hour}</TableCell>
-                  <TableCell align="right">{p.requests_per_day}</TableCell>
-                  <TableCell align="right">{p.max_chars.toLocaleString()}</TableCell>
-                  <TableCell sx={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {p.allowed_domains || "—"}
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {p.blocked_domains || "—"}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Tooltip title="Редактировать"><IconButton size="small" onClick={() => setEditDialog({ open: true, perms: p })}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {permissions.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center">
+                      <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                        Нет настроек web fetch. Нажмите на пользователя выше, чтобы добавить.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {permissions.map((p) => (
+                  <TableRow key={p.id} hover sx={{ cursor: "pointer" }} onClick={() => setEditDialog({ open: true, perms: p })}>
+                    <TableCell>{p.username || p.user_id}</TableCell>
+                    <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                      <Switch checked={p.enabled} onChange={() => handleToggle(p.user_id, p.enabled)} size="small" />
+                    </TableCell>
+                    <TableCell align="right">{p.requests_per_hour}</TableCell>
+                    <TableCell align="right">{p.requests_per_day}</TableCell>
+                    <TableCell align="right">{p.usage_count ?? 0}</TableCell>
+                    <TableCell align="right">{p.max_chars.toLocaleString()}</TableCell>
+                    <TableCell sx={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.allowed_domains || "—"}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.blocked_domains || "—"}
+                    </TableCell>
+                    <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                      <Tooltip title="Редактировать"><IconButton size="small" onClick={() => setEditDialog({ open: true, perms: p })}><EditIcon fontSize="small" /></IconButton></Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 2 }}>
+            {permissions.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 2, gridColumn: "1/-1", textAlign: "center" }}>
+                Нет настроек web fetch. Нажмите на пользователя выше, чтобы добавить.
+              </Typography>
+            ) : permissions.map((p) => (
+              <PermCard key={p.id} p={p} onEdit={(p) => setEditDialog({ open: true, perms: p })} onToggle={handleToggle} />
+            ))}
+          </Box>
+        )}
       </CardContent>
 
       <Dialog open={editDialog.open} onClose={() => setEditDialog({ open: false, perms: null })} maxWidth="sm" fullWidth>
@@ -176,7 +224,3 @@ export const WebFetchAccess = () => {
     </Card>
   );
 };
-
-function emptyPerms(userId: string, username: string): WebFetchPerms {
-  return { id: "", user_id: userId, username, enabled: false, requests_per_hour: 10, requests_per_day: 50, max_chars: 10000, allowed_domains: "", blocked_domains: "" };
-}

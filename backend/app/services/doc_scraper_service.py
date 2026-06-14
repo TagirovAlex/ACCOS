@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.doc_scrape_job import DocScrapeJob
 from app.adapters.doc_scraper_adapter import DocScraperAdapter, ScrapedPage
+from app.adapters.spa_crawler_adapter import SpaCrawlerAdapter
 from app.services.rag_service import RAGService
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.repositories.doc_scraper_repository import DocScraperRepository
@@ -80,9 +81,13 @@ class DocScraperService:
             return {"success": False, "error": f"Job is already {job.status}"}
 
         await self.repo.update(job_id, status="crawling")
-        await self.session.flush()
+        await self.session.commit()
 
-        adapter = DocScraperAdapter(max_pages=job.max_pages, max_depth=job.max_depth)
+        if "#!" in job.site_url:
+            logger.info(f"{job_id}: detected SPA site, using Playwright crawler")
+            adapter = SpaCrawlerAdapter(max_pages=job.max_pages, max_depth=job.max_depth)
+        else:
+            adapter = DocScraperAdapter(max_pages=job.max_pages, max_depth=job.max_depth)
         result = await adapter.crawl(job.site_url, max_pages=job.max_pages, max_depth=job.max_depth)
 
         if not result.pages:
@@ -92,6 +97,7 @@ class DocScraperService:
                 pages_found=result.pages_found,
                 errors=result.errors[:100],
             )
+            await self.session.commit()
             return {"success": False, "error": "No pages scraped", "errors": result.errors}
 
         await self.repo.update(
@@ -100,7 +106,7 @@ class DocScraperService:
             pages_found=result.pages_found,
             pages_scraped=len(result.pages),
         )
-        await self.session.flush()
+        await self.session.commit()
 
         chunk_size = await self.settings_svc.get_int("rag_chunk_size", 500)
         chunk_overlap = await self.settings_svc.get_int("rag_chunk_overlap", 50)
@@ -130,7 +136,7 @@ class DocScraperService:
             status="ingesting",
             chunks_created=len(page_chunks),
         )
-        await self.session.flush()
+        await self.session.commit()
 
         try:
             from app.adapters.rag_adapter import RAGAdapter
@@ -205,6 +211,10 @@ class DocScraperService:
             return {"success": False, "error": f"Job already {job.status}"}
         await self.repo.update(job_id, status="cancelled")
         return {"success": True, "job_id": job_id, "status": "cancelled"}
+
+    async def delete_job(self, job_id: str) -> dict:
+        ok = await self.repo.delete(job_id)
+        return {"success": ok, "error": None if ok else "Job not found"}
 
     async def delete_site(self, site_name: str) -> dict:
         folder = f"_scraped/{site_name}"

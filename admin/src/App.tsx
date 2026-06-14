@@ -1,5 +1,4 @@
-import { Admin, Resource, Layout, AppBar, UserMenu, useTheme, Logout, ToggleThemeButton, LoadingIndicator, CustomRoutes, type LayoutProps, type AppBarProps } from "react-admin";
-import { Route } from "react-router-dom";
+import { Admin, Resource, Layout, AppBar, UserMenu, useTheme, Logout, ToggleThemeButton, LoadingIndicator, type LayoutProps, type AppBarProps } from "react-admin";
 import { MenuItem, ListItemIcon, ListItemText, Box, Typography } from "@mui/material";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
@@ -90,9 +89,6 @@ const App = () => (
           {isSuperAdmin && <Resource name="llm-servers" options={{ label: "🤖 LLM-серверы" }} list={LlmServerList} />}
           {(isSuperAdmin || isAdmin) && <Resource name="web-fetch" options={{ label: "🌐 Web Fetch" }} list={WebFetchAccess} />}
           {(isSuperAdmin || isAdmin) && <Resource name="doc-scraper" options={{ label: "📚 Doc Scraper" }} list={DocScraperAccess} />}
-          <CustomRoutes noLayout>
-            <Route path="/web-fetch" element={<WebFetchAccess />} />
-          </CustomRoutes>
         </>
       );
     }}

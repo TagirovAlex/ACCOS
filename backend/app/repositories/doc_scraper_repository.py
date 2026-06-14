@@ -35,8 +35,16 @@ class DocScraperRepository:
         return list(result.scalars().all())
 
     async def update(self, job_id: str, **kwargs) -> DocScrapeJob | None:
-        kwargs["updated_at"] = datetime.now(timezone.utc)
+        kwargs["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
         stmt = update(DocScrapeJob).where(DocScrapeJob.id == job_id).values(**kwargs)
         await self.session.execute(stmt)
         await self.session.flush()
         return await self.get(job_id)
+
+    async def delete(self, job_id: str) -> bool:
+        job = await self.get(job_id)
+        if not job:
+            return False
+        await self.session.delete(job)
+        await self.session.flush()
+        return True

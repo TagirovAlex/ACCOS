@@ -160,7 +160,7 @@ export const UserEdit = () => (
       <ReferenceInput source="group_id" reference="groups" label="Группа AD">
         <SelectInput optionText="name" optionValue="id" emptyText="— Без группы —" />
       </ReferenceInput>
-      <TextInput source="permissions" label="Права доступа" helperText="chat — чат, generate — генерация, edit — редактирование, video — видео, documents_manage — база знаний. Можно комбинировать через запятую" />
+      <TextInput source="permissions" label="Права доступа" helperText="chat — чат, generate — генерация, edit — редактирование, video — видео, web — веб-страницы, documents_manage — база знаний. Можно комбинировать через запятую" />
       <BooleanInput source="is_admin" label="Администратор" />
       <BooleanInput source="is_active" label="Активен" />
     </SimpleForm>
@@ -210,7 +210,7 @@ export const UserCreate = () => (
       <ReferenceInput source="group_id" reference="groups" label="Группа AD">
         <SelectInput optionText="name" optionValue="id" emptyText="— Без группы —" />
       </ReferenceInput>
-      <TextInput source="permissions" label="Права доступа" defaultValue="chat,generate,edit,video" helperText="chat — чат, generate — генерация, edit — редактирование, video — видео, documents_manage — база знаний. Можно комбинировать через запятую" />
+      <TextInput source="permissions" label="Права доступа" defaultValue="chat,generate,edit,video,web" helperText="chat — чат, generate — генерация, edit — редактирование, video — видео, web — веб-страницы, documents_manage — база знаний. Можно комбинировать через запятую" />
       <BooleanInput source="is_admin" label="Администратор" defaultValue={false} />
       <BooleanInput source="is_active" label="Активен" defaultValue={true} />
     </SimpleForm>

@@ -165,7 +165,7 @@ class ChatService:
             if context:
                 rag_header = (
                     "\n\n=== Справочная информация из базы знаний ===\n"
-                    "При использовании информации из документов указывай источник в формате [doc: id] в конце предложения.\n\n"
+                    "При использовании информации из документов копируй точный ID из квадратных скобок. Пример: если в контексте написано «[doc: abc-123] Название», используй «[doc: abc-123]». Не заменяй ID на название документа.\n\n"
                 )
                 system_content += rag_header + context
         except Exception as e:
@@ -217,7 +217,7 @@ class ChatService:
                 ChatQueue.user_id == uid,
                 ChatQueue.status.in_(["queued", "processing"]),
             )
-            .values(status="cancelling", updated_at=datetime.now(timezone.utc))
+            .values(status="cancelling", updated_at=datetime.now(timezone.utc).replace(tzinfo=None))
         )
         if result.rowcount == 0:
             return {"success": False, "error": "No active generation to cancel"}

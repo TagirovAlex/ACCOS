@@ -15,6 +15,8 @@ class WebFetchPermissions(Base):
     requests_per_hour: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
     requests_per_day: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
     max_chars: Mapped[int] = mapped_column(Integer, nullable=False, default=10000)
+    usage_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_usage_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     allowed_domains: Mapped[str | None] = mapped_column(Text, nullable=True)
     blocked_domains: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

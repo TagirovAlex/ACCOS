@@ -14,17 +14,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/web-fetch", tags=["admin-web-fetch"])
 
 
-async def _serialize_perms(perms) -> dict:
-    user_repo = None
+async def _serialize_perms(perms, db=None) -> dict:
     username = str(perms.user_id)
+    if db:
+        ur = UserRepository(db)
+        u = await ur.get(perms.user_id)
+        if u:
+            username = u.username
     return {
-        "id": perms.id,
-        "user_id": perms.user_id,
+        "id": str(perms.id),
+        "user_id": str(perms.user_id),
         "username": username,
         "enabled": perms.enabled,
         "requests_per_hour": perms.requests_per_hour,
         "requests_per_day": perms.requests_per_day,
         "max_chars": perms.max_chars,
+        "usage_count": perms.usage_count,
+        "last_usage_at": str(perms.last_usage_at) if perms.last_usage_at else None,
         "allowed_domains": perms.allowed_domains or "",
         "blocked_domains": perms.blocked_domains or "",
         "created_at": perms.created_at,
@@ -41,7 +47,7 @@ async def list_web_fetch_permissions(
     perms_list = await repo.list_all()
     result = []
     for p in perms_list:
-        result.append(await _serialize_perms(p))
+        result.append(await _serialize_perms(p, db))
     user_repo = UserRepository(db)
     users = await user_repo.list(limit=1000)
     users_without_perms = []
@@ -71,7 +77,7 @@ async def get_web_fetch_permission(
     perms = await repo.get_by_user_id(user_id)
     if not perms:
         return {"success": True, "permission": None}
-    return {"success": True, "permission": await _serialize_perms(perms)}
+    return {"success": True, "permission": await _serialize_perms(perms, db)}
 
 
 @router.put("/permissions/{user_id}")
@@ -84,4 +90,4 @@ async def update_web_fetch_permission(
     repo = WebFetchRepository(db)
     kwargs = {k: v for k, v in body.model_dump().items() if v is not None}
     perms = await repo.upsert(user_id, **kwargs)
-    return {"success": True, "permission": await _serialize_perms(perms)}
+    return {"success": True, "permission": await _serialize_perms(perms, db)}
