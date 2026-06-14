@@ -1,5 +1,11 @@
 # Changelog ACCOS
 
+## Scraper — base_path fix + Confluence API + Playwright discovery (Jun 14)
+- **base_path fix**: Вместо полного пути стартового URL — первые 2 сегмента. Confluence `/spaces/LM/pages/884739/...` → `/spaces/LM/`. Находит все страницы в пространстве, а не одну.
+- **Confluence REST API**: Авто-обнаружение страниц через `/rest/api/content?spaceKey=XX` с пагинацией. Если URL содержит `/spaces/{key}/` — пытается получить полный список через API.
+- **Playwright discovery**: Если Confluence API не сработал (не Confluence-сайт), запускает Playwright на стартовом URL, ждёт JS-рендеринга и собирает все ссылки из DOM. JS-навигация (деревья, табы) теперь учитываются.
+- **DocScraperAdapter**: Добавлен параметр `chromium_path` (по умолчанию `/usr/bin/chromium`). Playwright используется только для discovery, контент — через httpx+trafilatura.
+
 ## Block 0 — Module System Core (Jun 14)
 - **ModuleSettingDef**: Датакласс для описания настроек модуля (key, label, type, category, default, validation)
 - **BaseModule**: Расширен — добавлены `get_settings_schema()`, `get_admin_menu()`, `get_user_menu()`, `on_startup()`, `on_shutdown()` (все с default-реализациями)

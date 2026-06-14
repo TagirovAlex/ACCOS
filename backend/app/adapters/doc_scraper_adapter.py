@@ -53,6 +53,7 @@ class DocScraperAdapter(BaseAdapter):
         timeout: int = 30,
         concurrent: int = 3,
         user_agent: str = "",
+        chromium_path: str = "/usr/bin/chromium",
     ):
         self.max_pages = max_pages
         self.max_depth = max_depth
@@ -60,6 +61,7 @@ class DocScraperAdapter(BaseAdapter):
         self.timeout = timeout
         self.concurrent = concurrent
         self.user_agent = user_agent or "Mozilla/5.0 (compatible; ACCOS-DocBot/1.0)"
+        self.chromium_path = chromium_path
 
     async def execute(self, **kwargs) -> CrawlResult:
         return await self.crawl(
@@ -82,7 +84,8 @@ class DocScraperAdapter(BaseAdapter):
         base_url = site_url.rstrip("/")
         parsed = urlparse(base_url)
         base_domain = parsed.netloc
-        base_path = parsed.path or "/"
+        path_parts = parsed.path.strip("/").split("/") if parsed.path and parsed.path != "/" else []
+        base_path = "/" + "/".join(path_parts[:2]) + "/" if path_parts else "/"
 
         visited: set[str] = set()
         pages: list[ScrapedPage] = []
@@ -98,6 +101,16 @@ class DocScraperAdapter(BaseAdapter):
 
         async with httpx.AsyncClient(headers=headers, timeout=self.timeout) as client:
             queue: list[tuple[str, int]] = [(base_url, 0)]
+
+            api_pages = await self._discover_via_confluence_api(client, base_url)
+            if api_pages:
+                logger.info(f"Discovered {len(api_pages)} pages via Confluence API, using as seed")
+                queue = [(p, 0) for p in api_pages if p not in visited]
+            else:
+                pw_pages = await self._discover_via_playwright(base_url, base_domain)
+                if pw_pages:
+                    logger.info(f"Discovered {len(pw_pages)} pages via Playwright, using as seed")
+                    queue = [(p, 0) for p in pw_pages if p not in visited]
 
             while queue and len(pages) < max_pages:
                 url, depth = queue.pop(0)
@@ -200,3 +213,95 @@ class DocScraperAdapter(BaseAdapter):
                 continue
             links.append(absolute)
         return list(set(links))
+
+    async def _discover_via_confluence_api(self, client: httpx.AsyncClient, base_url: str) -> list[str]:
+        parsed = urlparse(base_url)
+        parts = parsed.path.strip("/").split("/")
+        space_key = None
+        for i, p in enumerate(parts):
+            if p == "spaces" and i + 1 < len(parts):
+                space_key = parts[i + 1]
+                break
+        if not space_key:
+            return []
+
+        scheme = parsed.scheme or "https"
+        root = f"{scheme}://{parsed.netloc}"
+        api_url = f"{root}/rest/api/content?spaceKey={space_key}&limit=100"
+
+        try:
+            resp = await client.get(api_url, follow_redirects=True, timeout=15)
+            if resp.status_code != 200:
+                return []
+            data = resp.json()
+            results = data.get("results", [])
+            if not results:
+                return []
+
+            pages: list[str] = []
+            for r in results:
+                webui = r.get("_links", {}).get("webui", "")
+                if webui:
+                    full_url = urljoin(root, webui).rstrip("/")
+                    pages.append(full_url)
+
+            while data.get("_links", {}).get("next"):
+                next_url = root + data["_links"]["next"]
+                resp = await client.get(next_url, follow_redirects=True, timeout=15)
+                if resp.status_code != 200:
+                    break
+                data = resp.json()
+                for r in data.get("results", []):
+                    webui = r.get("_links", {}).get("webui", "")
+                    if webui:
+                        full_url = urljoin(root, webui).rstrip("/")
+                        pages.append(full_url)
+
+            return pages
+        except Exception as e:
+            logger.debug(f"Confluence API discovery failed for {api_url}: {e}")
+            return []
+
+    async def _discover_via_playwright(self, base_url: str, base_domain: str) -> list[str]:
+        from playwright.async_api import async_playwright
+
+        try:
+            async with async_playwright() as pw:
+                browser = await pw.chromium.launch(
+                    executable_path=self.chromium_path,
+                    headless=True,
+                    args=["--no-sandbox", "--disable-setuid-sandbox"],
+                )
+                ctx = await browser.new_context(
+                    user_agent=self.user_agent,
+                    viewport={"width": 1920, "height": 1080},
+                )
+                page = await ctx.new_page()
+                await page.goto(base_url, wait_until="networkidle", timeout=self.timeout * 1000)
+                await page.wait_for_timeout(3000)
+
+                links = await page.evaluate("""
+                    () => {
+                        const urls = new Set();
+                        document.querySelectorAll('a[href]').forEach(a => {
+                            try {
+                                const href = a.href.split('#')[0].replace(/\/$/, '');
+                                if (href) urls.add(href);
+                            } catch(e) {}
+                        });
+                        return Array.from(urls);
+                    }
+                """)
+
+                await browser.close()
+
+                from urllib.parse import urlparse
+                discovered = []
+                for url in links:
+                    parsed = urlparse(url)
+                    if parsed.netloc == base_domain:
+                        discovered.append(url.rstrip("/"))
+                return list(set(discovered))
+        except Exception as e:
+            logger.warning(f"Playwright discovery failed: {e}")
+            return []
