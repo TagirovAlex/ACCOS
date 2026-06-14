@@ -14,7 +14,6 @@ import { GenerationList, GenerationShow } from "./pages/Generations";
 import { AssetList, AssetShow } from "./pages/Assets";
 import { GenerationQueue } from "./pages/GenerationQueue";
 import { FileManager } from "./pages/FileManager";
-import { Documents } from "./pages/Documents";
 import { SettingsList, SettingsEdit, SettingsCreate } from "./pages/Settings";
 import { BackupList } from "./pages/Backups";
 import { LlmServerList } from "./pages/LlmServers";
@@ -83,7 +82,6 @@ const App = () => (
           {isSuperAdmin && <Resource name="generations" options={{ label: "🎨 Генерации" }} list={GenerationList} show={GenerationShow} />}
           {isSuperAdmin && <Resource name="assets" options={{ label: "🖼 Ресурсы" }} list={AssetList} show={AssetShow} />}
           {canManageDocs && <Resource name="files" options={{ label: "📁 Файлы" }} list={FileManager} />}
-          {canManageDocs && <Resource name="documents" options={{ label: "📄 Документы" }} list={Documents} />}
           {isSuperAdmin && <Resource name="generation-queue" options={{ label: "⏳ Очередь" }} list={GenerationQueue} />}
           {(isSuperAdmin || isAdmin) && <Resource name="settings" options={{ label: "⚙ Настройки" }} list={SettingsList} edit={SettingsEdit} create={SettingsCreate} />}
           {(isSuperAdmin || isAdmin) && <Resource name="backups" options={{ label: "📦 Бэкапы" }} list={BackupList} />}

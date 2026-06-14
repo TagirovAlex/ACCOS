@@ -6,6 +6,7 @@ import {
 } from "@mui/material";
 import ExtensionIcon from "@mui/icons-material/Extension";
 import { getToken } from "../services/api";
+import { KnowledgePage } from "./KnowledgePage";
 
 interface SettingDef {
   module_name: string;
@@ -183,7 +184,7 @@ export const ModuleSettings = () => {
         const names: Record<string, string> = {
           chat: "Чат", comfyui: "ComfyUI", rag: "База знаний",
           web_fetch: "Web Fetch", doc_scraper: "Doc Scraper",
-          files: "Файлы", documents: "Документы",
+          files: "Файлы",
         };
         if (data.modules) {
           setModules(data.modules.map((m: any) => ({ name: m.name, label: names[m.name] || m.name })));
@@ -228,7 +229,11 @@ export const ModuleSettings = () => {
       </Paper>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography variant="h6" fontWeight={600} mb={3}>{current.label}</Typography>
-        <ModuleSettingsForm moduleName={current.name} onSaved={() => {}} />
+        {current.name === "rag" ? (
+          <KnowledgePage />
+        ) : (
+          <ModuleSettingsForm moduleName={current.name} onSaved={() => {}} />
+        )}
       </Box>
     </Box>
   );
