@@ -5,6 +5,8 @@ import re
 from datetime import datetime, timezone
 from uuid import UUID
 
+from sqlalchemy import text
+
 from app.adapters.lmstudio_adapter import LMStudioAdapter
 from app.adapters.web_fetch_adapter import WebFetchAdapter
 from app.db.models.chat import ChatMessage
@@ -62,7 +64,7 @@ async def _claim_next_chat_job():
     async with async_session_factory() as db:
         async with db.begin():
             result = await db.execute(
-                __import__("sqlalchemy").text("""
+                text("""
                     UPDATE chat_queue
                     SET status = 'processing', updated_at = NOW()
                     WHERE id = (
@@ -222,8 +224,8 @@ async def _process_chat_job(record):
             logger.warning(f"Chat job {queue_id}: exceeded max tool rounds")
             return
 
+        content = await _process_generate_block(content, uid, sid, queue_id)
         content = _process_compute_blocks(content, str(sid))
-        content = await _process_generate_block(content, uid, sid, queue_id, total_tokens_input, total_tokens_output)
 
         async with async_session_factory() as db:
             economy = EconomyService(db)
@@ -301,35 +303,35 @@ def _process_compute_blocks(content: str, session_id: str) -> str:
     return re.sub(r"\[COMPUTE\](.*?)\[/COMPUTE\]", _replace, content, flags=re.DOTALL)
 
 
-async def _process_generate_block(content: str, user_id: str, session_id, queue_id, tokens_input: int, tokens_output: int) -> str:
+async def _process_generate_block(content: str, user_id: str, session_id, queue_id) -> str:
+    m = re.search(r'\{"_generate":\s*(\{[^}]+\})\}', content)
+    if not m:
+        return content
     try:
-        payload = json.loads(content)
-        if not isinstance(payload, dict) or "_generate" not in payload:
-            return content
-        gen = payload["_generate"]
-        template_name = gen.get("template")
-        variables = gen.get("variables", {})
-        output_format = gen.get("format", "pdf")
-    except (json.JSONDecodeError, TypeError):
+        gen = json.loads(m.group(1))
+    except (json.JSONDecodeError, ValueError):
+        return content
+    template_name = gen.get("template")
+    variables = gen.get("variables", {})
+    output_format = gen.get("format", "pdf")
+    if not template_name:
         return content
 
     async with async_session_factory() as db:
         from app.repositories.template_repository import DocTemplateRepository
         repo = DocTemplateRepository(db)
-        templates = await repo.get_all()
+        templates = await repo.list_all()
         template = next((t for t in templates if t.name.lower() == template_name.lower()), None)
         if not template:
-            return content + f"\n\nError: template '{template_name}' not found"
+            return content
 
-        from app.services.document_generator_service import DocumentGeneratorService
-        gen_svc = DocumentGeneratorService()
-        output_path = gen_svc.generate(output_format, template_path=template.file_path, fields=variables)
+        output_path = document_generator_service.generate(output_format, template_path=template.file_path, fields=variables)
 
         from pathlib import Path
         p = Path(output_path)
         filename = f"{template_name}_{p.name}"
         doc = GeneratedDocument(
-            user_id=UUID(user_id) if user_id else None,
+            user_id=UUID(user_id),
             session_id=session_id,
             template_id=template.id,
             source_file=filename,
@@ -340,4 +342,4 @@ async def _process_generate_block(content: str, user_id: str, session_id, queue_
         db.add(doc)
         await db.commit()
 
-    return content + f"\n\n📄 **Document generated:** [{filename}](/api/v1/generated-documents/{doc.id}/download)"
+    return content[:m.start()] + content[m.end():] + f"\n\n📄 **Document generated:** [{filename}](/api/v1/admin/doc-templates/generated-documents/{doc.id}/download)"

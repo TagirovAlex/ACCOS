@@ -92,11 +92,11 @@ async def update_template(
     kwargs = {}
     if name:
         kwargs["name"] = name
-    if description:
+    if description is not None:
         kwargs["description"] = description
-    if variables:
+    if variables is not None and variables:
         kwargs["variables"] = variables
-    if category:
+    if category is not None:
         kwargs["category"] = category
     if file:
         ext = Path(file.filename or "template.html").suffix
@@ -135,6 +135,7 @@ async def download_generated_document(
     request: Request,
     doc_id: str,
     db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user_id),
 ):
     from app.db.models.doc_template import GeneratedDocument
     doc = await db.get(GeneratedDocument, UUID(doc_id))

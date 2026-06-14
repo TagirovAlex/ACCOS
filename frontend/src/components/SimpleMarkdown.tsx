@@ -83,10 +83,11 @@ function parseDocLinks(text: string): string {
     /\[source:\s*([^\]]+)\]/gi,
     (_match, url) => {
       const u = url.trim();
-      if (u.startsWith("http://") || u.startsWith("https://")) {
-        return `<a href="${u}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;opacity:0.8">🔗 ${u}</a>`;
+      if (/^https?:\/\//i.test(u)) {
+        const safe = u.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+        return `<a href="${safe}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;opacity:0.8">🔗 ${u}</a>`;
       }
-      return url;
+      return u;
     }
   );
   return text;
