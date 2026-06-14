@@ -88,7 +88,12 @@ async def _fetch_page(url: str, max_chars: int) -> TextContent:
     result = await adapter.fetch(url, max_chars=max_chars)
     if result["success"]:
         text = result["content"]
-        return TextContent(type="text", text=text)
+        source = result.get("url", url)
+        char_count = result.get("char_count", len(text))
+        header = f"Source: {source}\nFetched: {len(text)} chars\n\n"
+        if len(header) + len(text) > max_chars:
+            text = text[:max_chars - len(header) - 50]
+        return TextContent(type="text", text=header + text)
     return TextContent(type="text", text=f"Error: {result.get('error', 'Unknown error')}")
 
 
