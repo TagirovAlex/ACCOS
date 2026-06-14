@@ -89,8 +89,16 @@ async def _fetch_page(url: str, max_chars: int) -> TextContent:
     if result["success"]:
         text = result["content"]
         source = result.get("url", url)
-        char_count = result.get("char_count", len(text))
-        header = f"Source: {source}\nFetched: {len(text)} chars\n\n"
+        links = result.get("links", [])
+        header = f"Source: {source}\n"
+        links_section = ""
+        if links:
+            link_lines = []
+            for l in links[:30]:
+                link_lines.append(f"  {l['url']}  --  {l['text']}")
+            links_section = "\nLinks on this page:\n" + "\n".join(link_lines) + "\n\n"
+        header += links_section
+        header += f"---\n\n"
         if len(header) + len(text) > max_chars:
             text = text[:max_chars - len(header) - 50]
         return TextContent(type="text", text=header + text)
