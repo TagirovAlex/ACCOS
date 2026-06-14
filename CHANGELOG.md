@@ -1,5 +1,17 @@
 # Changelog ACCOS
 
+## Block 0 — Module System Core (Jun 14)
+- **ModuleSettingDef**: Датакласс для описания настроек модуля (key, label, type, category, default, validation)
+- **BaseModule**: Расширен — добавлены `get_settings_schema()`, `get_admin_menu()`, `get_user_menu()`, `on_startup()`, `on_shutdown()` (все с default-реализациями)
+- **ModuleRegistry**: Singleton-реестр модулей с `register()`, `get_module()`, `register_all()`, топологической сортировкой по `depends_on`
+- **ModuleSetting модель**: `module_settings` — user_id (nullable=глобальное), module_name, key, value. UniqueConstraint(user_id, module_name, key)
+- **Migration**: `f1e2d3c4b5a6` — add_module_settings_table
+- **ModuleSettingsRepository**: CRUD для глобальных и пользовательских настроек модулей
+- **Admin API**: `GET/PUT/DELETE /admin/modules/{name}/settings` — управление настройками модулей
+- **Admin UI**: Страница "Модули" в админке с переключением по модулям и формой редактирования настроек
+- **RAGModule fix**: Добавлены недостающие `register_routes()` и `get_name()` (были утеряны abstractmethod)
+- **main.py**: ModuleRegistry инициализируется с ChatModule, ComfyUIModule, RAGModule
+
 ## Phase 2 — Documentation Scraper + SPA Crawler (Jun 14)
 - **SPA Crawler Fix**: `SpaCrawlerAdapter` переписан — теперь через `page.evaluate()` с JSON-телом `{"curUrl": ...}` (Content-Type: application/json) вместо form-urlencoded. API ClickHelp возвращает 202 Accepted для form-urlencoded и 200 OK для JSON.
 - **Tree expansion**: `_discover()` теперь рекурсивно раскрывает все коллапсированные узлы ASP.NET TreeView (`CHTree_nodeChildrenCollapsed`) через `a[data-node-id] .CHTree_btn` перед сбором ссылок.

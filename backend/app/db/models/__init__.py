@@ -9,6 +9,7 @@ from app.db.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from app.db.models.llm_server import LlmServer
 from app.db.models.web_fetch_permissions import WebFetchPermissions
 from app.db.models.doc_scrape_job import DocScrapeJob
+from app.db.models.module_setting import ModuleSetting
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "LlmServer",
     "WebFetchPermissions",
     "DocScrapeJob",
+    "ModuleSetting",
 ]

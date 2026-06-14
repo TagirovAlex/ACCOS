@@ -17,13 +17,14 @@ from app.core.rate_limit import limiter
 
 from app.core.config import settings, PROJECT_ROOT
 from app.core.paths import UPLOADS_DIR, GENERATIONS_DIR, EDITS_DIR, VIDEOS_DIR, AVATARS_DIR
-from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin, knowledge, help as help_endpoint, web_fetch_admin, doc_scraper_admin
+from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin, knowledge, help as help_endpoint, web_fetch_admin, doc_scraper_admin, module_admin
 from app.services.accrual_service import run_auto_accrual
 from app.services.queue_worker import queue_worker_loop
 from app.services.scheduler_service import start_scheduler, stop_scheduler, update_schedule
 
 from app.services.settings_service import SettingsService
 from app.db.session import async_session_factory
+from app.modules import ModuleRegistry, ChatModule, ComfyUIModule, RAGModule
 
 import uvicorn
 
@@ -185,6 +186,14 @@ app.include_router(knowledge.router)
 app.include_router(help_endpoint.router)
 app.include_router(web_fetch_admin.router, prefix="/api/v1")
 app.include_router(doc_scraper_admin.router, prefix="/api/v1")
+app.include_router(module_admin.router, prefix="/api/v1")
+
+# Module registry — new modules register routes here
+_registry = ModuleRegistry()
+_registry.register(ChatModule())
+_registry.register(ComfyUIModule())
+_registry.register(RAGModule())
+logger.info(f"Module registry initialized with {len(_registry.get_all_modules())} modules")
 
 
 @app.get("/api/v1/health")

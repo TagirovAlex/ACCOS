@@ -1,18 +1,15 @@
-import logging
+from fastapi import FastAPI
 
+from app.api.v1.endpoints import knowledge
 from app.modules.base import BaseModule
-
-logger = logging.getLogger(__name__)
 
 
 class RAGModule(BaseModule):
     name = "rag"
-    description = "Knowledge base with RAG (Retrieval-Augmented Generation)"
+    depends_on = ["core"]
 
-    async def initialize(self):
-        logger.info("RAG module initialized")
-        return True
+    def register_routes(self, app: FastAPI) -> None:
+        app.include_router(knowledge.router)
 
-    async def shutdown(self):
-        logger.info("RAG module shutdown")
-        return True
+    def get_name(self) -> str:
+        return self.name
