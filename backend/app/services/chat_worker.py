@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 from app.adapters.lmstudio_adapter import LMStudioAdapter
+from app.adapters.web_fetch_adapter import WebFetchAdapter
 from app.db.models.chat import ChatMessage
 from app.db.models.chat_queue import ChatQueue
 from app.db.models.user import User
@@ -12,6 +13,42 @@ from app.services.economy_service import EconomyService
 from app.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
+
+WEB_FETCH_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_web_page",
+            "description": "Fetch a web page URL and return its content as markdown. "
+                            "Useful when you need to read articles, documentation, or any web content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL to fetch"},
+                    "max_chars": {"type": "number", "description": "Maximum characters to return", "default": 10000},
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_in_page",
+            "description": "Search for a query within a fetched web page. "
+                            "Useful when you need to find specific information on a page.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL of the page to search"},
+                    "query": {"type": "string", "description": "Text to search for"},
+                    "max_chars": {"type": "number", "description": "Maximum context characters around match", "default": 5000},
+                },
+                "required": ["url", "query"],
+            },
+        },
+    },
+]
 
 _chat_worker_running = False
 
@@ -84,54 +121,105 @@ async def _process_chat_job(record):
             base_url = await settings_svc.get("lmstudio_base_url")
             llm = LMStudioAdapter(api_key=api_key, model=model, base_url=base_url)
 
-        async def llm_call():
-            return await llm.chat_completion(prompt_messages)
+        messages = prompt_messages
+        total_tokens_input = 0
+        total_tokens_output = 0
 
-        async def poll_cancel():
-            while True:
-                await asyncio.sleep(2)
-                if await _is_cancelled(queue_id):
-                    return True
+        for round_num in range(6):
+            async def llm_call(current_messages=messages):
+                return await llm.chat_completion(current_messages, tools=WEB_FETCH_TOOLS)
 
-        llm_task = asyncio.create_task(llm_call())
-        poll_task = asyncio.create_task(poll_cancel())
+            async def poll_cancel():
+                while True:
+                    await asyncio.sleep(2)
+                    if await _is_cancelled(queue_id):
+                        return True
 
-        done, pending = await asyncio.wait(
-            [llm_task, poll_task],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+            llm_task = asyncio.create_task(llm_call())
+            poll_task = asyncio.create_task(poll_cancel())
 
-        for task in pending:
-            task.cancel()
-            try:
-                await task
-            except (asyncio.CancelledError, Exception):
-                pass
+            done, pending = await asyncio.wait(
+                [llm_task, poll_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
 
-        if poll_task in done and not poll_task.exception() and poll_task.result():
-            await _update_job_status(queue_id, "cancelled")
-            logger.info(f"Chat job {queue_id} cancelled during generation")
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+
+            if poll_task in done and not poll_task.exception() and poll_task.result():
+                await _update_job_status(queue_id, "cancelled")
+                logger.info(f"Chat job {queue_id} cancelled during generation")
+                return
+
+            llm_result = llm_task.result()
+
+            if not llm_result["success"]:
+                await _update_job_status(queue_id, "failed", llm_result.get("error", "LLM call failed"))
+                logger.error(f"Chat job {queue_id} failed: {llm_result.get('error')}")
+                return
+
+            if await _is_cancelled(queue_id):
+                await _update_job_status(queue_id, "cancelled")
+                logger.info(f"Chat job {queue_id} cancelled after response")
+                return
+
+            total_tokens_input += llm_result.get("tokens_input", 0)
+            total_tokens_output += llm_result.get("tokens_output", 0)
+
+            tool_calls = llm_result.get("tool_calls")
+            if not tool_calls:
+                content = llm_result["content"]
+                break
+
+            logger.info(f"Chat job {queue_id} round {round_num + 1}: {len(tool_calls)} tool call(s)")
+            for tc in tool_calls:
+                fn = tc["function"]
+                name = fn["name"]
+                try:
+                    args = json.loads(fn["arguments"])
+                except json.JSONDecodeError:
+                    args = {}
+
+                if name == "fetch_web_page":
+                    fetcher = WebFetchAdapter()
+                    result = await fetcher.fetch(args.get("url", ""), max_chars=args.get("max_chars", 10000))
+                    tool_content = result.get("content", result.get("error", "No content"))
+                    if result.get("links"):
+                        tool_content += "\n\nLinks on this page:\n" + "\n".join(
+                            f"- {l['text']}: {l['url']}" for l in result["links"][:20]
+                        )
+                elif name == "search_in_page":
+                    fetcher = WebFetchAdapter()
+                    fetch_result = await fetcher.fetch(args.get("url", ""), max_chars=args.get("max_chars", 10000) * 2)
+                    if not fetch_result["success"]:
+                        tool_content = f"Error: {fetch_result['error']}"
+                    else:
+                        text = fetch_result["content"]
+                        query = args.get("query", "")
+                        idx = text.lower().find(query.lower())
+                        if idx == -1:
+                            tool_content = f"Query '{query}' not found on the page."
+                        else:
+                            half = args.get("max_chars", 5000) // 2
+                            start = max(0, idx - half)
+                            end = min(len(text), idx + len(query) + half)
+                            tool_content = f"Found context around '{query}':\n\n{text[start:end]}"
+                else:
+                    tool_content = f"Unknown tool: {name}"
+
+                messages.append({"role": "tool", "tool_call_id": tc["id"], "content": tool_content[:50000]})
+        else:
+            await _update_job_status(queue_id, "failed", "Max tool call rounds exceeded")
+            logger.warning(f"Chat job {queue_id}: exceeded max tool rounds")
             return
-
-        llm_result = llm_task.result()
-
-        if not llm_result["success"]:
-            await _update_job_status(queue_id, "failed", llm_result.get("error", "LLM call failed"))
-            logger.error(f"Chat job {queue_id} failed: {llm_result.get('error')}")
-            return
-
-        if await _is_cancelled(queue_id):
-            await _update_job_status(queue_id, "cancelled")
-            logger.info(f"Chat job {queue_id} cancelled after response (discarded)")
-            return
-
-        tokens_input = llm_result.get("tokens_input", 0)
-        tokens_output = llm_result.get("tokens_output", 0)
-        content = llm_result["content"]
 
         async with async_session_factory() as db:
             economy = EconomyService(db)
-            cost = await economy.calculate_cost("llm", tokens_input=tokens_input, tokens_output=tokens_output)
+            cost = await economy.calculate_cost("llm", tokens_input=total_tokens_input, tokens_output=total_tokens_output)
 
             user = await db.get(User, uid)
             if not user:
@@ -145,18 +233,18 @@ async def _process_chat_job(record):
             user.balance -= cost
             db.add(ChatMessage(
                 session_id=sid, role="assistant", content=content,
-                tokens_input=tokens_input, tokens_output=tokens_output, cost=cost,
+                tokens_input=total_tokens_input, tokens_output=total_tokens_output, cost=cost,
             ))
             q = await db.get(ChatQueue, queue_id)
             if q:
                 q.status = "completed"
-                q.tokens_input = tokens_input
-                q.tokens_output = tokens_output
+                q.tokens_input = total_tokens_input
+                q.tokens_output = total_tokens_output
                 q.cost = cost
                 q.updated_at = datetime.now(timezone.utc)
             await db.commit()
 
-        logger.info(f"Chat job {queue_id} completed ({tokens_input}↑ {tokens_output}↓ {cost} MS)")
+        logger.info(f"Chat job {queue_id} completed ({total_tokens_input}↑ {total_tokens_output}↓ {cost} MS)")
 
     except asyncio.CancelledError:
         await _update_job_status(queue_id, "cancelled")

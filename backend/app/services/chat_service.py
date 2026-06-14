@@ -181,8 +181,16 @@ class ChatService:
             logger.warning(f"Web fetch injection failed: {e}")
 
         messages: list[dict] = []
+        tool_instruction = (
+            "Ты имеешь доступ к инструментам fetch_web_page (получить содержимое веб-страницы) "
+            "и search_in_page (искать текст на странице). "
+            "Если тебе нужно получить информацию из интернета — используй эти инструменты, не говори что не можешь."
+        )
         if system_content:
+            system_content += "\n\n" + tool_instruction
             messages.append({"role": "system", "content": system_content})
+        else:
+            messages.append({"role": "system", "content": tool_instruction})
         for m in history[-ctx_count:]:
             messages.append({"role": m.role, "content": m.content})
         messages.append({"role": "user", "content": message})

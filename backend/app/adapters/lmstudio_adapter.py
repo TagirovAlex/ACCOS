@@ -2,6 +2,10 @@ import logging
 
 import httpx
 
+from typing import Any
+
+import httpx
+
 from app.adapters.base import BaseAdapter
 from app.core.config import settings
 
@@ -22,14 +26,17 @@ class LMStudioAdapter(BaseAdapter):
 
     async def execute(self, **kwargs) -> dict:
         messages = kwargs.get("messages", [])
-        return await self.chat_completion(messages)
+        tools = kwargs.get("tools")
+        return await self.chat_completion(messages, tools=tools)
 
-    async def chat_completion(self, messages: list[dict]) -> dict:
-        payload = {
+    async def chat_completion(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "stream": False,
         }
+        if tools:
+            payload["tools"] = tools
         try:
             async with httpx.AsyncClient(timeout=None) as client:
                 response = await client.post(
@@ -40,13 +47,18 @@ class LMStudioAdapter(BaseAdapter):
                 response.raise_for_status()
                 data = response.json()
                 choice = data["choices"][0]
-                return {
+                msg = choice["message"]
+                result: dict = {
                     "success": True,
-                    "content": choice["message"]["content"],
+                    "content": msg.get("content", ""),
                     "tokens_input": data.get("usage", {}).get("prompt_tokens", 0),
                     "tokens_output": data.get("usage", {}).get("completion_tokens", 0),
                     "model": data.get("model", "unknown"),
                 }
+                if msg.get("tool_calls"):
+                    result["tool_calls"] = msg["tool_calls"]
+                    result["finish_reason"] = choice.get("finish_reason", "tool_calls")
+                return result
         except httpx.TimeoutException:
             logger.error("LMStudio request timed out")
             return {"success": False, "error": "Request timed out"}
