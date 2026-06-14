@@ -1,0 +1,10 @@
+/opt/accos/logs/accos.log {
+    su root root
+    daily
+    rotate 14
+    compress
+    delaycompress
+    copytruncate
+    missingok
+    notifempty
+}
