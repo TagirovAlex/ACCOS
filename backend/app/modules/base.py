@@ -35,9 +35,8 @@ class BaseModule(ABC):
     def register_routes(self, app: FastAPI) -> None:
         pass
 
-    @abstractmethod
     def get_name(self) -> str:
-        pass
+        return self.name
 
     def get_settings_schema(self) -> list[ModuleSettingDef]:
         return []
