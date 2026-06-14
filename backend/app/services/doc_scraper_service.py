@@ -170,7 +170,7 @@ class DocScraperService:
                 job_id,
                 status="completed",
                 chunks_ingested=len(page_chunks),
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             await self.session.commit()
 

@@ -16,9 +16,9 @@ class DocScraperRepository:
         if "id" not in kwargs:
             kwargs["id"] = str(uuid.uuid4())
         if "created_at" not in kwargs:
-            kwargs["created_at"] = datetime.now(timezone.utc)
+            kwargs["created_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
         if "updated_at" not in kwargs:
-            kwargs["updated_at"] = datetime.now(timezone.utc)
+            kwargs["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
         job = DocScrapeJob(**kwargs)
         self.session.add(job)
         await self.session.flush()

@@ -112,7 +112,7 @@ class DocScraperAdapter(BaseAdapter):
                 parsed_url = urlparse(url)
                 if parsed_url.netloc and parsed_url.netloc != base_domain:
                     continue
-                if not parsed_url.path.startswith(base_path):
+                if not parsed_url.path.startswith(base_path) and parsed_url.path != "":
                     continue
 
                 visited.add(url)
