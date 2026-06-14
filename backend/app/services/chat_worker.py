@@ -1,16 +1,21 @@
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timezone
+from uuid import UUID
 
 from app.adapters.lmstudio_adapter import LMStudioAdapter
 from app.adapters.web_fetch_adapter import WebFetchAdapter
 from app.db.models.chat import ChatMessage
 from app.db.models.chat_queue import ChatQueue
+from app.db.models.doc_template import GeneratedDocument
 from app.db.models.user import User
 from app.db.session import async_session_factory
 from app.services.economy_service import EconomyService
 from app.services.settings_service import SettingsService
+from app.services import compute_service
+from app.services import document_generator_service
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +222,9 @@ async def _process_chat_job(record):
             logger.warning(f"Chat job {queue_id}: exceeded max tool rounds")
             return
 
+        content = _process_compute_blocks(content, str(sid))
+        content = await _process_generate_block(content, uid, sid, queue_id, total_tokens_input, total_tokens_output)
+
         async with async_session_factory() as db:
             economy = EconomyService(db)
             cost = await economy.calculate_cost("llm", tokens_input=total_tokens_input, tokens_output=total_tokens_output)
@@ -273,3 +281,63 @@ async def ensure_chat_worker():
     finally:
         _chat_worker_running = False
         logger.info("Chat worker stopped (queue empty)")
+
+
+def _process_compute_blocks(content: str, session_id: str) -> str:
+    def _replace(m):
+        code = m.group(1).strip().split("\n")
+        result = compute_service.execute(session_id, code)
+        if not result["success"]:
+            return f"[COMPUTE]\nError: {result.get('error', 'unknown')}\n[/COMPUTE]"
+        lines = []
+        for r in result["results"]:
+            lines.append(r)
+        output = "\n".join(lines)
+        if result["variables"]:
+            vars_str = ", ".join(f"{k}={v}" for k, v in result["variables"].items())
+            output += f"\n\n_Variables: {vars_str}_"
+        return f"**_Computed result_:**\n```\n{output}\n```"
+
+    return re.sub(r"\[COMPUTE\](.*?)\[/COMPUTE\]", _replace, content, flags=re.DOTALL)
+
+
+async def _process_generate_block(content: str, user_id: str, session_id, queue_id, tokens_input: int, tokens_output: int) -> str:
+    try:
+        payload = json.loads(content)
+        if not isinstance(payload, dict) or "_generate" not in payload:
+            return content
+        gen = payload["_generate"]
+        template_name = gen.get("template")
+        variables = gen.get("variables", {})
+        output_format = gen.get("format", "pdf")
+    except (json.JSONDecodeError, TypeError):
+        return content
+
+    async with async_session_factory() as db:
+        from app.repositories.template_repository import DocTemplateRepository
+        repo = DocTemplateRepository(db)
+        templates = await repo.get_all()
+        template = next((t for t in templates if t.name.lower() == template_name.lower()), None)
+        if not template:
+            return content + f"\n\nError: template '{template_name}' not found"
+
+        from app.services.document_generator_service import DocumentGeneratorService
+        gen_svc = DocumentGeneratorService()
+        output_path = gen_svc.generate(output_format, template_path=template.file_path, fields=variables)
+
+        from pathlib import Path
+        p = Path(output_path)
+        filename = f"{template_name}_{p.name}"
+        doc = GeneratedDocument(
+            user_id=UUID(user_id) if user_id else None,
+            session_id=session_id,
+            template_id=template.id,
+            source_file=filename,
+            file_path=output_path,
+            format=output_format,
+            prompt=json.dumps(variables),
+        )
+        db.add(doc)
+        await db.commit()
+
+    return content + f"\n\n📄 **Document generated:** [{filename}](/api/v1/generated-documents/{doc.id}/download)"

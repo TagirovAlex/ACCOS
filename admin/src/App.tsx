@@ -20,6 +20,7 @@ import { LlmServerList } from "./pages/LlmServers";
 import { WebFetchAccess } from "./pages/WebFetchAccess";
 import { DocScraperAccess } from "./pages/DocScraper";
 import { ModuleSettings } from "./pages/ModuleSettings";
+import { TemplateList } from "./pages/Templates";
 import "./App.css";
 
 const ThemeMenuItem = () => {
@@ -89,6 +90,7 @@ const App = () => (
           {(isSuperAdmin || isAdmin) && <Resource name="web-fetch" options={{ label: "🌐 Web Fetch" }} list={WebFetchAccess} />}
           {(isSuperAdmin || isAdmin) && <Resource name="doc-scraper" options={{ label: "📚 Doc Scraper" }} list={DocScraperAccess} />}
           {(isSuperAdmin || isAdmin) && <Resource name="module-settings" options={{ label: "🧩 Модули" }} list={ModuleSettings} />}
+          {isSuperAdmin && <Resource name="doc-templates" options={{ label: "📄 Бланки" }} list={TemplateList} />}
         </>
       );
     }}

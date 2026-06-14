@@ -227,6 +227,14 @@ class ChatService:
             "и search_in_page (искать текст на странице). "
             "Если тебе нужно получить информацию из интернета — используй эти инструменты, не говори что не можешь."
         )
+        gen_instruction = (
+            "\n\nВы можете генерировать документы. Для генерации верните JSON: "
+            '{"_generate": {"template": "имя шаблона", "variables": {"ключ": "значение"}, "format": "pdf"}} '
+            "Форматы: pdf, docx, xlsx, pptx. "
+            "Также можете выполнять вычисления в блоке [COMPUTE]код[/COMPUTE] - код на Python с сохранением переменных между вызовами. "
+            "Если используете информацию из интернета - указывайте источник в формате [source: url]."
+        )
+        tool_instruction += gen_instruction
         if system_content:
             system_content += "\n\n" + tool_instruction
             messages.append({"role": "system", "content": system_content})

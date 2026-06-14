@@ -69,16 +69,27 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
 }
 
 function parseDocLinks(text: string): string {
-  return text.replace(
+  text = text.replace(
     /\[doc:\s*([^\]]+)\]/gi,
     (_match, id) => {
       const isUuid = /^[a-f0-9\-]+$/i.test(id.trim());
       if (isUuid) {
-        return `<span style="text-decoration:underline;font-weight:600;cursor:pointer;color:inherit" onclick="var w=Math.round(screen.width*0.85);var h=Math.round(screen.height*0.85);window.open(\'/api/v1/knowledge/${id}/preview\',\'preview\',\'width=\'+w+\',height=\'+h+\',scrollbars=yes,resizable=yes\')">📄 [документ]</span>`;
+        return `<span style="text-decoration:underline;font-weight:600;cursor:pointer;color:inherit" onclick="var w=Math.round(screen.width*0.85);var h=Math.round(screen.height*0.85);window.open('/api/v1/knowledge/${id}/preview','preview','width='+w+',height='+h+',scrollbars=yes,resizable=yes')">📄 [документ]</span>`;
       }
       return `<span style="font-weight:500;opacity:0.8">📄 ${id.trim()}</span>`;
     }
   );
+  text = text.replace(
+    /\[source:\s*([^\]]+)\]/gi,
+    (_match, url) => {
+      const u = url.trim();
+      if (u.startsWith("http://") || u.startsWith("https://")) {
+        return `<a href="${u}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;opacity:0.8">🔗 ${u}</a>`;
+      }
+      return url;
+    }
+  );
+  return text;
 }
 
 export const SimpleMarkdown = ({ text }: Props) => {
