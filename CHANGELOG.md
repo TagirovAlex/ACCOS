@@ -1,5 +1,12 @@
 # Changelog ACCOS
 
+## Phase 1C — Web Fetch Module: MCP Server for LM Studio (Jun 14)
+- **MCP WebFetch сервер**: порт 8100, SSE transport, два инструмента — `fetch_web_page` и `search_in_page`
+- **Server**: запускается в lifespan main.py как фоновый uvicorn, использует `WebFetchAdapter` для загрузки
+- **LM Studio конфиг**: `config/lmstudio_mcp_servers.json` — SSE endpoint для подключения
+- **Dependency**: `mcp>=1.27.0` (MCP Python SDK + sse-starlette)
+- **FastAPI upgrade**: 0.115.0 → 0.136.3 (совместимость со starlette 1.x от MCP SDK)
+
 ## Phase 1B — Web Fetch Module: Backend + Admin UI (Jun 14)
 - **WebFetchRepository**: CRUD + upsert + domain validation per user
 - **WebFetchService**: URL auto-detection (regex), permission chain (global → user permission → per-user enabled → domains), trafilatura extraction

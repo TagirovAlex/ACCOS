@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "accos-web-fetch": {
+      "description": "ACCOS Web Fetch — получение содержимого веб-страниц через чат",
+      "type": "sse",
+      "url": "http://SERVER_IP:8100/api/v1/mcp/sse"
+    }
+  }
+}

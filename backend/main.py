@@ -25,6 +25,8 @@ from app.services.scheduler_service import start_scheduler, stop_scheduler, upda
 from app.services.settings_service import SettingsService
 from app.db.session import async_session_factory
 
+import uvicorn
+
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.DEBUG),
     format="[%(asctime)s] %(levelname)s %(module)s: %(message)s",
@@ -42,11 +44,12 @@ logging.getLogger().addHandler(file_handler)
 
 _accrual_task = None
 _queue_worker_task = None
+_mcp_server_task = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _accrual_task, _queue_worker_task
+    global _accrual_task, _queue_worker_task, _mcp_server_task
 
     logger.info("Seeding default settings...")
     try:
@@ -77,13 +80,24 @@ async def lifespan(app: FastAPI):
         await start_scheduler()
     except Exception as e:
         logger.error(f"Failed to start reindex scheduler: {e}")
+
+    logger.info("Starting MCP WebFetch server on port 8100...")
+    try:
+        from app.mcp.server_app import mcp_starlette
+        mcp_config = uvicorn.Config(mcp_starlette, host="0.0.0.0", port=8100, log_level="info", reload=False, workers=1)
+        mcp_server = uvicorn.Server(mcp_config)
+        _mcp_server_task = asyncio.create_task(mcp_server.serve())
+        logger.info("MCP WebFetch server started on http://0.0.0.0:8100/api/v1/mcp/sse")
+    except Exception as e:
+        logger.warning(f"Failed to start MCP server: {e}")
+
     yield
     try:
         await stop_scheduler()
     except Exception as e:
         logger.error(f"Failed to stop reindex scheduler: {e}")
-    for task in (_accrual_task, _queue_worker_task):
-        if task:
+    for task in (_accrual_task, _queue_worker_task, _mcp_server_task):
+        if task and not task.done():
             task.cancel()
     logger.info("Background tasks stopped")
 
