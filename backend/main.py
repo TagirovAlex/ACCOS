@@ -24,7 +24,7 @@ from app.services.scheduler_service import start_scheduler, stop_scheduler, upda
 
 from app.services.settings_service import SettingsService
 from app.db.session import async_session_factory
-from app.modules import ModuleRegistry, ChatModule, ComfyUIModule, RAGModule, WebFetchModule, DocScraperModule, FileModule, DocumentModule
+from app.modules import ModuleRegistry, ChatModule, ComfyUIModule, RAGModule, WebFetchModule, DocScraperModule, FileModule
 
 import uvicorn
 
@@ -208,7 +208,6 @@ _registry.register(RAGModule())
 _registry.register(WebFetchModule())
 _registry.register(DocScraperModule())
 _registry.register(FileModule())
-_registry.register(DocumentModule())
 logger.info(f"Module registry initialized with {len(_registry.get_all_modules())} modules")
 
 
