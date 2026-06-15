@@ -72,19 +72,11 @@ export const ChatPage = ({ user }: ChatPageProps) => {
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [attachedPreview, setAttachedPreview] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [supportsVision, setSupportsVision] = useState(false);
   const avatarUrl = user?.avatar_path ? `/${user.avatar_path}` : null;
 
-  useEffect(() => { loadChats(); checkVision(); return () => stopPolling(); }, []);
+  useEffect(() => { loadChats(); return () => stopPolling(); }, []);
   useEffect(() => { if (activeChat) loadMessages(activeChat); return () => stopPolling(); }, [activeChat]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, typing]);
-
-  const checkVision = async () => {
-    try {
-      const res: any = await api("GET", "/chat/vision");
-      setSupportsVision(res.supports_vision);
-    } catch { /* ignore */ }
-  };
 
   const loadChats = async () => {
     try {
@@ -273,8 +265,6 @@ export const ChatPage = ({ user }: ChatPageProps) => {
 
   const activeChatData = chats.find(c => c.id === activeChat);
 
-  const canAttach = supportsVision;
-
   const fileName = attachedFile?.name || "";
 
   return (
@@ -391,15 +381,13 @@ export const ChatPage = ({ user }: ChatPageProps) => {
                 </Box>
               )}
               <Box sx={{ display: "flex", gap: 1 }}>
-                {canAttach && (
-                  <>
-                    <input type="file" ref={fileInputRef} hidden onChange={e => handleFileSelect(e.target.files?.[0] || null)} />
-                    <IconButton size="small" onClick={() => fileInputRef.current?.click()} sx={{ alignSelf: "flex-end", mb: 0.5 }} title="Прикрепить файл">
-                      <AttachFileIcon />
-                    </IconButton>
-                  </>
-                )}
-                <TextField fullWidth size="small" placeholder={canAttach ? "Введите сообщение..." : "Прикрепите файл..."} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()} onPaste={handlePaste} disabled={loading} sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3 } }} />
+                <>
+                  <input type="file" ref={fileInputRef} hidden onChange={e => handleFileSelect(e.target.files?.[0] || null)} />
+                  <IconButton size="small" onClick={() => fileInputRef.current?.click()} sx={{ alignSelf: "flex-end", mb: 0.5 }} title="Прикрепить файл">
+                    <AttachFileIcon />
+                  </IconButton>
+                </>
+                <TextField fullWidth size="small" placeholder="Введите сообщение..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()} onPaste={handlePaste} disabled={loading} sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3 } }} />
                 <IconButton color="primary" onClick={sendMessage} disabled={loading || (!input.trim() && !attachedFile)} sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}>
                   <SendIcon />
                 </IconButton>

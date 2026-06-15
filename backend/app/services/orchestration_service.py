@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import PROJECT_ROOT
+from app.core.paths import resolve_path
 from app.repositories.generation_repository import GenerationRepository
 from app.services.economy_service import EconomyService
 
@@ -29,7 +29,7 @@ class OrchestrationService:
         if not reference_images:
             assets = gen.assets
             if assets:
-                reference_images = [str(PROJECT_ROOT / a.file_path) for a in assets if a.file_path]
+                reference_images = [str(resolve_path(a.file_path)) for a in assets if a.file_path]
         if not reference_images:
             return {"success": False, "error": "No reference images available"}
 
@@ -75,7 +75,7 @@ class OrchestrationService:
         if not deduct["success"]:
             return {"success": False, "error": deduct.get("error", "Insufficient balance")}
 
-        source_paths = [str(PROJECT_ROOT / a.file_path) for a in assets if a.file_path]
+        source_paths = [str(resolve_path(a.file_path)) for a in assets if a.file_path]
         ref_json = json.dumps(source_paths)
 
         source_uuid = UUID(generation_id)

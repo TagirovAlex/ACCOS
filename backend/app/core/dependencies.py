@@ -21,6 +21,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         finally:
             await session.close()
 
+    pending = session.info.pop("pending_index", [])
+    if pending:
+        import asyncio
+        from app.services.queue_worker import enqueue_knowledge_index
+        for doc_id in pending:
+            asyncio.create_task(enqueue_knowledge_index(doc_id))
+
 
 async def get_current_user_id(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -47,6 +54,6 @@ async def require_admin(
     db: AsyncSession = Depends(get_db),
 ) -> str:
     user = await db.get(User, UUID(user_id))
-    if not user or user.role not in ("admin", "super_admin"):
+    if not user or user.admin_role not in ("admin", "super_admin", "group_admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
     return user_id

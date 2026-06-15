@@ -17,6 +17,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import UploadIcon from "@mui/icons-material/Upload";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
+import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
 
 interface FileEntry {
   name: string;
@@ -65,12 +66,15 @@ export const FileManager = () => {
   const [viewMode, setViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("files_view") as "list" | "tiles") ?? "tiles");
   const [previewEntry, setPreviewEntry] = useState<FileEntry | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadFolder, setUploadFolder] = useState("");
   const [uploadNewFolder, setUploadNewFolder] = useState(false);
   const [uploadFolderOptions, setUploadFolderOptions] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadResults, setUploadResults] = useState<{filename:string;success:boolean;error?:string}[] | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [createFolderName, setCreateFolderName] = useState("");
 
   const adminRole = localStorage.getItem("admin_role") || "none";
   const isSuperAdmin = adminRole === "super_admin";
@@ -249,6 +253,7 @@ export const FileManager = () => {
   );
 
   const canUpload = currentPath === "knowledge" || currentPath.startsWith("knowledge/");
+  const currentFolder = currentPath.startsWith("knowledge/") ? currentPath.slice("knowledge/".length) : "";
 
   const fetchExistingFolders = async () => {
     try {
@@ -266,27 +271,26 @@ export const FileManager = () => {
   };
 
   const handleUpload = async () => {
-    if (!uploadFile) return;
+    if (!uploadFiles.length) return;
     setUploading(true);
     setUploadError(null);
+    setUploadResults(null);
     try {
       const token = adminToken();
       const form = new FormData();
-      form.append("file", uploadFile);
-      form.append("path", "knowledge");
-      form.append("folder", uploadFolder);
-      const res = await fetch("/api/v1/admin/files/upload", {
+      for (const f of uploadFiles) form.append("files", f);
+      const targetFolder = uploadFolder
+        ? (currentFolder ? `${currentFolder}/${uploadFolder}` : uploadFolder)
+        : currentFolder;
+      form.append("folder", targetFolder);
+      const res = await fetch("/api/v1/knowledge/upload-batch", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
       const data = await res.json();
       if (data.success) {
-        setUploadOpen(false);
-        setUploadFile(null);
-        setUploadFolder("");
-        setUploadNewFolder(false);
-        load("knowledge");
+        setUploadResults(data.results || []);
       } else {
         setUploadError(data.error || data.detail || "Ошибка загрузки");
       }
@@ -303,7 +307,7 @@ export const FileManager = () => {
   ) : viewMode === "list" ? listView : tilesView;
 
   return (
-    <Box>
+    <><Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
         <Button startIcon={<ArrowBackIcon />} size="small" onClick={() => redirect("/")}>
           Дашборд
@@ -316,17 +320,59 @@ export const FileManager = () => {
           <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
           <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
         </ToggleButtonGroup>
-        {canUpload && (
+        {canUpload && (<>
+          <Button startIcon={<CreateNewFolderIcon />} variant="outlined" size="small"
+            onClick={() => { setCreateFolderOpen(true); setCreateFolderName(""); }}>
+            + Папка
+          </Button>
           <Button startIcon={<UploadIcon />} variant="contained" size="small"
-            onClick={() => { setUploadFile(null); setUploadFolder(""); setUploadNewFolder(false);
+            onClick={() => { setUploadFiles([]); setUploadFolder(""); setUploadNewFolder(false); setUploadResults(null);
               fetchExistingFolders(); setUploadOpen(true); }}>
             Загрузить
           </Button>
-        )}
+        </>)}
         <IconButton onClick={() => load(currentPath)} title="Обновить">
           <RefreshIcon />
         </IconButton>
       </Box>
+
+      <Dialog open={createFolderOpen} onClose={() => setCreateFolderOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Новая папка</DialogTitle>
+        <DialogContent>
+          <TextField autoFocus fullWidth size="small" label="Имя папки" value={createFolderName}
+            onChange={(e) => setCreateFolderName(e.target.value)}
+            onKeyDown={async (e) => {
+              if (e.key === "Enter" && createFolderName.trim()) {
+                const token = adminToken();
+                try {
+                  const f = new FormData();
+                  f.append("path", currentPath);
+                  f.append("name", createFolderName.trim());
+                  await fetch("/api/v1/admin/files/mkdir", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: f });
+                  setCreateFolderOpen(false);
+                  load(currentPath);
+                } catch (e) {}
+              }
+            }} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateFolderOpen(false)}>Отмена</Button>
+          <Button variant="contained" disabled={!createFolderName.trim()}
+            onClick={async () => {
+              const token = adminToken();
+              try {
+                const f = new FormData();
+                f.append("path", currentPath);
+                f.append("name", createFolderName.trim());
+                await fetch("/api/v1/admin/files/mkdir", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: f });
+                setCreateFolderOpen(false);
+                load(currentPath);
+              } catch (e) {}
+            }}>
+            Создать
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Breadcrumbs sx={{ mb: 2 }}>
         <Link underline="hover" color="inherit" sx={{ cursor: "pointer" }} onClick={() => load("")}>
@@ -376,15 +422,34 @@ export const FileManager = () => {
         )}
       </Dialog>
 
-      <Dialog open={uploadOpen} onClose={() => !uploading && setUploadOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Загрузка документа</DialogTitle>
+      <Dialog open={uploadOpen} onClose={() => { if (!uploading) { setUploadOpen(false); if (uploadResults) load("knowledge"); } }} maxWidth="sm" fullWidth>
+        <DialogTitle>{uploadResults ? "Результаты загрузки" : "Загрузка документов"}</DialogTitle>
         <DialogContent>
+          {uploadResults ? (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 1 }}>
+              {uploadResults.map((r, i) => (
+                <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography variant="body2" sx={{ flex: 1 }}>{r.filename}</Typography>
+                  <Chip size="small" label={r.success ? "OK" : "Ошибка"}
+                    color={r.success ? "success" : "error"} />
+                  {r.error && <Typography variant="caption" color="error">{r.error}</Typography>}
+                </Box>
+              ))}
+            </Box>
+          ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
             <Button variant="outlined" component="label">
-              {uploadFile ? uploadFile.name : "Выберите файл"}
-              <input type="file" hidden accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+              {uploadFiles.length ? `Выбрано файлов: ${uploadFiles.length}` : "Выберите файлы"}
+              <input type="file" hidden multiple accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
+                onChange={(e) => setUploadFiles(Array.from(e.target.files || []))} />
             </Button>
+            {uploadFiles.length > 0 && (
+              <Box sx={{ maxHeight: 200, overflow: "auto" }}>
+                {uploadFiles.map((f, i) => (
+                  <Typography key={i} variant="caption" display="block">{f.name}</Typography>
+                ))}
+              </Box>
+            )}
             <FormControl size="small" fullWidth>
               <InputLabel>Отдел</InputLabel>
               <Select value={uploadNewFolder ? "__new__" : uploadFolder}
@@ -398,29 +463,36 @@ export const FileManager = () => {
                     setUploadFolder(e.target.value);
                   }
                 }}>
-                <MenuItem value=""><em>Общий доступ</em></MenuItem>
+                <MenuItem value=""><em>Текущая папка ({currentFolder || "Общий доступ"})</em></MenuItem>
                 {uploadFolderOptions.map((f) => (
                   <MenuItem key={f} value={f}>{f}</MenuItem>
                 ))}
-                <MenuItem value="__new__">+ Новый отдел</MenuItem>
+                <MenuItem value="__new__">+ Новая папка</MenuItem>
               </Select>
             </FormControl>
             {uploadNewFolder && (
-              <TextField label="Название нового отдела" size="small" value={uploadFolder}
+              <TextField label="Название новой папки" size="small" value={uploadFolder}
                 onChange={(e) => setUploadFolder(e.target.value)} />
             )}
             {uploadError && (
               <Typography variant="caption" color="error">{uploadError}</Typography>
             )}
           </Box>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setUploadOpen(false)} disabled={uploading}>Отмена</Button>
-          <Button variant="contained" onClick={handleUpload} disabled={!uploadFile || uploading}>
-            {uploading ? "Загрузка..." : "Загрузить"}
-          </Button>
+          {uploadResults ? (
+            <Button onClick={() => { setUploadOpen(false); load("knowledge"); }} variant="contained">Готово</Button>
+          ) : (
+            <>
+              <Button onClick={() => setUploadOpen(false)} disabled={uploading}>Отмена</Button>
+              <Button variant="contained" onClick={handleUpload} disabled={!uploadFiles.length || uploading}>
+                {uploading ? "Загрузка..." : `Загрузить (${uploadFiles.length})`}
+              </Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
     </Box>
-  );
+ </> );
 };

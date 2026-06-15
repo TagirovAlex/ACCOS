@@ -30,7 +30,6 @@ async def enqueue_knowledge_index(document_id: UUID) -> None:
                 from app.services.rag_service import RAGService
                 svc = RAGService(session)
                 result = await svc.index_document(document_id)
-                await session.commit()
                 if result["success"]:
                     logger.info(f"Knowledge index completed for {document_id}: {result['chunks']} chunks")
                 else:

@@ -10,6 +10,7 @@ import hashlib
 from urllib.parse import quote
 
 from app.core.config import PROJECT_ROOT
+from app.core.paths import STATIC_DIR
 from app.core.dependencies import get_db, get_current_user_id
 from app.repositories.user_repository import UserRepository
 from app.repositories.settings_repository import SettingsRepository
@@ -25,6 +26,8 @@ from app.schemas.knowledge import (
     KnowledgeSearchQuery,
     KnowledgeSearchResponse,
     FolderListResponse,
+    MkdirRequest,
+    MkdirResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,16 +80,14 @@ async def upload_document(
     safe_name = f"{uuid.uuid4().hex}.{ext}"
 
     folder_dir = folder.strip("/") if folder else ""
-    knowledge_dir = PROJECT_ROOT / "static" / "knowledge"
+    knowledge_dir = STATIC_DIR / "knowledge"
     if folder_dir:
         knowledge_dir = knowledge_dir / folder_dir
     knowledge_dir.mkdir(parents=True, exist_ok=True)
     file_path = knowledge_dir / safe_name
     file_path.write_bytes(content)
-    if folder_dir:
-        storage_path = f"static/knowledge/{folder_dir}/{safe_name}"
-    else:
-        storage_path = f"static/knowledge/{safe_name}"
+    rel = f"static/knowledge/{folder_dir}" if folder_dir else "static/knowledge"
+    storage_path = f"{rel}/{safe_name}"
 
     parsed_date = None
     if doc_date:
@@ -144,13 +145,14 @@ async def upload_documents_batch(
 
             safe_name = f"{uuid.uuid4().hex}.{ext}"
             folder_dir = folder.strip("/") if folder else ""
-            knowledge_dir = PROJECT_ROOT / "static" / "knowledge"
+            knowledge_dir = STATIC_DIR / "knowledge"
             if folder_dir:
                 knowledge_dir = knowledge_dir / folder_dir
             knowledge_dir.mkdir(parents=True, exist_ok=True)
             file_path = knowledge_dir / safe_name
             file_path.write_bytes(content)
-            storage_path = f"static/knowledge/{folder_dir}/{safe_name}" if folder_dir else f"static/knowledge/{safe_name}"
+            rel = f"static/knowledge/{folder_dir}" if folder_dir else "static/knowledge"
+            storage_path = f"{rel}/{safe_name}"
 
             result = await svc.create_document(
                 title=file.filename,
@@ -284,16 +286,14 @@ async def replace_document(
     if not old_doc:
         raise HTTPException(404, "Original document not found")
     folder_dir = (old_doc.get("folder") or "").strip("/")
-    knowledge_dir = PROJECT_ROOT / "static" / "knowledge"
+    knowledge_dir = STATIC_DIR / "knowledge"
     if folder_dir:
         knowledge_dir = knowledge_dir / folder_dir
     knowledge_dir.mkdir(parents=True, exist_ok=True)
     file_path = knowledge_dir / safe_name
     file_path.write_bytes(content)
-    if folder_dir:
-        storage_path = f"static/knowledge/{folder_dir}/{safe_name}"
-    else:
-        storage_path = f"static/knowledge/{safe_name}"
+    rel = f"static/knowledge/{folder_dir}" if folder_dir else "static/knowledge"
+    storage_path = f"{rel}/{safe_name}"
 
     result = await svc.replace_document(
         old_id=doc_id,
@@ -316,7 +316,32 @@ async def list_folders(
 ):
     svc = KnowledgeService(db)
     folders = await svc.get_folders()
-    return FolderListResponse(folders=folders)
+    disk_dirs = []
+    knowledge_dir = STATIC_DIR / "knowledge"
+    if knowledge_dir.exists():
+        for p in knowledge_dir.iterdir():
+            if p.is_dir():
+                if p.name not in folders:
+                    disk_dirs.append(p.name)
+    all_folders = sorted(set(folders) | set(disk_dirs))
+    return FolderListResponse(folders=all_folders)
+
+
+@router.post("/folders/mkdir", response_model=MkdirResponse)
+async def mkdir_folder(
+    body: MkdirRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    await _require_documents_manage(db, user_id)
+    name = body.folder.strip().strip("/")
+    if not name:
+        raise HTTPException(400, "Folder name is required")
+    knowledge_dir = STATIC_DIR / "knowledge" / name
+    if knowledge_dir.exists():
+        return MkdirResponse(success=False, folder=name, error="Folder already exists")
+    knowledge_dir.mkdir(parents=True, exist_ok=False)
+    return MkdirResponse(success=True, folder=name)
 
 
 @router.post("/search", response_model=KnowledgeSearchResponse)
@@ -357,12 +382,12 @@ async def list_departments(
     ous = await adapter.list_ous(search_base=clients_ou)
     from app.repositories.user_repository import UserRepository
     user = await UserRepository(db).get(uuid.UUID(user_id))
+    hidden_raw = await ss.get("hidden_doc_folders", "")
+    hidden = {h.strip().lower() for h in hidden_raw.split(",") if h.strip()}
     if user and user.admin_role == "none":
-        hidden_raw = await ss.get("hidden_doc_folders", "")
-        hidden = {h.strip().lower() for h in hidden_raw.split(",") if h.strip()}
         if hidden:
             ous = [d for d in ous if d.get("ou", "").lower() not in hidden]
-    return {"departments": ous}
+    return {"departments": ous, "hidden_folders": list(hidden)}
 
 
 @router.get("/search-docs")
@@ -400,7 +425,10 @@ async def preview_document(
     if not doc:
         raise HTTPException(404, "Document not found")
 
-    file_abs = PROJECT_ROOT / doc["file_path"]
+    rel_path = doc["file_path"].lstrip("/")
+    if rel_path.startswith("static/"):
+        rel_path = rel_path[7:]
+    file_abs = STATIC_DIR / rel_path
     if not file_abs.exists():
         doc_title = doc["title"] or doc["filename"]
         return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -415,7 +443,7 @@ body {{ font-family: Arial, sans-serif; margin: 20px; }}
 
     doc_title = doc["title"] or doc["filename"]
     ext = doc["content_type"]
-    file_url = quote(f"/{doc['file_path']}", safe="/")
+    file_url = quote(f"/{rel_path}", safe="/")
 
     body_html = ""
     if ext in ("txt", "md"):

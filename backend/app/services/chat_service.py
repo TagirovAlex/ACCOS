@@ -194,7 +194,7 @@ class ChatService:
 
         history = await self.chat_repo.get_messages(sid)
         settings_svc = SettingsService(self.session)
-        ctx_count = int(await settings_svc.get("chat_context_messages") or "50")
+        ctx_count = int(await settings_svc.get("chat_context_messages") or "10")
 
         system_content = chat_session.system_prompt or ""
         try:
@@ -222,19 +222,13 @@ class ChatService:
             logger.warning(f"Web fetch injection failed: {e}")
 
         messages: list[dict] = []
-        _wf_prompt = await settings_svc.get("web_fetch_prompt")
-        if _wf_prompt:
-            tool_instruction = _wf_prompt
-        else:
-            tool_instruction = "ВАЖНО: вы НЕ знаете содержимое сайтов. Для получения информации с любого URL ОБЯЗАТЕЛЬНО используйте fetch_web_page. НИКОГДА не выдумывайте содержимое страниц и не придумывайте URL."
         gen_instruction = (
             "\n\nВы можете генерировать документы. Для генерации верните JSON: "
             '{"_generate": {"template": "имя шаблона", "variables": {"ключ": "значение"}, "format": "pdf"}} '
             "Форматы: pdf, docx, xlsx, pptx. "
-            "Также можете выполнять вычисления в блоке [COMPUTE]код[/COMPUTE] - код на Python с сохранением переменных между вызовами. "
-            "Если используете информацию из интернета - указывайте источник в формате [source: url]."
+            "Также можете выполнять вычисления в блоке [COMPUTE]код[/COMPUTE] - код на Python с сохранением переменных между вызовами."
         )
-        tool_instruction += gen_instruction
+        tool_instruction = gen_instruction
         if system_content:
             system_content += "\n\n" + tool_instruction
             messages.append({"role": "system", "content": system_content})
@@ -242,11 +236,23 @@ class ChatService:
             messages.append({"role": "system", "content": tool_instruction})
         for m in history[-ctx_count:]:
             try:
-                mc = json.loads(m.content) if m.content.startswith("[") or m.content.startswith("{") else m.content
+                mc = json.loads(m.content) if (m.content.startswith("[") or m.content.startswith("{")) else m.content
             except (json.JSONDecodeError, ValueError):
                 mc = m.content
+            if isinstance(mc, list):
+                text_parts = [p.get("text", "") for p in mc if isinstance(p, dict) and p.get("type") == "text"]
+                mc = " ".join(text_parts) if text_parts else "[file attached]"
             messages.append({"role": m.role, "content": mc})
         messages.append({"role": "user", "content": user_content})
+
+        total_chars = sum(len(str(m.get("content", ""))) for m in messages)
+        if total_chars > 50000:
+            system = [m for m in messages if m.get("role") == "system"]
+            rest = [m for m in messages if m.get("role") != "system"]
+            while rest and total_chars > 50000:
+                popped = rest.pop(0)
+                total_chars -= len(str(popped.get("content", "")))
+            messages = system + rest
 
         async with async_session_factory() as db:
             db.add(ChatQueue(

@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     ad_clients_ou: str = ""
     rag_embedding_model: str = "default"
     rag_enabled: bool = False
+    knowledge_storage_dir: str = "static/knowledge"
+    user_data_dir: str = ""
 
     @property
     def cors_origin_list(self) -> List[str]:

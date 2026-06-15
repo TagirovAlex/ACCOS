@@ -51,14 +51,10 @@ class KnowledgeService:
                 logger.warning(f"Failed to link supersession: {e}")
 
         await self.session.flush()
-        doc_id = doc.id
-        await self.session.commit()
+        pending = self.session.info.setdefault("pending_index", [])
+        pending.append(str(doc.id))
 
-        from app.services.queue_worker import enqueue_knowledge_index
-        asyncio_create = __import__("asyncio").create_task
-        asyncio_create(enqueue_knowledge_index(doc_id))
-
-        return {"document_id": str(doc_id)}
+        return {"document_id": str(doc.id)}
 
     async def list_documents(
         self,
@@ -93,59 +89,36 @@ class KnowledgeService:
         return await self.rag.index_document(doc_id)
 
     async def reindex_all(self) -> dict:
+        import asyncio
+        from app.services.queue_worker import enqueue_knowledge_index
         docs = await self.repo.list_documents(include_inactive=False)
         total = len(docs)
-        succeeded = 0
-        failed = 0
         for doc in docs:
-            try:
-                result = await self.rag.index_document(doc.id)
-                if result.get("success"):
-                    succeeded += 1
-                else:
-                    failed += 1
-            except Exception as e:
-                logger.error(f"Reindex failed for document {doc.id}: {e}")
-                failed += 1
-        return {"success": True, "total": total, "succeeded": succeeded, "failed": failed}
+            asyncio.create_task(enqueue_knowledge_index(doc.id))
+        return {"success": True, "total": total, "message": "Reindex started in background"}
 
     async def reindex_new(self) -> dict:
+        import asyncio
+        from app.services.queue_worker import enqueue_knowledge_index
         docs = await self.repo.list_documents(include_inactive=False)
         total = 0
-        succeeded = 0
-        failed = 0
         for doc in docs:
             if doc.status == "pending":
                 total += 1
-                try:
-                    result = await self.rag.index_document(doc.id)
-                    if result.get("success"):
-                        succeeded += 1
-                    else:
-                        failed += 1
-                except Exception as e:
-                    logger.error(f"Reindex failed for document {doc.id}: {e}")
-                    failed += 1
-        return {"success": True, "total": total, "succeeded": succeeded, "failed": failed}
+                doc.status = "pending"
+                asyncio.create_task(enqueue_knowledge_index(doc.id))
+        return {"success": True, "total": total, "message": "Indexing started in background"}
 
     async def reindex_failed(self) -> dict:
+        import asyncio
+        from app.services.queue_worker import enqueue_knowledge_index
         docs = await self.repo.list_documents(include_inactive=False)
         total = 0
-        succeeded = 0
-        failed = 0
         for doc in docs:
             if doc.status == "failed":
                 total += 1
-                try:
-                    result = await self.rag.index_document(doc.id)
-                    if result.get("success"):
-                        succeeded += 1
-                    else:
-                        failed += 1
-                except Exception as e:
-                    logger.error(f"Reindex failed for document {doc.id}: {e}")
-                    failed += 1
-        return {"success": True, "total": total, "succeeded": succeeded, "failed": failed}
+                asyncio.create_task(enqueue_knowledge_index(doc.id))
+        return {"success": True, "total": total, "message": "Reindex started in background"}
 
     async def replace_document(
         self,
@@ -175,13 +148,10 @@ class KnowledgeService:
         )
         await self.repo.replace_document(old_id, doc.id)
         await self.session.flush()
-        new_id = doc.id
-        await self.session.commit()
+        pending = self.session.info.setdefault("pending_index", [])
+        pending.append(str(doc.id))
 
-        from app.services.queue_worker import enqueue_knowledge_index
-        __import__("asyncio").create_task(enqueue_knowledge_index(new_id))
-
-        return {"success": True, "document_id": str(new_id)}
+        return {"success": True, "document_id": str(doc.id)}
 
     async def search(self, query: str, ad_group_dns: list[str] | None = None) -> dict:
         return await self.rag.search(query, ad_group_dns)

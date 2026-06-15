@@ -134,7 +134,7 @@ async def _process_chat_job(record):
 
         for round_num in range(10):
             async def llm_call(current_messages=messages):
-                return await llm.chat_completion(current_messages, tools=WEB_FETCH_TOOLS)
+                return await llm.chat_completion(current_messages)
 
             async def poll_cancel():
                 while True:
@@ -218,7 +218,7 @@ async def _process_chat_job(record):
                 else:
                     tool_content = f"Unknown tool: {name}"
 
-                messages.append({"role": "tool", "tool_call_id": tc["id"], "content": tool_content[:50000]})
+                messages.append({"role": "tool", "tool_call_id": tc["id"], "content": tool_content[:8000]})
         else:
             await _update_job_status(queue_id, "failed", "Max tool call rounds exceeded")
             logger.warning(f"Chat job {queue_id}: exceeded max tool rounds")

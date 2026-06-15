@@ -441,7 +441,7 @@ class AdminService:
                 for asset in obj.assets:
                     if asset.file_path:
                         try:
-                            p = Path(asset.file_path)
+                            p = resolve_path(asset.file_path)
                             if p.exists():
                                 p.unlink()
                         except Exception as e:
@@ -640,7 +640,7 @@ class AdminService:
                 return {"success": False, "error": "Asset not found"}
             if obj.file_path:
                 try:
-                    p = Path(obj.file_path)
+                    p = resolve_path(obj.file_path)
                     if p.exists():
                         p.unlink()
                         parent = p.parent

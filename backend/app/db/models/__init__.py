@@ -10,6 +10,7 @@ from app.db.models.llm_server import LlmServer
 from app.db.models.web_fetch_permissions import WebFetchPermissions
 from app.db.models.doc_scrape_job import DocScrapeJob
 from app.db.models.module_setting import ModuleSetting
+from app.db.models.doc_template import DocTemplate, GeneratedDocument
 
 __all__ = [
     "User",
@@ -26,4 +27,6 @@ __all__ = [
     "WebFetchPermissions",
     "DocScrapeJob",
     "ModuleSetting",
+    "DocTemplate",
+    "GeneratedDocument",
 ]

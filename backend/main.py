@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import shutil
 import traceback
 import uuid
 from contextlib import asynccontextmanager
@@ -16,7 +17,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 
 from app.core.config import settings, PROJECT_ROOT
-from app.core.paths import UPLOADS_DIR, GENERATIONS_DIR, EDITS_DIR, VIDEOS_DIR, AVATARS_DIR
+from app.core.paths import STATIC_DIR, UPLOADS_DIR, GENERATIONS_DIR, EDITS_DIR, VIDEOS_DIR, AVATARS_DIR
 from app.api.v1.endpoints import auth, user, chat, generation, orchestration, admin, knowledge, help as help_endpoint, web_fetch_admin, doc_scraper_admin, module_admin, templates as template_endpoint, compute
 from app.services.accrual_service import run_auto_accrual
 from app.services.queue_worker import queue_worker_loop
@@ -141,15 +142,23 @@ app.add_middleware(
 
 
 static_dir = PROJECT_ROOT / "static"
-static_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+if settings.user_data_dir and static_dir != STATIC_DIR:
+    for d in ["css", "js", "images", "templates", "admin", "frontend"]:
+        src = static_dir / d
+        dst = STATIC_DIR / d
+        if src.exists() and not dst.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(str(src), str(dst), dirs_exist_ok=True)
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 GENERATIONS_DIR.mkdir(parents=True, exist_ok=True)
 EDITS_DIR.mkdir(parents=True, exist_ok=True)
 VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
 AVATARS_DIR.mkdir(parents=True, exist_ok=True)
-KNOWLEDGE_DIR = PROJECT_ROOT / "static" / "knowledge"
-KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
+(STATIC_DIR / "knowledge").mkdir(parents=True, exist_ok=True)
+(STATIC_DIR / "knowledge_preview").mkdir(parents=True, exist_ok=True)
+(STATIC_DIR / "generated").mkdir(parents=True, exist_ok=True)
 
 
 def _error_detail(request: Request, exc: Exception, status: int, error_id: str) -> dict:

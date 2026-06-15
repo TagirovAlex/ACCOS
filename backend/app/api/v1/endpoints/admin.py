@@ -712,6 +712,19 @@ async def delete_file(
         raise HTTPException(status_code=500, detail=f"Delete failed: {e}")
 
 
+@router.post("/files/mkdir")
+async def create_directory(
+    path: str = Form(...),
+    name: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    await _require_admin(user_id=user_id, db=db)
+    abs_path = STATIC_DIR / path / name
+    abs_path.mkdir(parents=True, exist_ok=True)
+    return {"success": True, "path": f"{path}/{name}"}
+
+
 @router.post("/files/upload")
 async def upload_file(
     file: UploadFile = File(...),

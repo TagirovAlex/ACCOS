@@ -12,6 +12,7 @@ import {
 } from "@mui/material";
 import DescriptionIcon from "@mui/icons-material/Description";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
 import UploadIcon from "@mui/icons-material/Upload";
@@ -123,6 +124,11 @@ export const KnowledgePage = () => {
   const [ragLoading, setRagLoading] = useState(false);
   const [savingRag, setSavingRag] = useState(false);
   const [snack, setSnack] = useState<{ msg: string; sev: "success" | "error" } | null>(null);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [mkdirOpen, setMkdirOpen] = useState(false);
+  const [mkdirName, setMkdirName] = useState("");
+  const PAGE_SIZE = 50;
   const [reindexRunning, setReindexRunning] = useState<string | null>(null);
   const [reindexResult, setReindexResult] = useState<{ msg: string; success: boolean } | null>(null);
 
@@ -150,14 +156,16 @@ export const KnowledgePage = () => {
       setDepartments(data.departments || []);
     } catch {}
   };
-  const loadDocuments = async (folder: string) => {
-    setLoading(true); setError(null);
+  const loadDocuments = async (folder: string, p = 0) => {
+    setLoading(true); setError(null); setPage(p);
     try {
       const token = adminToken();
-      const q = folder ? `?folder=${encodeURIComponent(folder)}` : "";
+      const q = `?folder=${encodeURIComponent(folder)}&skip=${p * PAGE_SIZE}&limit=${PAGE_SIZE}`;
       const res = await fetch(`/api/v1/knowledge/documents${q}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
-      setDocuments(Array.isArray(data) ? data : []);
+      const docs = Array.isArray(data) ? data : [];
+      setDocuments(docs);
+      setHasMore(docs.length === PAGE_SIZE);
     } catch { setError("Ошибка загрузки документов"); }
     setLoading(false);
   };
@@ -179,9 +187,20 @@ export const KnowledgePage = () => {
   useEffect(() => { loadDepartments(); loadHiddenFolders(); loadRagSettings(); }, [loadRagSettings]);
 
   const visibleDepartments = departments.filter((d) => !hiddenFolders.includes(d.ou));
-  const navigateFolder = (folder: string | null) => { setCurrentFolder(folder); if (folder !== null) loadDocuments(folder); };
+  const navigateFolder = (folder: string | null) => { setCurrentFolder(folder); setPage(0); if (folder !== null) loadDocuments(folder, 0); };
   const handleBack = () => { setCurrentFolder(null); setDocuments([]); };
 
+  const handleMkdir = async () => {
+    if (!mkdirName.trim()) return;
+    const folder = currentFolder === "" ? mkdirName.trim() : `${currentFolder}/${mkdirName.trim()}`;
+    try {
+      const token = adminToken();
+      const res = await fetch("/api/v1/knowledge/folders/mkdir", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ folder }) });
+      const data = await res.json();
+      if (data.success) { setSnack({ msg: "Папка создана", sev: "success" }); setMkdirOpen(false); setMkdirName(""); }
+      else setSnack({ msg: data.error || "Ошибка", sev: "error" });
+    } catch { setSnack({ msg: "Ошибка сети", sev: "error" }); }
+  };
   const handleDelete = async (doc: KnowledgeDoc) => {
     if (!window.confirm(`Удалить "${doc.filename}"? Файл и эмбеддинги будут удалены.`)) return;
     try {
@@ -424,6 +443,10 @@ export const KnowledgePage = () => {
               onClick={() => { setUploadFiles([]); setUploadFolder(currentFolder === "" ? "" : currentFolder!); setUploadError(null); setUploadResults(null); setUploadOpen(true); }}>
               Загрузить
             </Button>
+            <Button startIcon={<CreateNewFolderIcon />} variant="outlined" size="small"
+              onClick={() => { setMkdirName(""); setMkdirOpen(true); }}>
+              + Папка
+            </Button>
             <Tooltip title="Переиндексировать все документы"><Button startIcon={<AutorenewIcon />} variant="outlined" size="small" disabled={batchReindexing !== null} onClick={() => handleBatchReindex("reindex-all")}>{batchReindexing === "reindex-all" ? "..." : "Всё"}</Button></Tooltip>
             <Tooltip title="Индексировать новые документы"><Button startIcon={<PlayArrowIcon />} variant="outlined" size="small" disabled={batchReindexing !== null} onClick={() => handleBatchReindex("reindex-new")}>{batchReindexing === "reindex-new" ? "..." : "Новые"}</Button></Tooltip>
             <Tooltip title="Переиндексировать упавшие"><Button startIcon={<ErrorIcon />} variant="outlined" size="small" color="warning" disabled={batchReindexing !== null} onClick={() => handleBatchReindex("reindex-new?only_failed=true")}>{batchReindexing === "reindex-new?only_failed=true" ? "..." : "Упавшие"}</Button></Tooltip>
@@ -448,7 +471,13 @@ export const KnowledgePage = () => {
           <Typography variant="body2" color="error" sx={{ textAlign: "center", py: 4 }}>{error}</Typography>
         ) : documents.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 4 }}>В этой папке нет документов</Typography>
-        ) : viewMode === "list" ? listView : tilesView
+        ) : (<>{viewMode === "list" ? listView : tilesView}{documents.length > 0 && (
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2, mt: 2, pt: 2 }}>
+            <Button size="small" disabled={page === 0} onClick={() => loadDocuments(currentFolder!, page - 1)}>Назад</Button>
+            <Typography variant="body2">Страница {page + 1}</Typography>
+            <Button size="small" disabled={!hasMore} onClick={() => loadDocuments(currentFolder!, page + 1)}>Вперёд</Button>
+          </Box>
+        )}</>)
       )}
 
       <Box sx={{ mt: 4, borderTop: "1px solid", borderColor: "divider", pt: 2 }}>
@@ -555,6 +584,23 @@ export const KnowledgePage = () => {
           <Button variant="contained" onClick={handleUpload} disabled={uploadFiles.length === 0 || uploading}>
             {uploading ? `Загрузка (${uploadFiles.length})...` : "Загрузить"}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={mkdirOpen} onClose={() => setMkdirOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Создать папку</DialogTitle>
+        <DialogContent>
+          <MuiTextField
+            autoFocus label="Имя папки" fullWidth value={mkdirName}
+            onChange={(e) => setMkdirName(e.target.value)}
+            helperText={currentFolder === "" ? "В общем доступе" : `Внутри ${currentFolder}`}
+            sx={{ mt: 1 }}
+            onKeyDown={(e) => { if (e.key === "Enter" && mkdirName.trim()) handleMkdir(); }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMkdirOpen(false)}>Отмена</Button>
+          <Button variant="contained" onClick={handleMkdir} disabled={!mkdirName.trim()}>Создать</Button>
         </DialogActions>
       </Dialog>
 

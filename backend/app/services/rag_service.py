@@ -138,8 +138,9 @@ class RAGService:
 
             file_path = doc.file_path
             if not file_path.startswith("/") and not file_path.startswith("C:"):
-                from app.core.config import PROJECT_ROOT
-                file_path = str(PROJECT_ROOT / file_path)
+                from app.core.paths import STATIC_DIR
+                rel = file_path.lstrip("static/")
+                file_path = str(STATIC_DIR / rel)
 
             raw_text = extract_text(file_path, doc.content_type)
             if not raw_text.strip():

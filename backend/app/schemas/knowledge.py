@@ -84,3 +84,11 @@ class KnowledgeSearchResponse(BaseModel):
 
 class FolderListResponse(BaseModel):
     folders: list[str]
+
+class MkdirRequest(BaseModel):
+    folder: str
+
+class MkdirResponse(BaseModel):
+    success: bool
+    folder: str
+    error: str | None = None

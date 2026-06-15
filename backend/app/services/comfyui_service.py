@@ -5,13 +5,12 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.paths import STATIC_DIR
 from app.repositories.generation_repository import GenerationRepository
 from app.services.economy_service import EconomyService
 from app.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
-
-STATIC_DIR = Path(__file__).parent.parent.parent.parent / "static"
 
 
 def _abs_path_to_url(abs_path: str) -> str:

@@ -110,6 +110,8 @@ async def upload_avatar(
         top = (img.height - size) // 2
         img = img.crop((left, top, left + size, top + size))
         img = img.resize((AVATAR_MAX_SIZE, AVATAR_MAX_SIZE), Image.LANCZOS)
+        if img.mode in ("RGBA", "P", "LA"):
+            img = img.convert("RGB")
         img.save(filepath, "JPEG", quality=85)
     except Exception as e:
         raise HTTPException(
