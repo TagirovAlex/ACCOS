@@ -13,6 +13,7 @@ import AddIcon from "@mui/icons-material/Add";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import GridViewIcon from "@mui/icons-material/GridView";
 import LanguageIcon from "@mui/icons-material/Language";
+import AutorenewIcon from "@mui/icons-material/Autorenew";
 import { apiRequest } from "../services/api";
 
 interface ScrapeJob {
@@ -72,11 +73,22 @@ export const DocScraperAccess = () => {
   };
 
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string; type: "job" | "rag" } | null>(null);
+  const [reindexing, setReindexing] = useState<string | null>(null);
 
   const pauseJob = async (id: string) => {
     try {
-      await apiRequest("POST", `/admin/doc-scraper/jobs/${id}/cancel`);
+      await apiRequest("POST", `/admin/doc-scraper/jobs/${id}/pause`);
       setSnack({ msg: "Job paused", severity: "success" });
+      loadJobs();
+    } catch (e: any) {
+      setSnack({ msg: `Error: ${e.message}`, severity: "error" });
+    }
+  };
+
+  const resumeJob = async (id: string) => {
+    try {
+      await apiRequest("POST", `/admin/doc-scraper/jobs/${id}/resume`);
+      setSnack({ msg: "Job resumed", severity: "success" });
       loadJobs();
     } catch (e: any) {
       setSnack({ msg: `Error: ${e.message}`, severity: "error" });
@@ -101,6 +113,21 @@ export const DocScraperAccess = () => {
     } catch (e: any) {
       setSnack({ msg: `Error: ${e.message}`, severity: "error" });
     }
+  };
+
+  const reindexSite = async (jobId: string) => {
+    setReindexing(jobId);
+    try {
+      const data: any = await apiRequest("POST", `/admin/doc-scraper/jobs/${jobId}/reindex`);
+      if (data.success) {
+        setSnack({ msg: `Reindexed ${data.results?.length || 0} documents`, severity: "success" });
+      } else {
+        setSnack({ msg: data.error || "Reindex failed", severity: "error" });
+      }
+    } catch (e: any) {
+      setSnack({ msg: `Reindex error: ${e.message}`, severity: "error" });
+    }
+    setReindexing(null);
   };
 
   const deleteSite = async (site_name: string) => {
@@ -156,11 +183,17 @@ export const DocScraperAccess = () => {
                   <TableCell align="right">{job.pages_scraped}</TableCell>
                   <TableCell align="right">{job.chunks_ingested}</TableCell>
                   <TableCell align="right">
-                    {["queued","crawling","processing","ingesting"].includes(job.status) && (
+                    {["crawling"].includes(job.status) && (
                       <Tooltip title="Pause"><IconButton size="small" onClick={() => pauseJob(job.id)}><PauseIcon fontSize="small" /></IconButton></Tooltip>
+                    )}
+                    {job.status === "paused" && (
+                      <Tooltip title="Resume"><IconButton size="small" onClick={() => resumeJob(job.id)}><PlayArrowIcon fontSize="small" /></IconButton></Tooltip>
                     )}
                     {["failed","cancelled"].includes(job.status) && (
                       <Tooltip title="Run"><IconButton size="small" onClick={() => runJob(job.id)}><PlayArrowIcon fontSize="small" /></IconButton></Tooltip>
+                    )}
+                    {job.status === "completed" && (
+                      <Tooltip title="Reindex"><IconButton size="small" onClick={() => reindexSite(job.id)} disabled={reindexing === job.id}><AutorenewIcon fontSize="small" className={reindexing === job.id ? "spin" : ""} /></IconButton></Tooltip>
                     )}
                     <Tooltip title="Delete job"><IconButton size="small" onClick={() => setConfirmDelete({id: job.id, name: job.site_name, type: "job"})}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
                   </TableCell>
@@ -187,11 +220,17 @@ export const DocScraperAccess = () => {
                     <Chip label={`${job.chunks_ingested} chunks`} size="small" variant="outlined" />
                   </Box>
                   <Box display="flex" gap={0.5} mt="auto" pt={1}>
-                    {["queued","crawling","processing","ingesting"].includes(job.status) && (
+                    {["crawling"].includes(job.status) && (
                       <Button size="small" color="warning" startIcon={<PauseIcon />} onClick={() => pauseJob(job.id)}>Pause</Button>
+                    )}
+                    {job.status === "paused" && (
+                      <Button size="small" color="primary" startIcon={<PlayArrowIcon />} onClick={() => resumeJob(job.id)}>Resume</Button>
                     )}
                     {["failed","cancelled"].includes(job.status) && (
                       <Button size="small" color="primary" startIcon={<PlayArrowIcon />} onClick={() => runJob(job.id)}>Run</Button>
+                    )}
+                    {job.status === "completed" && (
+                      <Button size="small" startIcon={<AutorenewIcon className={reindexing === job.id ? "spin" : ""} />} onClick={() => reindexSite(job.id)} disabled={reindexing === job.id}>Reindex</Button>
                     )}
                     <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={() => setConfirmDelete({id: job.id, name: job.site_name, type: "job"})}>Delete</Button>
                   </Box>

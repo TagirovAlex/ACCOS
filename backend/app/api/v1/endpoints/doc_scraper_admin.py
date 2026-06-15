@@ -83,6 +83,35 @@ async def cancel_job(
 ):
     svc = DocScraperService(db)
     result = await svc.cancel_job(job_id)
+    await db.commit()
+    return result
+
+
+@router.post("/jobs/{job_id}/pause")
+async def pause_job(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(_require_admin),
+):
+    svc = DocScraperService(db)
+    result = await svc.pause_job(job_id)
+    await db.commit()
+    return result
+
+
+@router.post("/jobs/{job_id}/resume")
+async def resume_job(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(_require_admin),
+):
+    svc = DocScraperService(db)
+    result = await svc.resume_job(job_id)
+    await db.commit()
+    if result.get("success"):
+        task = asyncio.create_task(_run_job(job_id))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
     return result
 
 
@@ -96,7 +125,7 @@ async def retry_job(
     job = await svc.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job["status"] in ("crawling", "processing", "ingesting"):
+    if job["status"] in ("crawling", "processing", "ingesting", "paused"):
         raise HTTPException(status_code=400, detail=f"Job is already {job['status']}")
 
     result = await svc.start_job(
@@ -123,6 +152,48 @@ async def delete_job(
     result = await svc.delete_job(job_id)
     await db.commit()
     return result
+
+
+@router.post("/jobs/{job_id}/reindex")
+async def reindex_job(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(_require_admin),
+):
+    svc = DocScraperService(db)
+    job = await svc.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    from app.services.rag_service import RAGService
+    from app.repositories.knowledge_repository import KnowledgeRepository
+    from app.db.models.knowledge import KnowledgeDocument
+    from sqlalchemy import select
+
+    folder = f"_scraped/{job['site_name']}"
+    repo = KnowledgeRepository(db)
+    rag = RAGService(db)
+
+    query = select(KnowledgeDocument).where(
+        KnowledgeDocument.folder == folder,
+        KnowledgeDocument.is_active == True,
+    )
+    result = await db.execute(query)
+    docs = list(result.scalars().all())
+
+    if not docs:
+        return {"success": False, "error": f"No documents found in folder {folder}"}
+
+    from datetime import datetime, timezone
+    results = []
+    for doc in docs:
+        doc.deleted_at = None
+        db.add(doc)
+        result = await rag.index_document(doc.id)
+        results.append({"document_id": str(doc.id), "success": result.get("success"), "error": result.get("error")})
+
+    await db.commit()
+    return {"success": True, "job_id": job_id, "results": results}
 
 
 @router.delete("/sites/{site_name}")

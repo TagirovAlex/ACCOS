@@ -70,6 +70,57 @@ class DocScraperAdapter(BaseAdapter):
             max_depth=kwargs.get("max_depth", self.max_depth),
         )
 
+    async def discover(self, site_url: str) -> list[str]:
+        """Discover all page URLs on a site (quick BFS without content extraction)."""
+        base_url = site_url.rstrip("/")
+        parsed = urlparse(base_url)
+        base_domain = parsed.netloc
+        path_parts = parsed.path.strip("/").split("/") if parsed.path and parsed.path != "/" else []
+        base_path = "/" + "/".join(path_parts[:2]) + "/" if path_parts else "/"
+
+        visited: set[str] = set()
+        headers = {"User-Agent": self.user_agent}
+
+        async with httpx.AsyncClient(headers=headers, timeout=self.timeout) as client:
+            queue: list[tuple[str, int]] = [(base_url, 0)]
+
+            api_pages = await self._discover_via_confluence_api(client, base_url)
+            if api_pages:
+                queue = [(p, 0) for p in api_pages if p not in visited]
+            else:
+                pw_pages = await self._discover_via_playwright(base_url, base_domain)
+                if pw_pages:
+                    queue = [(p, 0) for p in pw_pages if p not in visited]
+
+            while queue and len(visited) < self.max_pages:
+                url, depth = queue.pop(0)
+                url, _ = urldefrag(url)
+                url = url.rstrip("/")
+                if url in visited or depth > self.max_depth:
+                    continue
+                parsed_url = urlparse(url)
+                if parsed_url.netloc and parsed_url.netloc != base_domain:
+                    continue
+                if not parsed_url.path.startswith(base_path) and parsed_url.path != "":
+                    continue
+                if any(re.search(p, url, re.IGNORECASE) for p in EXCLUDE_PATTERNS):
+                    continue
+                visited.add(url)
+                try:
+                    resp = await client.get(url, follow_redirects=True)
+                    if resp.status_code != 200:
+                        continue
+                    if "text/html" not in resp.headers.get("content-type", ""):
+                        continue
+                    links = self._extract_links(resp.text, url, base_domain, base_path)
+                    for link in links:
+                        if link not in visited:
+                            queue.append((link, depth + 1))
+                except Exception:
+                    continue
+
+        return list(visited)
+
     async def crawl(
         self,
         site_url: str,
@@ -90,26 +141,17 @@ class DocScraperAdapter(BaseAdapter):
         visited: set[str] = set()
         pages: list[ScrapedPage] = []
         errors: list[str] = []
-
         headers = {"User-Agent": self.user_agent}
-
-        def should_exclude(url: str) -> bool:
-            for pat in EXCLUDE_PATTERNS:
-                if re.search(pat, url, re.IGNORECASE):
-                    return True
-            return False
 
         async with httpx.AsyncClient(headers=headers, timeout=self.timeout) as client:
             queue: list[tuple[str, int]] = [(base_url, 0)]
 
             api_pages = await self._discover_via_confluence_api(client, base_url)
             if api_pages:
-                logger.info(f"Discovered {len(api_pages)} pages via Confluence API, using as seed")
                 queue = [(p, 0) for p in api_pages if p not in visited]
             else:
                 pw_pages = await self._discover_via_playwright(base_url, base_domain)
                 if pw_pages:
-                    logger.info(f"Discovered {len(pw_pages)} pages via Playwright, using as seed")
                     queue = [(p, 0) for p in pw_pages if p not in visited]
 
             while queue and len(pages) < max_pages:
@@ -119,7 +161,7 @@ class DocScraperAdapter(BaseAdapter):
 
                 if url in visited or depth > max_depth:
                     continue
-                if should_exclude(url):
+                if any(re.search(p, url, re.IGNORECASE) for p in EXCLUDE_PATTERNS):
                     continue
 
                 parsed_url = urlparse(url)
@@ -133,13 +175,10 @@ class DocScraperAdapter(BaseAdapter):
                 try:
                     await asyncio.sleep(self.delay)
                     resp = await client.get(url, follow_redirects=True)
-
                     if resp.status_code != 200:
                         errors.append(f"{url}: HTTP {resp.status_code}")
                         continue
-
-                    content_type = resp.headers.get("content-type", "")
-                    if "text/html" not in content_type:
+                    if "text/html" not in resp.headers.get("content-type", ""):
                         continue
 
                     html = resp.text
@@ -152,7 +191,6 @@ class DocScraperAdapter(BaseAdapter):
                         favor_recall=True,
                         config=traf_config,
                     )
-
                     if not text_content or len(text_content.strip()) < 50:
                         links = self._extract_links(html, url, base_domain, base_path)
                         for link in links:
@@ -161,7 +199,6 @@ class DocScraperAdapter(BaseAdapter):
                         continue
 
                     title = self._extract_title(html)
-
                     page = ScrapedPage(
                         url=url,
                         title=title,
@@ -237,14 +274,11 @@ class DocScraperAdapter(BaseAdapter):
             results = data.get("results", [])
             if not results:
                 return []
-
             pages: list[str] = []
             for r in results:
                 webui = r.get("_links", {}).get("webui", "")
                 if webui:
-                    full_url = urljoin(root, webui).rstrip("/")
-                    pages.append(full_url)
-
+                    pages.append(urljoin(root, webui).rstrip("/"))
             while data.get("_links", {}).get("next"):
                 next_url = root + data["_links"]["next"]
                 resp = await client.get(next_url, follow_redirects=True, timeout=15)
@@ -254,9 +288,7 @@ class DocScraperAdapter(BaseAdapter):
                 for r in data.get("results", []):
                     webui = r.get("_links", {}).get("webui", "")
                     if webui:
-                        full_url = urljoin(root, webui).rstrip("/")
-                        pages.append(full_url)
-
+                        pages.append(urljoin(root, webui).rstrip("/"))
             return pages
         except Exception as e:
             logger.debug(f"Confluence API discovery failed for {api_url}: {e}")
@@ -264,7 +296,6 @@ class DocScraperAdapter(BaseAdapter):
 
     async def _discover_via_playwright(self, base_url: str, base_domain: str) -> list[str]:
         from playwright.async_api import async_playwright
-
         try:
             async with async_playwright() as pw:
                 browser = await pw.chromium.launch(
@@ -277,7 +308,7 @@ class DocScraperAdapter(BaseAdapter):
                     viewport={"width": 1920, "height": 1080},
                 )
                 page = await ctx.new_page()
-                await page.goto(base_url, wait_until="networkidle", timeout=self.timeout * 1000)
+                await page.goto(base_url, wait_until="load", timeout=self.timeout * 1000)
                 await page.wait_for_timeout(3000)
 
                 links = await page.evaluate("""
@@ -292,10 +323,8 @@ class DocScraperAdapter(BaseAdapter):
                         return Array.from(urls);
                     }
                 """)
-
                 await browser.close()
 
-                from urllib.parse import urlparse
                 discovered = []
                 for url in links:
                     parsed = urlparse(url)

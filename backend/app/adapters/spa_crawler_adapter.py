@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import re
 import time
 from urllib.parse import urlparse
 
@@ -38,26 +37,12 @@ class SpaCrawlerAdapter(BaseAdapter):
             max_depth=kwargs.get("max_depth", self.max_depth),
         )
 
-    async def crawl(
-        self,
-        site_url: str,
-        max_pages: int = 0,
-        max_depth: int = 0,
-    ) -> CrawlResult:
-        if max_pages <= 0:
-            max_pages = self.max_pages
-        if max_depth <= 0:
-            max_depth = self.max_depth
-
-        from playwright.async_api import async_playwright
-
+    async def discover(self, site_url: str) -> tuple[str, str, list[str]]:
         base_url = site_url.rstrip("/")
         parsed = urlparse(base_url)
         base_domain = parsed.netloc
 
-        pages: list[ScrapedPage] = []
-        errors: list[str] = []
-
+        from playwright.async_api import async_playwright
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(
                 executable_path=self.chromium_path,
@@ -66,17 +51,44 @@ class SpaCrawlerAdapter(BaseAdapter):
             )
             ctx = await browser.new_context()
             page = await ctx.new_page()
-
             project, slugs = await self._discover(page, base_url)
-            logger.info(f"Discovered {len(slugs)} article slugs from {base_url}")
-            if len(slugs) > max_pages:
-                slugs = slugs[:max_pages]
-                logger.info(f"Limiting to {max_pages} slugs (max_pages)")
+            await browser.close()
 
+        if len(slugs) > self.max_pages:
+            slugs = slugs[:self.max_pages]
+        return project, base_domain, slugs
+
+    async def crawl(self, site_url: str, max_pages: int = 0, max_depth: int = 0) -> CrawlResult:
+        project, base_domain, slugs = await self.discover(site_url)
+        return await self._crawl_batch(project, base_domain, slugs, max_pages=max_pages)
+
+    async def _crawl_batch(
+        self,
+        project: str,
+        base_domain: str,
+        batch: list[str],
+        max_pages: int = 0,
+    ) -> CrawlResult:
+        if max_pages <= 0:
+            max_pages = self.max_pages
+
+        pages: list[ScrapedPage] = []
+        errors: list[str] = []
+
+        from playwright.async_api import async_playwright
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(
+                executable_path=self.chromium_path,
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+            ctx = await browser.new_context()
+            page = await ctx.new_page()
             base_articles_url = f"https://{base_domain}/articles"
+
             sem = asyncio.Semaphore(self.concurrent)
 
-            async def fetch_article(slug: str) -> ScrapedPage | None:
+            async def fetch(slug: str) -> ScrapedPage | None:
                 async with sem:
                     try:
                         data = await page.evaluate(
@@ -98,17 +110,12 @@ class SpaCrawlerAdapter(BaseAdapter):
                     except Exception as e:
                         logger.warning(f"Fetch failed for {slug}: {e}")
                         return None
-
                     return self._process(data, slug)
 
-            async def fetch_with_slug(s):
-                r = await fetch_article(s)
-                return s, r
-
-            tasks = [fetch_with_slug(slug) for slug in slugs]
+            tasks = [fetch(s) for s in batch]
             results = await asyncio.gather(*tasks)
 
-            for slug, r in results:
+            for slug, r in zip(batch, results):
                 if r:
                     pages.append(r)
                 else:
@@ -116,15 +123,14 @@ class SpaCrawlerAdapter(BaseAdapter):
 
             await browser.close()
 
-        return CrawlResult(pages=pages, pages_found=len(slugs), errors=errors)
+        return CrawlResult(pages=pages, pages_found=len(batch), errors=errors)
 
     async def _discover(self, page, base_url: str) -> tuple[str, list[str]]:
-        await page.goto(base_url, wait_until="networkidle", timeout=self.timeout * 1000)
-        await page.wait_for_timeout(3000)
+        await page.goto(base_url, wait_until="load", timeout=60000)
+        await page.wait_for_timeout(5000)
 
         project = self._extract_project(base_url)
 
-        # Expand all collapsed tree nodes recursively
         for _ in range(50):
             nodes = await page.evaluate("""
                 () => {
@@ -150,7 +156,6 @@ class SpaCrawlerAdapter(BaseAdapter):
                 except Exception:
                     pass
 
-        # Collect all links after full expansion
         links = await page.eval_on_selector_all(
             f"a[href*='{project}']",
             "els => els.map(el => el.getAttribute('href'))",
@@ -181,7 +186,6 @@ class SpaCrawlerAdapter(BaseAdapter):
         vf_html = data.get("viewFrameHtml", "")
         if not vf_html:
             return None
-
         text_content = extract(
             vf_html,
             include_comments=False,
@@ -193,7 +197,6 @@ class SpaCrawlerAdapter(BaseAdapter):
         )
         if not text_content or len(text_content.strip()) < 20:
             return None
-
         title = data.get("title", "") or data.get("pageTitle", "")
         return ScrapedPage(
             url=slug,

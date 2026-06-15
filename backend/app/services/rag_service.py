@@ -142,7 +142,15 @@ class RAGService:
                 rel = file_path.lstrip("static/")
                 file_path = str(STATIC_DIR / rel)
 
-            raw_text = extract_text(file_path, doc.content_type)
+            import os as _os
+            if not _os.path.isfile(file_path) and doc.content_type == "doc_scrape":
+                chunks = await self.repo.get_chunks_by_document(document_id)
+                if chunks:
+                    raw_text = "\n\n---PAGE BREAK---\n\n".join(c.content for c in chunks)
+                else:
+                    raw_text = ""
+            else:
+                raw_text = extract_text(file_path, doc.content_type)
             if not raw_text.strip():
                 doc.status = "failed"
                 doc.error_message = "No text could be extracted"

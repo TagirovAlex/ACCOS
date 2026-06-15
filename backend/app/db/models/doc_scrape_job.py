@@ -24,4 +24,5 @@ class DocScrapeJob(Base):
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    state: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=None)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
