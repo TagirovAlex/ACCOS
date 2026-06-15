@@ -87,6 +87,12 @@ if (-not (Test-Path $envPath)) {
 Write-Host "[6/8] Создание директорий..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Path "$PROJECT_ROOT\static\generated" -Force | Out-Null
 New-Item -ItemType Directory -Path "$PROJECT_ROOT\static\uploads" -Force | Out-Null
+New-Item -ItemType Directory -Path "$PROJECT_ROOT\static\avatars" -Force | Out-Null
+New-Item -ItemType Directory -Path "$PROJECT_ROOT\static\knowledge" -Force | Out-Null
+New-Item -ItemType Directory -Path "$PROJECT_ROOT\static\edits" -Force | Out-Null
+New-Item -ItemType Directory -Path "$PROJECT_ROOT\static\videos" -Force | Out-Null
+New-Item -ItemType Directory -Path "$PROJECT_ROOT\static\templates" -Force | Out-Null
+New-Item -ItemType Directory -Path "$PROJECT_ROOT\workflows" -Force | Out-Null
 New-Item -ItemType Directory -Path "$PROJECT_ROOT\backend\logs" -Force | Out-Null
 Write-Host "  Директории созданы"
 
