@@ -339,6 +339,30 @@ class BaseModule(ABC):
 #### Страницы без тайлов (не трогать)
 - Users, GenerationQueue, Settings, ModuleSettings, Templates, WebFetchAccess
 
+### Деплой — чеклист
+
+#### Полный деплой (deploy.py)
+- `cd scripts && python deploy.py` — собирает tar.gz, загружает, запускает deploy.sh на сервере
+- deploy.sh: останавливает сервис → распаковывает → сохраняет .venv/.env/logs → собирает admin/frontend → миграции → запуск
+- **Внимание:** tar.gz не сохраняет симлинки. После деплоя проверить:
+  - `ls -la /opt/accos/static/generations` → symlink to `/mnt/storage/generations`
+  - `ls -la /opt/accos/static/documents` → symlink to `/mnt/storage/documents`
+  - `ls -la /opt/accos/static/knowledge` → symlink to `/mnt/storage/knowledge`
+  - `ls -la /opt/accos/static/knowledge_preview` → symlink to `/mnt/storage/knowledge_preview`
+- deploy.py таймаут 600s — если npm install на сервере долгий, скрипт падает. После таймаута: `systemctl start accos` вручную
+
+#### Быстрый деплой (только admin)
+- `npm run build` в `admin/`
+- `scp -i ~/.ssh/accos_deploy -r dist/* root@10.0.68.43:/opt/accos/static/admin/`
+- **Важно:** копировать содержимое `assets/*`, а не саму папку `assets` — иначе получится `assets/assets/`
+
+#### Проверка после деплоя
+- `systemctl status accos` — active (running)
+- `curl localhost/admin/` — 200
+- `curl localhost/` — 200
+- `curl localhost/static/generations/...` — 200 (проверить существующий файл)
+- `nginx -t && nginx -s reload` — если менялась конфигурация
+
 ### Полезное
 1. **Audit log** — логирование всех действий пользователей и админов
 2. **PDF preview caching** — lazy render-to-images при первом открытии, сохранение в `static/knowledge_preview/{doc_id}/`, отдача готовых картинок при повторных просмотрах (реализовано)
