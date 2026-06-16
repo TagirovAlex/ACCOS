@@ -1,4 +1,7 @@
+import importlib
+import inspect
 import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
@@ -43,6 +46,26 @@ class ModuleRegistry:
     def shutdown_all(self) -> None:
         for module in self._modules.values():
             module.on_shutdown()
+
+    def discover_modules(self) -> None:
+        mod_dir = Path(__file__).parent
+        for f in sorted(mod_dir.iterdir()):
+            if f.suffix != '.py' or f.name.startswith('_'):
+                continue
+            modname = f'app.modules.{f.stem}'
+            try:
+                mod = importlib.import_module(modname)
+            except Exception as e:
+                logger.warning(f"discover_modules: failed to import {modname}: {e}")
+                continue
+            for _, obj in inspect.getmembers(mod, inspect.isclass):
+                if issubclass(obj, BaseModule) and obj is not BaseModule and obj.__module__ == modname:
+                    try:
+                        inst = obj()
+                        if getattr(inst, 'name', None):
+                            self.register(inst)
+                    except Exception as e:
+                        logger.warning(f"discover_modules: failed to instantiate {obj.__name__}: {e}")
 
     def _topological_sort(self) -> list[BaseModule]:
         modules = list(self._modules.values())

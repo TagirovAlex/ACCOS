@@ -7,11 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import PROJECT_ROOT
 from app.core.dependencies import get_db, get_current_user_id
+from app.repositories.module_settings_repository import ModuleSettingsRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import BalanceResponse
+from app.schemas.module_admin import ModuleSettingResponse, ModuleSettingsResponse
 from app.schemas.user import ProfileUpdateRequest, ProfileResponse, AvatarResponse
 from app.services.economy_service import EconomyService
+from app.modules import ModuleRegistry
 
+_registry = ModuleRegistry()
 router = APIRouter(prefix="/user", tags=["user"])
 
 AVATAR_DIR = PROJECT_ROOT / "static" / "avatars"
@@ -96,6 +100,35 @@ async def upload_avatar(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be an image",
         )
+@router.get("/module-settings", response_model=ModuleSettingsResponse)
+async def get_user_module_settings(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    repo = ModuleSettingsRepository(db)
+    rows = await repo.list_user_settings(user_id)
+    settings = []
+    for r in rows:
+        mod = _registry.get_module(r.module_name)
+        s_def = next((s for s in (mod.get_settings_schema() if mod else []) if s.key == r.key and s.is_user_setting), None)
+        if not s_def:
+            continue
+        settings.append(ModuleSettingResponse(
+            module_name=r.module_name,
+            key=r.key,
+            label=s_def.label,
+            type=s_def.type,
+            category=s_def.category,
+            default=s_def.default,
+            description=s_def.description,
+            is_admin_setting=s_def.is_admin_setting,
+            is_user_setting=s_def.is_user_setting,
+            validation=s_def.validation,
+            value=str(r.value) if r.value is not None else None,
+        ))
+    return ModuleSettingsResponse(success=True, settings=settings)
+
+
     AVATAR_DIR.mkdir(parents=True, exist_ok=True)
     ext = "jpg"
     filename = f"{user_id}.{ext}"
