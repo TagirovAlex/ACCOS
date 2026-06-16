@@ -45,11 +45,12 @@ const LastLoginField = ({ record }: { record?: any }) => {
   if (!record?.last_login) return <span style={{ color: "#999" }}>—</span>;
   const d = new Date(record.last_login);
   const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  const days = Math.floor(diff / (86400000));
-  if (days === 0) return <span>{d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>;
-  if (days === 1) return <span>Вчера</span>;
-  if (days < 7) return <span>{days} дн. назад</span>;
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const loginDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.floor((todayStart.getTime() - loginDate.getTime()) / 86400000);
+  if (diffDays === 0) return <span>{d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>;
+  if (diffDays === 1) return <span>Вчера</span>;
+  if (diffDays < 7) return <span>{diffDays} дн. назад</span>;
   return <span>{d.toLocaleDateString()}</span>;
 };
 

@@ -19,6 +19,7 @@ const StatCard = ({ icon, label, value, color, to, secondary }: { icon: string; 
     <Card
       onClick={() => to && nav(to)}
       sx={{
+        height: "100%",
         cursor: to ? "pointer" : "default",
         transition: "all 0.2s ease",
         "&:hover": to ? { transform: "translateY(-2px)", boxShadow: "0 6px 20px rgba(0,0,0,0.12)" } : {},
@@ -116,7 +117,7 @@ export const Dashboard = () => {
         )}
         {isSuperAdmin() && (
           <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <StatCard icon="🎨" label="Генераций сегодня" value={d?.generations_today} color="#ab47bc" secondary="новых генераций" />
+            <StatCard icon="🎨" label="Генераций сегодня" value={d?.generations_today} color="#ab47bc" to="/generations" secondary="новых генераций" />
           </Grid>
         )}
       </Grid>
