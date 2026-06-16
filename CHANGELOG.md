@@ -1,5 +1,15 @@
 # Changelog ACCOS
 
+## Block 0 — Module System Core: validation, user APIs, auto-discovery (Jun 16)
+- **Validation enforcement**: PUT /admin/modules/{name}/settings/{key} проверяет select options, number min/max, boolean, regex pattern из ModuleSettingDef.validation
+- **GET /admin/users/{id}/module-settings**: просмотр настроек модуля для конкретного пользователя
+- **GET /user/module-settings**: пользовательский API настроек модулей (фильтр is_user_setting=True)
+- **discover_modules()**: автосканирование modules/ и регистрация всех наследников BaseModule
+- **Code review fixes**: исправлен разорванный upload_avatar, re.match → re.fullmatch, str(value).lower()
+- **Тесты**: backend/tests/test_module_settings.py — 7 тестов (список модулей, получение/обновление настроек, валидация, пользовательские API)
+- **Деплой**: код, npm build admin+frontend, миграции на head, symlinks восстановлены
+- **YAGNI (пропущено)**: get_admin_menu/get_user_menu (нет динамического меню), MenuItemDef (нет потребителя), on_startup/on_shutdown оверрайды (ни один модуль не требует)
+
 ## Scraper — base_path fix + Confluence API + Playwright discovery (Jun 14)
 - **base_path fix**: Вместо полного пути стартового URL — первые 2 сегмента. Confluence `/spaces/LM/pages/884739/...` → `/spaces/LM/`. Находит все страницы в пространстве, а не одну.
 - **Confluence REST API**: Авто-обнаружение страниц через `/rest/api/content?spaceKey=XX` с пагинацией. Если URL содержит `/spaces/{key}/` — пытается получить полный список через API.

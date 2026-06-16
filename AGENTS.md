@@ -206,77 +206,20 @@ class BaseAdapter(ABC):
 
 ## 9. План следующих блоков
 
-### Block 0: Module System Core
-Реализация полноценной модульной инфраструктуры. Все последующие блоки разрабатываются как модули.
-
-**ModuleRegistry:**
-- Центральный реестр модулей (Singleton)
-- Автообнаружение: `discover_modules()` сканирует `modules/`, загружает все наследники `BaseModule`
-- Порядок загрузки по `depends_on` (топологическая сортировка)
-- `register_all(app)` — итерация по модулям, вызов `module.register_routes(app)`
-- Lifecycle: `on_startup()`, `on_shutdown()` (вызов в lifespan)
-- `get_module(name)` — получение модуля по имени
-
-**BaseModule (расширенный) — единая структура модуля:**
-```python
-class BaseModule(ABC):
-    name: str
-    depends_on: list[str]
-    
-    @abstractmethod
-    def register_routes(self, app: FastAPI) -> None: ...
-    
-    def get_name(self) -> str: ...
-    def on_startup(self) -> None: ...
-    def on_shutdown(self) -> None: ...
-    
-    def get_settings_schema(self) -> list[ModuleSettingDef]: ...
-    def get_admin_menu(self) -> list[MenuItemDef]: ...
-    def get_user_menu(self) -> list[MenuItemDef]: ...
-```
-
-**ModuleSettingDef — стандартное описание настройки модуля:**
-- `key: str` — уникальный ключ (например `telegram_bot_chat_id`)
-- `label: str` — отображаемое имя (например "Telegram ID")
-- `type: str` — `"string"`, `"boolean"`, `"number"`, `"select"`, `"password"`
-- `category: str` — категория для группировки в UI
-- `default: Any` — значение по умолчанию
-- `is_user_setting: bool` — True = видно в ЛК пользователя, False = только админ
-- `is_admin_setting: bool` — True = видно в админке
-- `validation: dict | None` — опциональные правила валидации (regex, min, max, options)
-- `description: str` — подсказка
-
-**MenuItemDef — стандартное описание пункта меню:**
-- `label: str` — текст пункта
-- `path: str` — URL (например `/telegram`)
-- `icon: str` — имя MUI-иконки
-- `permission: str | None` — требуемое право (None = всем)
-- `order: int` — порядок сортировки
-
-**Модель module_settings (таблица БД):**
-- `id` (PK), `user_id` (FK → users, nullable = глобальная), `module_name` (str), `key` (str), `value` (text), `created_at`, `updated_at`
-- Unique: `(user_id, module_name, key)` — user_id NULL = глобальное значение модуля
-
-**Модель module_menu_items (опционально):**
-- Для статического определения пунктов меню модулями
-
-**Сбор настроек:**
-- Admin API: `GET /admin/modules/{name}/settings` — глобальные настройки модуля
-- Admin API: `GET /admin/users/{id}/module-settings` — настройки модуля для конкретного пользователя
-- User API: `GET /user/module-settings` — свои настройки модулей
-- Admin Panel: динамическая секция "Настройки модулей" в Settings + вкладка "Модули" в профиле пользователя
-- User Frontend: динамическая секция в ProfilePage
-
-**Безопасность:**
-- Валидация всех значений настроек через `ModuleSettingDef.validation`
-- Проверка прав доступа к пунктам меню
-- Изоляция модулей друг от друга
-
-**Рефакторинг существующих модулей:**
-- ChatModule, ComfyUIModule, RAGModule — привести к единому BaseModule
-- RAGModule — исправить (добавить register_routes, get_name)
-- main.py — перевести на модульную загрузку (`registry.register_all(app)`)
-- Все текущие роуты (`auth`, `user`, `chat`, `generation`, `orchestration`, `admin`, `knowledge`, `help`) должны регистрироваться через модули
+### Block 0: Module System Core ✅ (Jun 16)
+Реализована полноценная модульная инфраструктура.
+- ✅ ModuleRegistry (Singleton, discover_modules, register_all, topological sort, lifecycle)
+- ✅ BaseModule (register_routes, get_name, on_startup, on_shutdown, get_settings_schema)
+- ✅ ModuleSettingDef, MenuItemDef
+- ✅ module_settings модель БД + ModuleSettingsRepository
+- ✅ Admin API: GET/PUT/DELETE /admin/modules/{name}/settings
+- ✅ Admin API: GET /admin/users/{id}/module-settings
+- ✅ User API: GET /user/module-settings
+- ✅ Валидация настроек (select, number, boolean, regex)
+- ✅ 6 модулей (Chat, ComfyUI, RAG, WebFetch, DocScraper, File) имплементируют BaseModule
+- ✅ discover_modules() — автообнаружение модулей
+- ✅ tests/test_module_settings.py — 7 тестов
+- YAGNI: get_admin_menu/get_user_menu (нет динамического меню), MenuItemDef (нет потребителя), on_startup/on_shutdown оверрайды (ни один модуль не требует)
 
 ### Block 5: LLM Server Management
 Управление несколькими LLM-серверами для распределения нагрузки и тестирования моделей.
