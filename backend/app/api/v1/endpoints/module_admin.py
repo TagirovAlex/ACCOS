@@ -42,11 +42,11 @@ def _validate_setting_value(value: str, s_def: ModuleSettingDef) -> str | None:
         except ValueError:
             return "Must be a number"
     if s_def.type == "boolean":
-        if value.lower() not in ("true", "false", "1", "0", "yes", "no"):
+        if str(value).lower() not in ("true", "false", "1", "0", "yes", "no"):
             return "Must be true or false"
     pattern = v.get("regex")
     if pattern:
-        if not re.match(pattern, value):
+        if not re.fullmatch(pattern, value):
             return f"Must match pattern: {pattern}"
     return None
 

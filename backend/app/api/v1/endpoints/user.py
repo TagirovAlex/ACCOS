@@ -100,6 +100,34 @@ async def upload_avatar(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be an image",
         )
+    AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+    ext = "jpg"
+    filename = f"{user_id}.{ext}"
+    filepath = AVATAR_DIR / filename
+    image_data = await file.read()
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(image_data))
+        size = min(img.width, img.height)
+        left = (img.width - size) // 2
+        top = (img.height - size) // 2
+        img = img.crop((left, top, left + size, top + size))
+        img = img.resize((AVATAR_MAX_SIZE, AVATAR_MAX_SIZE), Image.LANCZOS)
+        if img.mode in ("RGBA", "P", "LA"):
+            img = img.convert("RGB")
+        img.save(filepath, "JPEG", quality=85)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Image processing failed: {e}",
+        )
+    repo = UserRepository(db)
+    avatar_path = f"static/avatars/{filename}"
+    await repo.update(uuid.UUID(user_id), avatar_path=avatar_path)
+    return AvatarResponse(avatar_url=f"/{avatar_path}")
+
+
 @router.get("/module-settings", response_model=ModuleSettingsResponse)
 async def get_user_module_settings(
     user_id: str = Depends(get_current_user_id),
@@ -127,31 +155,3 @@ async def get_user_module_settings(
             value=str(r.value) if r.value is not None else None,
         ))
     return ModuleSettingsResponse(success=True, settings=settings)
-
-
-    AVATAR_DIR.mkdir(parents=True, exist_ok=True)
-    ext = "jpg"
-    filename = f"{user_id}.{ext}"
-    filepath = AVATAR_DIR / filename
-    image_data = await file.read()
-    try:
-        from PIL import Image
-        import io
-        img = Image.open(io.BytesIO(image_data))
-        size = min(img.width, img.height)
-        left = (img.width - size) // 2
-        top = (img.height - size) // 2
-        img = img.crop((left, top, left + size, top + size))
-        img = img.resize((AVATAR_MAX_SIZE, AVATAR_MAX_SIZE), Image.LANCZOS)
-        if img.mode in ("RGBA", "P", "LA"):
-            img = img.convert("RGB")
-        img.save(filepath, "JPEG", quality=85)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Image processing failed: {e}",
-        )
-    repo = UserRepository(db)
-    avatar_path = f"static/avatars/{filename}"
-    await repo.update(uuid.UUID(user_id), avatar_path=avatar_path)
-    return AvatarResponse(avatar_url=f"/{avatar_path}")
