@@ -3,14 +3,13 @@ import {
   Typography, Box, Button, IconButton,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, CircularProgress, Alert, Tooltip, Card, CardContent,
-  ToggleButtonGroup, ToggleButton, Grid as MuiGrid,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import BackupIcon from "@mui/icons-material/Backup";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import ViewListIcon from "@mui/icons-material/ViewList";
-import GridViewIcon from "@mui/icons-material/GridView";
 import StorageIcon from "@mui/icons-material/Storage";
+import { CardGrid } from "../components/CardGrid";
+import { useView } from "../components/ViewToggle";
 import { useNotify, Confirm } from "react-admin";
 import { getToken } from "../services/api";
 
@@ -34,7 +33,7 @@ export const BackupList = () => {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("backups_view") as "list" | "tiles") ?? "list");
+  const { view, ViewToggleEl } = useView("backups_view");
   const notify = useNotify();
 
   const token = getToken();
@@ -115,11 +114,7 @@ export const BackupList = () => {
           Обновить
         </Button>
         <Box sx={{ flex: 1 }} />
-        <ToggleButtonGroup value={view} exclusive size="small"
-          onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("backups_view", v); } }}>
-          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
+        {ViewToggleEl}
       </Box>
 
       {loading && (
@@ -168,9 +163,9 @@ export const BackupList = () => {
       )}
 
       {!loading && backups.length > 0 && view === "tiles" && (
-        <MuiGrid container spacing={2}>
+        <CardGrid>
           {backups.map((b) => (
-            <MuiGrid key={b.filename} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+            <Box key={b.filename}>
               <Card sx={{ position: "relative", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
                 <CardContent>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
@@ -189,9 +184,9 @@ export const BackupList = () => {
                   </Button>
                 </CardContent>
               </Card>
-            </MuiGrid>
+            </Box>
           ))}
-        </MuiGrid>
+        </CardGrid>
       )}
 
       <Confirm

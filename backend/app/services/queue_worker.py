@@ -22,7 +22,26 @@ from app.services.settings_service import SettingsService
 logger = logging.getLogger(__name__)
 
 
+async def _set_indexing_status(document_id: UUID) -> bool:
+    from app.db.session import async_session_factory
+    from app.db.models.knowledge import KnowledgeDocument as DocumentModel
+    try:
+        async with async_session_factory() as session:
+            async with session.begin():
+                doc = await session.get(DocumentModel, document_id)
+                if not doc or doc.status not in ("pending", "ready"):
+                    return False
+                doc.status = "indexing"
+                return True
+    except Exception as e:
+        logger.error(f"Failed to set indexing status for {document_id}: {e}")
+        return False
+
+
 async def enqueue_knowledge_index(document_id: UUID) -> None:
+    ok = await _set_indexing_status(document_id)
+    if not ok:
+        return
     from app.db.session import async_session_factory
     try:
         async with async_session_factory() as session:

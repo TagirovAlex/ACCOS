@@ -324,6 +324,11 @@ async def list_folders(
                 if p.name not in folders:
                     disk_dirs.append(p.name)
     all_folders = sorted(set(folders) | set(disk_dirs))
+    ss = SettingsService(db)
+    hidden_raw = await ss.get("hidden_doc_folders", "")
+    hidden = {h.strip().lower() for h in hidden_raw.split(",") if h.strip()}
+    if hidden:
+        all_folders = [f for f in all_folders if f.lower() not in hidden]
     return FolderListResponse(folders=all_folders)
 
 
@@ -388,6 +393,15 @@ async def list_departments(
         if hidden:
             ous = [d for d in ous if d.get("ou", "").lower() not in hidden]
     return {"departments": ous, "hidden_folders": list(hidden)}
+
+
+@router.get("/stats")
+async def knowledge_stats(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    svc = KnowledgeService(db)
+    return await svc.get_stats()
 
 
 @router.get("/search-docs")

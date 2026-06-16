@@ -1,13 +1,25 @@
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.services.rag_service import RAGService
 
 logger = logging.getLogger(__name__)
+
+
+_index_tasks: set[asyncio.Task] = set()
+_index_semaphore = asyncio.Semaphore(3)
+
+
+async def _enqueue_and_track(document_id: uuid.UUID) -> None:
+    from app.services.queue_worker import enqueue_knowledge_index
+    async with _index_semaphore:
+        await enqueue_knowledge_index(document_id)
 
 
 class KnowledgeService:
@@ -89,36 +101,35 @@ class KnowledgeService:
         return await self.rag.index_document(doc_id)
 
     async def reindex_all(self) -> dict:
-        import asyncio
-        from app.services.queue_worker import enqueue_knowledge_index
         docs = await self.repo.list_documents(include_inactive=False)
         total = len(docs)
         for doc in docs:
-            asyncio.create_task(enqueue_knowledge_index(doc.id))
+            self._fire_index(doc.id)
         return {"success": True, "total": total, "message": "Reindex started in background"}
 
     async def reindex_new(self) -> dict:
-        import asyncio
-        from app.services.queue_worker import enqueue_knowledge_index
-        docs = await self.repo.list_documents(include_inactive=False)
+        docs = await self.repo.list_documents(include_inactive=False, limit=9999)
         total = 0
         for doc in docs:
             if doc.status == "pending":
                 total += 1
-                doc.status = "pending"
-                asyncio.create_task(enqueue_knowledge_index(doc.id))
+                self._fire_index(doc.id)
         return {"success": True, "total": total, "message": "Indexing started in background"}
 
     async def reindex_failed(self) -> dict:
-        import asyncio
-        from app.services.queue_worker import enqueue_knowledge_index
-        docs = await self.repo.list_documents(include_inactive=False)
+        docs = await self.repo.list_documents(include_inactive=False, limit=9999)
         total = 0
         for doc in docs:
             if doc.status == "failed":
                 total += 1
-                asyncio.create_task(enqueue_knowledge_index(doc.id))
+                self._fire_index(doc.id)
         return {"success": True, "total": total, "message": "Reindex started in background"}
+
+    def _fire_index(self, doc_id: uuid.UUID) -> None:
+        logger.info(f"Firing index task for {doc_id}")
+        task = asyncio.create_task(_enqueue_and_track(doc_id))
+        _index_tasks.add(task)
+        task.add_done_callback(lambda t: (_index_tasks.discard(t), logger.info(f"Index task done for {doc_id}")))
 
     async def replace_document(
         self,
@@ -162,6 +173,17 @@ class KnowledgeService:
 
     async def get_folders(self) -> list[str]:
         return await self.repo.list_folders()
+
+    async def get_stats(self) -> dict:
+        from sqlalchemy import func as sa_func
+        from app.db.models.knowledge import KnowledgeDocument
+        base = select(sa_func.count()).select_from(KnowledgeDocument).where(KnowledgeDocument.deleted_at.is_(None))
+        total = (await self.session.execute(base)).scalar() or 0
+        pending = (await self.session.execute(base.where(KnowledgeDocument.status == "pending"))).scalar() or 0
+        indexing = (await self.session.execute(base.where(KnowledgeDocument.status == "indexing"))).scalar() or 0
+        ready = (await self.session.execute(base.where(KnowledgeDocument.status == "ready"))).scalar() or 0
+        failed = (await self.session.execute(base.where(KnowledgeDocument.status == "failed"))).scalar() or 0
+        return {"total": total, "pending": pending, "indexing": indexing, "ready": ready, "failed": failed}
 
     async def build_context(self, query: str, ad_group_dns: list[str] | None = None) -> str:
         return await self.rag.build_context(query, ad_group_dns)

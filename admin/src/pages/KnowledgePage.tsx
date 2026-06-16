@@ -3,8 +3,8 @@ import {
   Box, Typography, List, ListItem, ListItemText,
   Breadcrumbs, Link, LinearProgress, IconButton, Chip, Button, Card, CardContent,
   Dialog, DialogContent, DialogTitle, DialogActions,
-  Grid as MuiGrid, Select, MenuItem, FormControl, InputLabel, Alert,
-  ToggleButtonGroup, ToggleButton,
+ Select, MenuItem, FormControl, InputLabel, Alert,
+
   Tooltip, Checkbox, FormGroup, FormControlLabel,
   TableContainer, Table, TableHead, TableRow, TableCell, TableBody, Paper,
   TextField as MuiTextField, Switch, FormControlLabel as MuiFormControlLabel,
@@ -23,10 +23,12 @@ import PreviewIcon from "@mui/icons-material/Preview";
 import SegmentIcon from "@mui/icons-material/Segment";
 import HomeIcon from "@mui/icons-material/Home";
 import BusinessIcon from "@mui/icons-material/Business";
-import ViewListIcon from "@mui/icons-material/ViewList";
-import GridViewIcon from "@mui/icons-material/GridView";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import SettingsIcon from "@mui/icons-material/Settings";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import { CardGrid } from "../components/CardGrid";
+import { useView } from "../components/ViewToggle";
 import { getToken } from "../services/api";
 
 interface Department { dn: string; ou: string; description: string; }
@@ -100,8 +102,8 @@ export const KnowledgePage = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [documents, setDocuments] = useState<KnowledgeDoc[]>([]);
-  const [viewMode, setViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("docs_view") as "list" | "tiles") ?? "list");
-  const [rootViewMode, setRootViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("docs_root_view") as "list" | "tiles") ?? "tiles");
+  const { view: viewMode, ViewToggleEl: DocsViewToggle } = useView("docs_view");
+  const { view: rootViewMode, ViewToggleEl: RootViewToggle } = useView("docs_root_view");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadFolder, setUploadFolder] = useState("");
@@ -131,6 +133,8 @@ export const KnowledgePage = () => {
   const PAGE_SIZE = 50;
   const [reindexRunning, setReindexRunning] = useState<string | null>(null);
   const [reindexResult, setReindexResult] = useState<{ msg: string; success: boolean } | null>(null);
+  const [stats, setStats] = useState<{ total: number; pending: number; ready: number; failed: number; indexing: number } | null>(null);
+  const [activeReindex, setActiveReindex] = useState<{ initialPending: number } | null>(null);
 
   const loadHiddenFolders = async () => {
     try {
@@ -169,6 +173,14 @@ export const KnowledgePage = () => {
     } catch { setError("Ошибка загрузки документов"); }
     setLoading(false);
   };
+  const loadStats = async () => {
+    try {
+      const token = adminToken();
+      const res = await fetch("/api/v1/knowledge/stats", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setStats(await res.json());
+    } catch {}
+  };
+
   const loadRagSettings = useCallback(async () => {
     setRagLoading(true);
     try {
@@ -184,7 +196,25 @@ export const KnowledgePage = () => {
     setRagLoading(false);
   }, []);
 
-  useEffect(() => { loadDepartments(); loadHiddenFolders(); loadRagSettings(); }, [loadRagSettings]);
+  useEffect(() => { loadDepartments(); loadHiddenFolders(); loadRagSettings(); loadStats(); }, [loadRagSettings]);
+
+  useEffect(() => {
+    if (!activeReindex) return;
+    let polls = 0;
+    const interval = setInterval(async () => {
+      polls += 1;
+      if (polls > 20) { setActiveReindex(null); return; }
+      try {
+        const token = adminToken();
+        const res = await fetch("/api/v1/knowledge/stats", { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return;
+        const s = await res.json();
+        setStats(s);
+        if (s.pending === 0 && s.indexing === 0 && polls > 2) setActiveReindex(null);
+      } catch {}
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [activeReindex]);
 
   const visibleDepartments = departments.filter((d) => !hiddenFolders.includes(d.ou));
   const navigateFolder = (folder: string | null) => { setCurrentFolder(folder); setPage(0); if (folder !== null) loadDocuments(folder, 0); };
@@ -216,8 +246,8 @@ export const KnowledgePage = () => {
       const token = adminToken();
       const res = await fetch(`/api/v1/knowledge/${action}`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
-      setBatchResult(data.success ? `Готово: ${data.succeeded || 0} успешно, ${data.failed || 0} с ошибками` : data.error || "Ошибка");
-      if (data.success) loadDocuments(currentFolder!);
+      setBatchResult(data.success ? `Запущено в фоне: ${data.total || 0} документов` : data.error || "Ошибка");
+      if (data.success) { loadDocuments(currentFolder!); loadStats(); setActiveReindex({ initialPending: data.total || 0 }); }
     } catch (e: any) { setBatchResult(e.message || "Ошибка"); }
     setBatchReindexing(null);
   };
@@ -278,9 +308,9 @@ export const KnowledgePage = () => {
       const data = await res.json();
       setReindexResult({
         success: data.success,
-        msg: data.success ? `Готово: ${data.succeeded || 0} успешно, ${data.failed || 0} с ошибками` : data.error || "Ошибка",
+        msg: data.success ? `Запущено в фоне: ${data.total || 0} документов` : data.error || "Ошибка",
       });
-      if (data.success && currentFolder !== null) loadDocuments(currentFolder!);
+      if (data.success) { if (currentFolder !== null) loadDocuments(currentFolder!); loadStats(); setActiveReindex({ initialPending: data.total || 0 }); }
     } catch (e: any) { setReindexResult({ success: false, msg: e.message || "Ошибка" }); }
     setReindexRunning(null);
   };
@@ -335,11 +365,11 @@ export const KnowledgePage = () => {
   );
 
   const tilesView = (
-    <MuiGrid container spacing={2}>
+    <CardGrid>
       {documents.map((doc) => {
         const isImg = IMG.has(ext(doc.filename));
         return (
-          <MuiGrid key={doc.id} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+          <Box key={doc.id}>
             <Card sx={{ "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
               <Box sx={{ height: 140, overflow: "hidden", bgcolor: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }} onClick={() => handleDownload(doc)}>
                 {isImg ? (<img src={imgUrl(doc)} alt={doc.filename} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }} onError={(e: any) => { e.target.style.display = "none"; }} />) : (<DescriptionIcon sx={{ fontSize: 48, color: "text.disabled" }} />)}
@@ -359,22 +389,22 @@ export const KnowledgePage = () => {
                 </Box>
               </CardContent>
             </Card>
-          </MuiGrid>
+          </Box>
         );
       })}
-    </MuiGrid>
+    </CardGrid>
   );
 
   const rootTilesView = (
-    <MuiGrid container spacing={2}>
-      <MuiGrid size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+    <CardGrid>
+      <Box>
         <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }} onClick={() => navigateFolder("")}>
           <Box sx={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}><HomeIcon sx={{ fontSize: 48, color: "primary.main" }} /></Box>
           <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}><Typography variant="body2" noWrap textAlign="center">Общий доступ</Typography></CardContent>
         </Card>
-      </MuiGrid>
+      </Box>
       {visibleDepartments.map((dep) => (
-        <MuiGrid key={dep.dn} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+        <Box key={dep.dn}>
           <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }} onClick={() => navigateFolder(dep.ou)}>
             <Box sx={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}><BusinessIcon sx={{ fontSize: 48, color: "secondary.main" }} /></Box>
             <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
@@ -382,9 +412,9 @@ export const KnowledgePage = () => {
               {dep.description && (<Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dep.description}</Typography>)}
             </CardContent>
           </Card>
-        </MuiGrid>
+        </Box>
       ))}
-    </MuiGrid>
+    </CardGrid>
   );
 
   const rootListView = (
@@ -414,10 +444,7 @@ export const KnowledgePage = () => {
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
         <Typography variant="h6" sx={{ flex: 1 }}>Папки документов</Typography>
-        <ToggleButtonGroup value={rootViewMode} exclusive size="small" onChange={(_, v) => { if (v) { setRootViewMode(v); localStorage.setItem("docs_root_view", v); } }}>
-          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
+        {RootViewToggle}
         <Button size="small" startIcon={<VisibilityIcon />} onClick={() => { setDraftHidden([...hiddenFolders]); setSettingsOpen(true); }}>Настройка папок</Button>
       </Box>
       {rootViewMode === "list" ? rootListView : rootTilesView}
@@ -435,10 +462,7 @@ export const KnowledgePage = () => {
         </Typography>
         {currentFolder !== null && (
           <>
-            <ToggleButtonGroup value={viewMode} exclusive size="small" onChange={(_, v) => { if (v) { setViewMode(v); localStorage.setItem("docs_view", v); } }}>
-              <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-              <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-            </ToggleButtonGroup>
+            {DocsViewToggle}
             <Button startIcon={<UploadIcon />} variant="contained" size="small"
               onClick={() => { setUploadFiles([]); setUploadFolder(currentFolder === "" ? "" : currentFolder!); setUploadError(null); setUploadResults(null); setUploadOpen(true); }}>
               Загрузить
@@ -454,6 +478,17 @@ export const KnowledgePage = () => {
           </>
         )}
       </Box>
+
+      {stats && (
+        <Box sx={{ display: "flex", gap: 1.5, mb: 2, flexWrap: "wrap", alignItems: "center" }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>Документы:</Typography>
+          <Chip label={`Всего: ${stats.total}`} size="small" variant="outlined" />
+          <Chip label={`Ожидает: ${stats.pending}`} size="small" sx={{ bgcolor: "#f57c00", color: "white" }} />
+          {activeReindex && <Chip label={stats ? `Индексация: ${stats.pending + stats.indexing} осталось` : "Индексация..."} size="small" sx={{ bgcolor: "#1976d2", color: "white" }} icon={<CircularProgress size={12} color="inherit" />} />}
+          <Chip label={`Готово: ${stats.ready}`} size="small" sx={{ bgcolor: "#2e7d32", color: "white" }} />
+          {stats.failed > 0 && <Chip label={`Ошибка: ${stats.failed}`} size="small" color="error" />}
+        </Box>
+      )}
 
       {currentFolder !== null && (
         <Breadcrumbs sx={{ mb: 2 }}>
@@ -472,10 +507,32 @@ export const KnowledgePage = () => {
         ) : documents.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 4 }}>В этой папке нет документов</Typography>
         ) : (<>{viewMode === "list" ? listView : tilesView}{documents.length > 0 && (
-          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2, mt: 2, pt: 2 }}>
-            <Button size="small" disabled={page === 0} onClick={() => loadDocuments(currentFolder!, page - 1)}>Назад</Button>
-            <Typography variant="body2">Страница {page + 1}</Typography>
-            <Button size="small" disabled={!hasMore} onClick={() => loadDocuments(currentFolder!, page + 1)}>Вперёд</Button>
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 0.5, mt: 2, pt: 2 }}>
+            <Button size="small" disabled={page === 0} onClick={() => { setPage(0); loadDocuments(currentFolder!, 0); }} title="Первая">
+              <ChevronLeftIcon fontSize="small" /><ChevronLeftIcon fontSize="small" sx={{ ml: -1 }} />
+            </Button>
+            <Button size="small" disabled={page === 0} onClick={() => { const p = page - 1; setPage(p); loadDocuments(currentFolder!, p); }}>
+              <ChevronLeftIcon fontSize="small" /> Назад
+            </Button>
+            {page > 2 && (
+              <>
+                <Chip label="1" size="small" clickable variant="outlined" onClick={() => { setPage(0); loadDocuments(currentFolder!, 0); }} sx={{ minWidth: 32 }} />
+                <Typography variant="caption" color="text.disabled">...</Typography>
+              </>
+            )}
+            {(() => { const ps: number[] = []; const s = Math.max(0, page - 2); const e = page + (hasMore ? 2 : 0); for (let i = s; i <= e; i++) ps.push(i); return ps.map(p => (
+              <Chip key={p} label={String(p + 1)} size="small"
+                variant={p === page ? "filled" : "outlined"}
+                color={p === page ? "primary" : "default"}
+                clickable={p !== page}
+                onClick={() => p !== page && (setPage(p), loadDocuments(currentFolder!, p))}
+                sx={{ minWidth: 32, fontWeight: p === page ? 700 : 400 }} />
+            )); })()}
+            {hasMore && (
+              <Button size="small" onClick={() => { const p = page + 1; setPage(p); loadDocuments(currentFolder!, p); }}>
+                Вперед <ChevronRightIcon fontSize="small" />
+              </Button>
+            )}
           </Box>
         )}</>)
       )}

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { List, Datagrid, TextField, BooleanField, DateField, Show, SimpleShowLayout, ReferenceField, WithListContext, useRedirect, useDelete, DeleteButton } from "react-admin";
-import { Box, Typography, Paper, Card, CardContent, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button, IconButton, Chip } from "@mui/material";
-import ViewListIcon from "@mui/icons-material/ViewList";
-import GridViewIcon from "@mui/icons-material/GridView";
+import { Box, Typography, Paper, Card, CardContent, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button, IconButton, Chip } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { CardGrid } from "../components/CardGrid";
+import { useView } from "../components/ViewToggle";
+
 import { useRecordContext } from "react-admin";
 
 const MessagesList = () => {
@@ -49,9 +50,9 @@ const ChatTileView = () => {
   return (
   <>
   <WithListContext render={({ data }) => (
-    <MuiGrid container spacing={2} sx={{ p: 2 }}>
+    <CardGrid>
       {data?.map((record: any) => (
-        <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
+        <Box key={record.id}>
           <Card sx={{ position: "relative", cursor: "pointer", height: "100%", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
           <Box sx={{
           position: "absolute", top: 0, left: 0, right: 0, height: 4, zIndex: 2,
@@ -77,9 +78,9 @@ const ChatTileView = () => {
             </Typography>
           </CardContent>
           </Card>
-        </MuiGrid>
+        </Box>
       ))}
-    </MuiGrid>
+    </CardGrid>
   )} />
   <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
     <DialogTitle>Удалить чат?</DialogTitle>
@@ -96,15 +97,10 @@ const ChatTileView = () => {
 };
 
 export const ChatList = () => {
-  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("chats_view") as "list" | "tiles") ?? "list");
+  const { view, ViewToggleEl } = useView("chats_view");
   return (
     <List actions={false}>
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
-        <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("chats_view", v); } }}>
-          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
+      {ViewToggleEl}
       {view === "list" ? <ChatListView /> : <ChatTileView />}
     </List>
   );

@@ -393,7 +393,7 @@ const statusLabels: Record<string, string> = {
                 {WORKFLOWS.map(w => <MenuItem key={w.value} value={w.value}>{w.label}</MenuItem>)}
               </TextField>
 
-              <TextField label="Промпт" fullWidth multiline rows={3} value={prompt} onChange={e => setPrompt(e.target.value)} margin="normal" placeholder="Опишите, что хотите получить..." />
+              <TextField label="Промпт" fullWidth multiline minRows={6} maxRows={20} value={prompt} onChange={e => setPrompt(e.target.value)} margin="normal" placeholder="Опишите, что хотите получить..." sx={{ '& textarea': { resize: 'vertical' } }} />
 
               <TextField label="Seed (пусто = случайный)" fullWidth type="number" size="small" value={seed}
                 onChange={e => setSeed(e.target.value)}

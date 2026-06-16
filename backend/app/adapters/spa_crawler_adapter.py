@@ -85,6 +85,7 @@ class SpaCrawlerAdapter(BaseAdapter):
             ctx = await browser.new_context()
             page = await ctx.new_page()
             base_articles_url = f"https://{base_domain}/articles"
+            await page.goto(base_articles_url, wait_until="load", timeout=30000)
 
             sem = asyncio.Semaphore(self.concurrent)
 

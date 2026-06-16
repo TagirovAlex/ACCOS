@@ -552,6 +552,11 @@ class AdminService:
             .where(KnowledgeDocument.deleted_at.is_(None))
             .where(KnowledgeDocument.status == "ready")
         )).scalar()
+        pending_count = (await self.session.execute(
+            select(sa_func.count()).select_from(KnowledgeDocument)
+            .where(KnowledgeDocument.deleted_at.is_(None))
+            .where(KnowledgeDocument.status == "pending")
+        )).scalar()
 
         token_row = (await self.session.execute(
             select(
@@ -592,6 +597,7 @@ class AdminService:
             "generations_today": gens_today,
             "documents": docs_count or 0,
             "documents_indexed": indexed_count or 0,
+            "documents_pending": pending_count or 0,
             "total_tokens_input": total_tokens_input,
             "total_tokens_output": total_tokens_output,
             "total_llm_cost": total_llm_cost,

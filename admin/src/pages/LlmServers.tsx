@@ -1,17 +1,16 @@
 import { useState, useEffect } from "react";
 import {
   Typography, Box, Button, Card, CardContent, IconButton, Dialog, DialogTitle, DialogContent,
-  DialogActions, TextField, Switch, FormControlLabel, Tooltip, Chip, Grid as MuiGrid,
-  ToggleButtonGroup, ToggleButton, CircularProgress, Alert,
+  DialogActions, TextField, Switch, FormControlLabel, Tooltip, Chip, CircularProgress, Alert,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DnsIcon from "@mui/icons-material/Dns";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import ViewListIcon from "@mui/icons-material/ViewList";
-import GridViewIcon from "@mui/icons-material/GridView";
 import { useNotify, Confirm } from "react-admin";
+import { CardGrid } from "../components/CardGrid";
+import { useView } from "../components/ViewToggle";
 import { getToken } from "../services/api";
 
 const API_BASE = "/api/v1/admin/llm-servers";
@@ -37,7 +36,7 @@ const emptyForm = {
 export const LlmServerList = () => {
   const [servers, setServers] = useState<LlmServer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("llm_servers_view") as "list" | "tiles") ?? "list");
+  const { view, ViewToggleEl } = useView("llm_servers_view");
   const [formOpen, setFormOpen] = useState(false);
   const [formData, setFormData] = useState<any>({ ...emptyForm });
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -168,9 +167,9 @@ export const LlmServerList = () => {
   );
 
   const tilesView = (
-    <MuiGrid container spacing={2}>
+    <CardGrid>
       {servers.map((s) => (
-        <MuiGrid key={s.id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+        <Box key={s.id}>
           <Card sx={{ height: "100%", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
             <CardContent>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
@@ -196,20 +195,16 @@ export const LlmServerList = () => {
               </Box>
             </CardContent>
           </Card>
-        </MuiGrid>
+        </Box>
       ))}
-    </MuiGrid>
+    </CardGrid>
   );
 
   return (
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
         <Typography variant="h5" sx={{ flex: 1 }}>LLM-серверы</Typography>
-        <ToggleButtonGroup value={view} exclusive size="small"
-          onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("llm_servers_view", v); } }}>
-          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
+        {ViewToggleEl}
         <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
           Добавить сервер
         </Button>

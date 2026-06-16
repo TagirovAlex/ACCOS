@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { List, Datagrid, TextField, DateField, Show, SimpleShowLayout, ReferenceField, FunctionField, WithListContext, useRedirect, useRecordContext, DeleteButton, useDelete } from "react-admin";
-import { Box, IconButton, Chip, Card, CardContent, Typography, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
+import { Box, IconButton, Chip, Card, CardContent, Typography, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
-import ViewListIcon from "@mui/icons-material/ViewList";
-import GridViewIcon from "@mui/icons-material/GridView";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { CardGrid } from "../components/CardGrid";
+import { useView } from "../components/ViewToggle";
 
 const ImagePreview = () => {
   const record = useRecordContext();
@@ -93,9 +93,9 @@ const AssetTileView = () => {
   return (
   <>
     <WithListContext render={({ data }) => (
-      <MuiGrid container spacing={2} sx={{ p: 2 }}>
+      <CardGrid>
         {data?.map((record: any) => (
-          <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
+          <Box key={record.id}>
             <Card sx={{ position: "relative", cursor: "pointer", height: "100%", display: "flex", flexDirection: "column", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
               <IconButton size="small"
                 sx={{ position: "absolute", top: 4, right: 4, zIndex: 1, color: "error.light" }}
@@ -128,9 +128,9 @@ const AssetTileView = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </MuiGrid>
+          </Box>
         ))}
-      </MuiGrid>
+      </CardGrid>
     )} />
     <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
       <DialogTitle>Удалить ресурс?</DialogTitle>
@@ -147,15 +147,10 @@ const AssetTileView = () => {
 };
 
 export const AssetList = () => {
-  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("assets_view") as "list" | "tiles") ?? "list");
+  const { view, ViewToggleEl } = useView("assets_view");
   return (
     <List actions={false}>
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
-        <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("assets_view", v); } }}>
-          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
+      {ViewToggleEl}
       {view === "list" ? <AssetListView /> : <AssetTileView />}
     </List>
   );

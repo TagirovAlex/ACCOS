@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { List, Datagrid, TextField, NumberField, Edit, SimpleForm, TextInput, NumberInput, BooleanInput, Create, AutocompleteInput, useNotify, WithListContext, CreateButton, TopToolbar, useRedirect } from "react-admin";
-import { ToggleButtonGroup, ToggleButton, Box, Card, CardContent, Typography, Grid as MuiGrid, Chip } from "@mui/material";
-import ViewListIcon from "@mui/icons-material/ViewList";
-import GridViewIcon from "@mui/icons-material/GridView";
+import { Box, Card, CardContent, Typography, Chip } from "@mui/material";
+import { CardGrid } from "../components/CardGrid";
+import { ViewToggle, useView } from "../components/ViewToggle";
 import { getToken } from "../services/api";
 
 const API_BASE = "/api/v1/admin/ldap-groups";
@@ -47,9 +47,9 @@ const GroupTileView = () => {
   const redirect = useRedirect();
   return (
     <WithListContext render={({ data }) => (
-      <MuiGrid container spacing={2} sx={{ p: 2 }}>
+      <CardGrid>
         {data?.map((record: any) => (
-          <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
+          <Box key={record.id}>
             <Card sx={{ cursor: "pointer", height: "100%", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
               onClick={() => redirect("edit", "groups", record.id)}>
               <CardContent>
@@ -72,28 +72,25 @@ const GroupTileView = () => {
                 )}
               </CardContent>
             </Card>
-          </MuiGrid>
+          </Box>
         ))}
-      </MuiGrid>
+      </CardGrid>
     )} />
   );
 };
 
-const GroupListActions = ({ view, onViewChange }: { view: string; onViewChange: (v: "list" | "tiles") => void }) => (
+const GroupListActions = ({ view, onViewChange }: { view: "list" | "tiles"; onViewChange: (v: "list" | "tiles") => void }) => (
   <TopToolbar>
     <CreateButton />
     <Box sx={{ flex: 1 }} />
-    <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) onViewChange(v); }}>
-      <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-      <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-    </ToggleButtonGroup>
+    <ViewToggle view={view} onChange={onViewChange} />
   </TopToolbar>
 );
 
 export const GroupList = () => {
-  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("groups_view") as "list" | "tiles") ?? "list");
+  const { view, setView } = useView("groups_view");
   return (
-    <List actions={<GroupListActions view={view} onViewChange={(v) => { setView(v); localStorage.setItem("groups_view", v); }} />}>
+    <List actions={<GroupListActions view={view} onViewChange={setView} />}>
       {view === "list" ? <GroupListView /> : <GroupTileView />}
     </List>
   );

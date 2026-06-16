@@ -3,17 +3,16 @@ import {
   Card, CardContent, Typography, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Paper, Button,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  Box, Snackbar, Alert, Chip, IconButton, Tooltip, ToggleButtonGroup, ToggleButton,
+  Box, Snackbar, Alert, Chip, IconButton, Tooltip,
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import PauseIcon from "@mui/icons-material/Pause";
 import AddIcon from "@mui/icons-material/Add";
-import ViewListIcon from "@mui/icons-material/ViewList";
-import GridViewIcon from "@mui/icons-material/GridView";
 import LanguageIcon from "@mui/icons-material/Language";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
+import { useView } from "../components/ViewToggle";
 import { apiRequest } from "../services/api";
 
 interface ScrapeJob {
@@ -47,7 +46,7 @@ export const DocScraperAccess = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [snack, setSnack] = useState<{ msg: string; severity: "success" | "error" } | null>(null);
   const [form, setForm] = useState({ site_url: "", site_name: "", max_pages: 500, max_depth: 10 });
-  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("doc_scraper_view") as "list" | "tiles") ?? "list");
+  const { view, ViewToggleEl } = useView("doc_scraper_view");
 
   const loadJobs = async () => {
     try {
@@ -149,10 +148,7 @@ export const DocScraperAccess = () => {
             <Typography variant="h5">Documentation Scraper</Typography>
           </Box>
           <Box display="flex" gap={1} alignItems="center">
-            <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("doc_scraper_view", v); }}}>
-              <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-              <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-            </ToggleButtonGroup>
+            {ViewToggleEl}
             <Button startIcon={<RefreshIcon />} onClick={loadJobs} sx={{ mr: 1 }}>Refresh</Button>
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>New Scrape</Button>
           </Box>

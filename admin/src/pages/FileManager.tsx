@@ -3,8 +3,8 @@ import { useRedirect } from "react-admin";
 import {
   Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText,
   Breadcrumbs, Link, LinearProgress, IconButton, Chip, Button, Card, CardContent,
-  Dialog, DialogContent, DialogTitle, DialogActions, ToggleButtonGroup, ToggleButton,
-  Grid as MuiGrid, TextField, Select, MenuItem, FormControl, InputLabel,
+  Dialog, DialogContent, DialogTitle, DialogActions,
+ TextField, Select, MenuItem, FormControl, InputLabel,
 } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
@@ -15,9 +15,9 @@ import CloseIcon from "@mui/icons-material/Close";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
 import UploadIcon from "@mui/icons-material/Upload";
-import ViewListIcon from "@mui/icons-material/ViewList";
-import GridViewIcon from "@mui/icons-material/GridView";
 import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
+import { CardGrid } from "../components/CardGrid";
+import { useView } from "../components/ViewToggle";
 
 interface FileEntry {
   name: string;
@@ -63,7 +63,7 @@ export const FileManager = () => {
   const [currentPath, setCurrentPath] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"list" | "tiles">(() => (localStorage.getItem("files_view") as "list" | "tiles") ?? "tiles");
+  const { view: viewMode, ViewToggleEl: FileViewToggle } = useView("files_view");
   const [previewEntry, setPreviewEntry] = useState<FileEntry | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
@@ -197,9 +197,9 @@ export const FileManager = () => {
   );
 
   const tilesView = (
-    <MuiGrid container spacing={2}>
+    <CardGrid>
       {currentPath ? (
-        <MuiGrid size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+        <Box>
           <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
             onClick={parentDir}>
             <Box sx={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
@@ -209,47 +209,47 @@ export const FileManager = () => {
               <Typography variant="body2" noWrap textAlign="center">..</Typography>
             </CardContent>
           </Card>
-        </MuiGrid>
-      ) : null}
-      {entries.map((entry) => {
-        const isImg = isImage(entry.name);
-        if (entry.is_dir) {
+          </Box>
+          ) : null}
+          {entries.map((entry) => {
+          const isImg = isImage(entry.name);
+          if (entry.is_dir) {
           return (
-            <MuiGrid key={entry.path} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
-              <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
-                onClick={() => navigateDir(entry.path)}>
-                <Box sx={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
-                  <FolderIcon sx={{ fontSize: 48, color: "primary.main" }} />
-                </Box>
-                <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
-                  <Typography variant="body2" noWrap>{entry.name}/</Typography>
-                </CardContent>
-              </Card>
-            </MuiGrid>
+          <Box key={entry.path}>
+          <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
+          onClick={() => navigateDir(entry.path)}>
+          <Box sx={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover" }}>
+          <FolderIcon sx={{ fontSize: 48, color: "primary.main" }} />
+          </Box>
+          <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
+          <Typography variant="body2" noWrap>{entry.name}/</Typography>
+          </CardContent>
+          </Card>
+          </Box>
           );
-        }
-        return (
-          <MuiGrid key={entry.path} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
-            <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
-              onClick={isImg ? () => setPreviewEntry(entry) : () => handleDownload(entry)}>
-              <Box sx={{ height: 120, overflow: "hidden", bgcolor: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {isImg ? (
-                  <img src={imgUrl(entry)} alt={entry.name}
-                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }}
-                    onError={(e: any) => { e.target.style.display = "none"; }} />
-                ) : (
-                  <InsertDriveFileIcon sx={{ fontSize: 40, color: "text.disabled" }} />
-                )}
-              </Box>
-              <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
-                <Typography variant="body2" noWrap>{entry.name}</Typography>
-                <Typography variant="caption" color="text.secondary">{formatSize(entry.size)}</Typography>
-              </CardContent>
-            </Card>
-          </MuiGrid>
-        );
-      })}
-    </MuiGrid>
+          }
+          return (
+          <Box key={entry.path}>
+          <Card sx={{ cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}
+          onClick={isImg ? () => setPreviewEntry(entry) : () => handleDownload(entry)}>
+          <Box sx={{ height: 120, overflow: "hidden", bgcolor: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {isImg ? (
+          <img src={imgUrl(entry)} alt={entry.name}
+          style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }}
+          onError={(e: any) => { e.target.style.display = "none"; }} />
+          ) : (
+          <InsertDriveFileIcon sx={{ fontSize: 40, color: "text.disabled" }} />
+          )}
+          </Box>
+          <CardContent sx={{ p: 1, "&:last-child": { pb: 1 } }}>
+          <Typography variant="body2" noWrap>{entry.name}</Typography>
+          <Typography variant="caption" color="text.secondary">{formatSize(entry.size)}</Typography>
+          </CardContent>
+          </Card>
+          </Box>
+          );
+          })}
+          </CardGrid>
   );
 
   const canUpload = currentPath === "knowledge" || currentPath.startsWith("knowledge/");
@@ -315,11 +315,7 @@ export const FileManager = () => {
         <Typography variant="h5" fontWeight={700} sx={{ flex: 1 }}>
           Файловый менеджер
         </Typography>
-        <ToggleButtonGroup value={viewMode} exclusive size="small"
-          onChange={(_, v) => { if (v) { setViewMode(v); localStorage.setItem("files_view", v); } }}>
-          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
+        {FileViewToggle}
         {canUpload && (<>
           <Button startIcon={<CreateNewFolderIcon />} variant="outlined" size="small"
             onClick={() => { setCreateFolderOpen(true); setCreateFolderName(""); }}>

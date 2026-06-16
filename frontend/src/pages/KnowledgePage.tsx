@@ -4,6 +4,7 @@ import {
   ListItemIcon, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   LinearProgress, Select, MenuItem, FormControl, InputLabel,
   IconButton, InputAdornment, Breadcrumbs, Link, Snackbar, Alert,
+  Card, CardContent, Grid as MuiGrid, ToggleButtonGroup, ToggleButton,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import UploadIcon from "@mui/icons-material/Upload";
@@ -13,6 +14,8 @@ import FolderIcon from "@mui/icons-material/Folder";
 import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import GridViewIcon from "@mui/icons-material/GridView";
 import { api } from "../services/api";
 
 const LIMIT = 50;
@@ -24,6 +27,14 @@ interface DocItem {
 }
 
 interface Department { dn: string; ou: string; description: string; }
+
+const TLB: Record<string, string> = { pdf: "PDF", docx: "DOCX", txt: "TXT", md: "MD", png: "PNG", jpg: "JPEG", jpeg: "JPEG" };
+const IMG = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
+
+function ext(name: string) {
+  const i = name.lastIndexOf(".");
+  return i > 0 ? name.slice(i + 1).toLowerCase() : "";
+}
 
 export const KnowledgePage = () => {
   const [docs, setDocs] = useState<DocItem[]>([]);
@@ -43,6 +54,9 @@ export const KnowledgePage = () => {
   const [mkdirName, setMkdirName] = useState("");
   const [mkdirDept, setMkdirDept] = useState("");
   const [snack, setSnack] = useState<{msg:string;severity:"success"|"error"}|null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "tiles">(
+    () => (localStorage.getItem("kb_view") as "list" | "tiles") ?? "tiles"
+  );
 
   const doLoadDocs = useCallback(async (f: string, p: number) => {
     setLoading(true);
@@ -80,6 +94,7 @@ export const KnowledgePage = () => {
   }, [folder, doLoadDocs, doLoadFolders]);
 
   const goPage = (p: number) => {
+    if (p < 0) return;
     setPage(p);
     doLoadDocs(folder, p);
   };
@@ -164,6 +179,108 @@ export const KnowledgePage = () => {
     setOpenMkdir(true);
   };
 
+  const imgUrl = (d: DocItem) => "/" + d.file_path;
+
+  const paginationPages = () => {
+    const pages: number[] = [];
+    const start = Math.max(0, page - 2);
+    const end = page + (hasMore ? 2 : 0);
+    for (let i = start; i <= end; i++) pages.push(i);
+    return pages;
+  };
+
+  const pagination = docs.length > 0 && (
+    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 0.5, mt: 2 }}>
+      <Button size="small" disabled={page === 0} onClick={() => goPage(0)} title="Первая">
+        <ChevronLeftIcon fontSize="small" /><ChevronLeftIcon fontSize="small" sx={{ ml: -1 }} />
+      </Button>
+      <Button size="small" disabled={page === 0} onClick={() => goPage(page - 1)}>
+        <ChevronLeftIcon fontSize="small" /> Назад
+      </Button>
+      {page > 2 && (
+        <>
+          <Chip label="1" size="small" clickable variant="outlined" onClick={() => goPage(0)} sx={{ minWidth: 32 }} />
+          <Typography variant="caption" color="text.disabled">...</Typography>
+        </>
+      )}
+      {paginationPages().map(p => (
+        <Chip key={p} label={String(p + 1)} size="small"
+          variant={p === page ? "filled" : "outlined"}
+          color={p === page ? "primary" : "default"}
+          clickable={p !== page}
+          onClick={() => p !== page && goPage(p)}
+          sx={{ minWidth: 32, fontWeight: p === page ? 700 : 400 }}
+        />
+      ))}
+      {hasMore && (
+        <Button size="small" onClick={() => goPage(page + 1)}>
+          Вперед <ChevronRightIcon fontSize="small" />
+        </Button>
+      )}
+    </Box>
+  );
+
+  const listView = (
+    <List disablePadding sx={{ border: 1, borderColor: "divider", borderRadius: 2, overflow: "hidden" }}>
+      {filtered.map(doc => (
+        <ListItem key={doc.id} divider sx={{ bgcolor: "background.paper" }}>
+          <ListItemIcon>
+            {IMG.has(ext(doc.filename)) ? (
+              <Box component="img" src={imgUrl(doc)} alt=""
+                sx={{ width: 40, height: 40, objectFit: "cover", borderRadius: 1 }}
+                onError={(e: any) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "block"; }} />
+            ) : <DescriptionIcon />}
+          </ListItemIcon>
+          <ListItemText
+            primary={doc.title}
+            secondary={(doc.folder || "Корневая") + " · " + (TLB[doc.content_type] || doc.content_type.toUpperCase()) + " · " + new Date(doc.created_at).toLocaleDateString()} />
+          <Chip label={doc.status === "ready" ? "Готов" : doc.status === "indexing" ? "Индексация" : doc.status}
+            size="small"
+            color={doc.status === "ready" ? "success" : doc.status === "indexing" ? "warning" : "default"}
+            sx={{ mr: 1 }} />
+          <IconButton size="small" href={"/" + doc.file_path} target="_blank" title="Скачать">
+            <DownloadIcon fontSize="small" />
+          </IconButton>
+        </ListItem>
+      ))}
+    </List>
+  );
+
+  const tilesView = (
+    <MuiGrid container spacing={2}>
+      {filtered.map(doc => (
+        <MuiGrid key={doc.id} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
+          <Card sx={{ height: "100%", display: "flex", flexDirection: "column", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+            <Box sx={{ height: 120, overflow: "hidden", bgcolor: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {IMG.has(ext(doc.filename)) ? (
+                <Box component="img" src={imgUrl(doc)} alt={doc.filename}
+                  sx={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+                  onError={(e: any) => { e.target.style.display = "none"; }} />
+              ) : (
+                <DescriptionIcon sx={{ fontSize: 48, color: "text.disabled" }} />
+              )}
+            </Box>
+            <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 }, flex: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
+              <Typography variant="body2" noWrap fontWeight={500}>{doc.title}</Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Chip label={TLB[doc.content_type] || doc.content_type.toUpperCase()} size="small" variant="outlined" sx={{ height: 20 }} />
+                <Chip label={doc.status === "ready" ? "Готов" : doc.status === "indexing" ? "Индексация" : doc.status}
+                  size="small"
+                  color={doc.status === "ready" ? "success" : doc.status === "indexing" ? "warning" : "default"}
+                  sx={{ height: 20 }} />
+              </Box>
+              <Box sx={{ mt: "auto", pt: 0.5 }}>
+                <Button size="small" variant="outlined" fullWidth
+                  href={"/" + doc.file_path} target="_blank"
+                  startIcon={<DownloadIcon />}>Скачать</Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </MuiGrid>
+      ))}
+    </MuiGrid>
+  );
+
   return (
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2, flexWrap: "wrap" }}>
@@ -172,6 +289,11 @@ export const KnowledgePage = () => {
           onChange={e => setSearch(e.target.value)}
           slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
           sx={{ minWidth: 200 }} />
+        <ToggleButtonGroup value={viewMode} exclusive size="small"
+          onChange={(_, v) => { if (v) { setViewMode(v); localStorage.setItem("kb_view", v); } }}>
+          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
+        </ToggleButtonGroup>
         <Button size="small" variant="outlined" startIcon={<CreateNewFolderIcon />} onClick={openMkdirDialog}>
           + Папка
         </Button>
@@ -212,30 +334,8 @@ export const KnowledgePage = () => {
         </Typography>
       ) : (
         <>
-          <List disablePadding sx={{ border: 1, borderColor: "divider", borderRadius: 2, overflow: "hidden" }}>
-            {filtered.map(doc => (
-              <ListItem key={doc.id} divider sx={{ bgcolor: "background.paper" }}>
-                <ListItemIcon><DescriptionIcon /></ListItemIcon>
-                <ListItemText
-                  primary={doc.title}
-                  secondary={(doc.folder || "Корневая") + " · " + doc.content_type.toUpperCase() + " · " + new Date(doc.created_at).toLocaleDateString()} />
-                <Chip label={doc.status === "ready" ? "Готов" : doc.status === "indexing" ? "Индексация" : doc.status}
-                  size="small"
-                  color={doc.status === "ready" ? "success" : doc.status === "indexing" ? "warning" : "default"}
-                  sx={{ mr: 1 }} />
-                <IconButton size="small" href={"/" + doc.file_path} target="_blank" title="Скачать">
-                  <DownloadIcon fontSize="small" />
-                </IconButton>
-              </ListItem>
-            ))}
-          </List>
-          <Box sx={{ display: "flex", justifyContent: "center", gap: 2, mt: 2, alignItems: "center" }}>
-            <Button size="small" startIcon={<ChevronLeftIcon />} disabled={page === 0}
-              onClick={() => goPage(page - 1)}>Назад</Button>
-            <Typography variant="body2" color="text.secondary">Страница {page + 1}</Typography>
-            <Button size="small" endIcon={<ChevronRightIcon />} disabled={!hasMore}
-              onClick={() => goPage(page + 1)}>Вперед</Button>
-          </Box>
+          {viewMode === "list" ? listView : tilesView}
+          {pagination}
         </>
       )}
 

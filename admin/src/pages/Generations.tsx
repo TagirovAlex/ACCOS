@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { List, Datagrid, TextField, DateField, NumberField, Show, SimpleShowLayout, ReferenceField, FunctionField, WithListContext, useRedirect, useDelete, DeleteButton } from "react-admin";
-import { Box, Typography, Chip, IconButton, Card, CardContent, ToggleButtonGroup, ToggleButton, Grid as MuiGrid, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
+import { ListBase, Datagrid, TextField, DateField, NumberField, Show, SimpleShowLayout, ReferenceField, FunctionField, WithListContext, useRedirect, useDelete, DeleteButton } from "react-admin";
+import { Box, Typography, Chip, IconButton, Card, CardContent, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import ViewListIcon from "@mui/icons-material/ViewList";
-import GridViewIcon from "@mui/icons-material/GridView";
+import { CardGrid } from "../components/CardGrid";
+import { useView } from "../components/ViewToggle";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -175,49 +175,47 @@ const GenerationTileView = () => {
   return (
   <>
     <WithListContext render={({ data }) => (
-      <MuiGrid container spacing={2} sx={{ p: 2 }}>
+      <CardGrid>
         {data?.map((record: any) => (
-          <MuiGrid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={record.id}>
-            <Card sx={{ position: "relative", cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
-              <Box sx={{
-                position: "absolute", top: 0, left: 0, right: 0, height: 4, zIndex: 2,
-                bgcolor: record.status === "completed" ? "success.main"
-                  : record.status === "failed" ? "error.main"
-                  : record.status === "processing" ? "info.main" : "grey.400",
-                borderRadius: "4px 4px 0 0",
-              }} />
-              <IconButton size="small"
-                sx={{ position: "absolute", top: 4, right: 4, zIndex: 1, color: "error.light" }}
-                onClick={(e) => { e.stopPropagation(); setDeleteTarget(record); }}>
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-              <Box onClick={() => redirect("show", "generations", record.id)}
-                sx={{ width: "100%", height: 140, overflow: "hidden", bgcolor: "#1a1a1a" }}>
-                {record.thumbnail ? (
-                  <img src={`/${record.thumbnail}`} alt=""
-                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-                    onError={(e: any) => { e.target.style.display = "none"; }} />
-                ) : (
-                  <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Typography variant="caption" color="text.disabled">Нет изображения</Typography>
-                  </Box>
-                )}
-              </Box>
-              <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
-                <Typography variant="body2" fontWeight={600} noWrap>{record.workflow_type}</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{record.prompt}</Typography>
-                <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 0.5 }}>
-                  <StatusChip record={record} />
-                  <Typography variant="caption" color="text.secondary">{Number(record.cost.toFixed(2))} кр.</Typography>
+          <Card key={record.id} sx={{ position: "relative", cursor: "pointer", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+            <Box sx={{
+              position: "absolute", top: 0, left: 0, right: 0, height: 4, zIndex: 2,
+              bgcolor: record.status === "completed" ? "success.main"
+                : record.status === "failed" ? "error.main"
+                : record.status === "processing" ? "info.main" : "grey.400",
+              borderRadius: "4px 4px 0 0",
+            }} />
+            <IconButton size="small"
+              sx={{ position: "absolute", top: 4, right: 4, zIndex: 1, color: "error.light" }}
+              onClick={(e) => { e.stopPropagation(); setDeleteTarget(record); }}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+            <Box onClick={() => redirect("show", "generations", record.id)}
+              sx={{ width: "100%", height: 140, overflow: "hidden", bgcolor: "#1a1a1a" }}>
+              {record.thumbnail ? (
+                <img src={imgUrl(record.thumbnail)} alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                  onError={(e: any) => { e.target.style.display = "none"; }} />
+              ) : (
+                <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Typography variant="caption" color="text.disabled">Нет изображения</Typography>
                 </Box>
-                <Typography variant="caption" color="text.secondary">
-                  {record.username} · {new Date(record.created_at).toLocaleDateString()}
-                </Typography>
-              </CardContent>
-            </Card>
-          </MuiGrid>
+              )}
+            </Box>
+            <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
+              <Typography variant="body2" fontWeight={600} noWrap>{record.workflow_type}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }} noWrap>{record.prompt}</Typography>
+              <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 0.5 }}>
+                <StatusChip record={record} />
+                <Typography variant="caption" color="text.secondary">{Number(record.cost.toFixed(2))} кр.</Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {record.username} · {new Date(record.created_at).toLocaleDateString()}
+              </Typography>
+            </CardContent>
+          </Card>
         ))}
-      </MuiGrid>
+      </CardGrid>
     )} />
     <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
       <DialogTitle>Удалить генерацию?</DialogTitle>
@@ -234,17 +232,14 @@ const GenerationTileView = () => {
 };
 
 export const GenerationList = () => {
-  const [view, setView] = useState<"list" | "tiles">(() => (localStorage.getItem("generations_view") as "list" | "tiles") ?? "list");
+  const { view, ViewToggleEl } = useView("generations_view");
   return (
-    <List actions={false}>
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
-        <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => { if (v) { setView(v); localStorage.setItem("generations_view", v); } }}>
-          <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value="tiles"><GridViewIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
-      {view === "list" ? <GenerationListView /> : <GenerationTileView />}
-    </List>
+    <div>
+      {ViewToggleEl}
+      <ListBase perPage={100}>
+        {view === "list" ? <GenerationListView /> : <GenerationTileView />}
+      </ListBase>
+    </div>
   );
 };
 

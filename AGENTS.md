@@ -321,6 +321,24 @@ class BaseModule(ABC):
 - Запуск через ComfyUI как отдельный workflow_type
 - Расчёт стоимости через VideoGenCostStrategy
 
+### Admin Page Guidelines
+
+#### Shared Components (`admin/src/components/`)
+- **`CardGrid`** — CSS Grid `auto-fill, minmax(240px, 1fr)`. Использовать вместо `MuiGrid container` для карточных тайлов. Children — `Box` (аналог `MuiGrid item`).
+- **`ViewToggle`** — `ToggleButtonGroup` (ViewListIcon / GridViewIcon) с сохранением в localStorage. Использовать композицию: `<ViewToggle storageKey="section_view" />`. Либо хук `useView(storageKey)` возвращает `{ view, ViewToggleEl, setView }`.
+- **`StatusChip`** — маппинг статусов: completed/ready/active → green, failed/error → red, processing/indexing → blue, queued → default, pending → orange.
+
+#### Правила для страниц admin
+- **Карточные тайлы:** `CardGrid` вместо `MuiGrid container spacing={2}`, `Box` вместо `MuiGrid size={{...}}`.
+- **Тоггл вида:** `ViewToggle` или `useView` вместо дублирования `ToggleButtonGroup` + `localStorage`.
+- **Статусы:** `StatusChip` вместо ручного `Chip` с цветами.
+- **Тема:** не задавать ручные цвета — только MUI `color` prop или `sx` с theme ссылками. Light/dark автоматически.
+- **localStorage ключи:** `<section>_view` (generations_view, assets_view, groups_view, docs_view, docs_root_view, backups_view, files_view, llm_servers_view, doc_scraper_view).
+- **ViewToggle внутри TopToolbar:** использовать `<ViewToggle storageKey="..." />` вместо inline-кнопок.
+
+#### Страницы без тайлов (не трогать)
+- Users, GenerationQueue, Settings, ModuleSettings, Templates, WebFetchAccess
+
 ### Полезное
 1. **Audit log** — логирование всех действий пользователей и админов
 2. **PDF preview caching** — lazy render-to-images при первом открытии, сохранение в `static/knowledge_preview/{doc_id}/`, отдача готовых картинок при повторных просмотрах (реализовано)
