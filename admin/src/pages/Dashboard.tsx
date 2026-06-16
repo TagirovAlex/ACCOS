@@ -21,21 +21,20 @@ const StatCard = ({ icon, label, value, color, to, secondary }: { icon: string; 
       sx={{
         cursor: to ? "pointer" : "default",
         transition: "all 0.2s ease",
-        height: "100%",
         "&:hover": to ? { transform: "translateY(-2px)", boxShadow: "0 6px 20px rgba(0,0,0,0.12)" } : {},
       }}
     >
-      <CardContent sx={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 1, py: 2.5, "&:last-child": { pb: 2.5 } }}>
+      <CardContent sx={{ display: "flex", alignItems: "center", gap: 2, py: 2.5, "&:last-child": { pb: 2.5 } }}>
         <Box sx={{
-          width: 48, height: 48, borderRadius: 2,
+          width: 56, height: 56, borderRadius: 2,
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 24, bgcolor: color + "18", color: color, flexShrink: 0,
+          fontSize: 28, bgcolor: color + "18", color: color, flexShrink: 0,
         }}>
           {icon}
         </Box>
         <Box sx={{ minWidth: 0 }}>
           {value === undefined
-            ? <Skeleton variant="text" width={50} height={28} sx={{ mx: "auto" }} />
+            ? <Skeleton variant="text" width={60} height={32} />
             : <Typography variant="h5" fontWeight={700} lineHeight={1.2}>{value}</Typography>
           }
           <Typography variant="body2" color="text.secondary" noWrap>{label}</Typography>
@@ -106,38 +105,41 @@ export const Dashboard = () => {
         <Typography variant="body2" color="text.secondary">Панель управления системой генерации контента</Typography>
       </Box>
 
-      <Grid container spacing={1.5} mb={3}>
-        <Grid size={{ xs: 4, sm: 2, md: 1.5 }}>
-          <StatCard icon="👥" label="Пользователи" value={d?.users} color="#448aff" to="/users" />
+      <Grid container spacing={2} mb={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <StatCard icon="👥" label="Всего пользователей" value={d?.users} color="#448aff" to="/users" />
         </Grid>
         {isSuperAdmin() && (
-          <Grid size={{ xs: 4, sm: 2, md: 1.5 }}>
-            <StatCard icon="💬" label="Чаты" value={d?.chats} color="#ffa726" to="/chats" />
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+            <StatCard icon="💬" label="Всего чатов" value={d?.chats} color="#ffa726" to="/chats" />
           </Grid>
         )}
         {isSuperAdmin() && (
-          <Grid size={{ xs: 4, sm: 2, md: 1.5 }}>
-            <StatCard icon="🎨" label="Генераций сегодня" value={d?.generations_today} color="#ab47bc" secondary="новых" />
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+            <StatCard icon="🎨" label="Генераций сегодня" value={d?.generations_today} color="#ab47bc" secondary="новых генераций" />
           </Grid>
         )}
-        {INFO_BOXES.filter(box => box.key === "settings" || isSuperAdmin()).map(box => (
-          <Grid size={{ xs: 4, sm: 2, md: 1.5 }} key={box.key}>
+      </Grid>
+
+      <Grid container spacing={2} mb={3}>
+        {INFO_BOXES.filter(box => box.key === "users" || box.key === "settings" || isSuperAdmin()).map(box => (
+          <Grid size={{ xs: 6, sm: 4, md: 3, lg: 12 / 7 }} key={box.key}>
             <StatCard icon={box.icon} label={box.label} value={d?.[box.key] ?? ""} color={box.color} to={box.to} />
           </Grid>
         ))}
-        <Grid size={{ xs: 4, sm: 2, md: 1.5 }}>
-          <StatCard icon="📄" label="Документов" value={d?.documents} color="#43a047" />
+      </Grid>
+
+      <Grid container spacing={2} mb={3}>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <StatCard icon="📄" label="Документов всего" value={d?.documents} color="#43a047" />
         </Grid>
-        <Grid size={{ xs: 4, sm: 2, md: 1.5 }}>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <StatCard icon="✅" label="Проиндексировано" value={d?.documents_indexed} color="#2e7d32" />
         </Grid>
-        <Grid size={{ xs: 4, sm: 2, md: 1.5 }}>
-          <StatCard icon="⏳" label="Ожидает" value={d?.documents_pending} color="#f57c00" />
-        </Grid>
-        <Grid size={{ xs: 4, sm: 2, md: 1.5 }}>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <StatCard icon="📊" label="Токенов ввода" value={d?.total_tokens_input !== undefined ? Number(d.total_tokens_input).toLocaleString() : undefined} color="#ffa000" />
         </Grid>
-        <Grid size={{ xs: 4, sm: 2, md: 1.5 }}>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <StatCard icon="📊" label="Токенов вывода" value={d?.total_tokens_output !== undefined ? Number(d.total_tokens_output).toLocaleString() : undefined} color="#e65100" />
         </Grid>
       </Grid>
