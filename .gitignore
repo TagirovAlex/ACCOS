@@ -47,4 +47,5 @@ static/generated/
 
 # Backups
 backups/
-.opencode
+*.bak
+.opencode/
