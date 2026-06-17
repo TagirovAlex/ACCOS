@@ -47,3 +47,4 @@ static/generated/
 
 # Backups
 backups/
+.opencode
